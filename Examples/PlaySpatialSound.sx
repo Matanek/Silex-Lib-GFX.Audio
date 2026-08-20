@@ -1,0 +1,54 @@
+use GFX.Audio as GFXAudio
+use GFX.Application
+use GFX.Plugins
+use GFX.Resources
+use STD.Math
+
+struct SpatialAudioDemo {
+    var sound:GFXAudio.Sound
+    var playing:GFXAudio.PlayingSound
+    var elapsed:float
+
+    init() {
+        self.sound = GFXAudio.Sound()
+        self.playing = GFXAudio.PlayingSound()
+        self.elapsed = 0.0
+    }
+}
+
+func begin_demo(audio:&Resources.Audio, demo:&SpatialAudioDemo) {
+    let tone = audio.load("../Assets/Audio/SpatialTone.wav")
+    demo.sound = tone
+    demo.playing = audio.play(tone, GFXAudio.Playback(
+        volume:0.2,
+        repeat:GFXAudio.Repeat.forever(),
+        position:Math.Vec3(-2.0, 0.0, -1.0),
+        fade_in_seconds:0.15
+    ))
+}
+
+func update_demo(
+    time:@Resources.FrameTime,
+    demo:&SpatialAudioDemo,
+    audio:&Resources.Audio
+) {
+    demo.elapsed += time.delta
+    let x = Math.sin(demo.elapsed as float32) as float * 3.0
+    audio.set_position(demo.playing, Math.Vec3(x, 0.0, -1.0))
+}
+
+func main() {
+    Application()
+        ..add_resource(SpatialAudioDemo())
+        ..add_plugin(Plugins.Audio())
+        ..add_plugin(Plugins.Time())
+        ..add_plugin(Plugins.FramePacing(60))
+        ..add_plugin(Plugins.Window(Plugins.WindowSettings()
+            ..title = "GFX Spatial Audio"
+            ..width = 640
+            ..height = 360
+        ))
+        ..add_system(Application.Schedule.startup, begin_demo)
+        ..add_system(Application.Schedule.update, update_demo)
+        ..run()
+}

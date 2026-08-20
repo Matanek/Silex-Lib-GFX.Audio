@@ -1,0 +1,103 @@
+--- a/src/SDL_mixer_internal.h
++++ b/src/SDL_mixer_internal.h
+@@ -141,6 +141,9 @@
+     MIX_SpatializationMode spatialization_mode;
+     float spatialization_panning[2];
+     int spatialization_speakers[2];
++    float spatialization_current_panning[2];
++    int spatialization_current_speakers[2];
++    bool spatialization_current_valid;
+     MIX_Mixer *mixer;
+     SDL_PropertiesID props;
+     float *input_buffer;  // a place to process audio as it progresses through the callback.
+--- a/src/SDL_mixer.c
++++ b/src/SDL_mixer.c
+@@ -477,30 +477,42 @@
+     }
+ }
+
+-static void MixSpatializedFloat32Audio(float *dst, const float *src, const int samples, const int output_channels, const float *panning, const int *speakers, const float gain)
++static void MixSpatializedFloat32Audio(float *dst, const float *src, const int samples, const int output_channels, const float *panning, const int *speakers, float *current_panning, int *current_speakers, bool *current_valid, const float gain)
+ {
+-    const float panning0 = panning[0] * gain;
+-    const float panning1 = panning[1] * gain;
+-    const int speaker0 = speakers[0];
+-    const int speaker1 = speakers[1];
++    if (!*current_valid) {
++        current_panning[0] = panning[0];
++        current_panning[1] = panning[1];
++        current_speakers[0] = speakers[0];
++        current_speakers[1] = speakers[1];
++        *current_valid = true;
++    }
+
+-    // !!! FIXME: a common case (output_channels==2, speaker0=0, speaker1=1) can be easily SIMD'd.
+-    // !!! FIXME: unroll this loop?
+-    if ((panning0 == 0.0f) && (panning1 == 0.0f)) {
+-        return;  // don't mix silence.
+-    } else if ((panning0 == 1.0f) && (panning1 == 1.0f)) {  // no modulation.
+-        for (int i = 0; i < samples; i++, dst += output_channels, src++) {
+-            const float sample = *src;
+-            dst[speaker0] += sample;
+-            dst[speaker1] += sample;
+-        }
+-    } else {
+-        for (int i = 0; i < samples; i++, dst += output_channels, src++) {
+-            const float sample = *src;
+-            dst[speaker0] += sample * panning0;
+-            dst[speaker1] += sample * panning1;
++    const float start0 = current_panning[0] * gain;
++    const float start1 = current_panning[1] * gain;
++    const float target0 = panning[0] * gain;
++    const float target1 = panning[1] * gain;
++    const bool same_speakers = (current_speakers[0] == speakers[0]) && (current_speakers[1] == speakers[1]);
++    const float fraction_step = 1.0f / (float) samples;
++
++    for (int i = 0; i < samples; i++, dst += output_channels, src++) {
++        const float sample = *src;
++        const float fraction = (float) (i + 1) * fraction_step;
++        if (same_speakers) {
++            dst[speakers[0]] += sample * (start0 + ((target0 - start0) * fraction));
++            dst[speakers[1]] += sample * (start1 + ((target1 - start1) * fraction));
++        } else {
++            const float remaining = 1.0f - fraction;
++            dst[current_speakers[0]] += sample * start0 * remaining;
++            dst[current_speakers[1]] += sample * start1 * remaining;
++            dst[speakers[0]] += sample * target0 * fraction;
++            dst[speakers[1]] += sample * target1 * fraction;
+         }
+     }
++
++    current_panning[0] = panning[0];
++    current_panning[1] = panning[1];
++    current_speakers[0] = speakers[0];
++    current_speakers[1] = speakers[1];
+ }
+
+ static void MixForcedStereoFloat32Audio(float *dst, const float *src, const int sample_frames, const int output_channels, const float *panning, const float gain)
+@@ -599,7 +611,7 @@
+
+                     case MIX_SPATIALIZATION_3D:
+                         SDL_assert(track->output_spec.channels == 1);
+-                        MixSpatializedFloat32Audio(group_mixbuf, getbuf, br / sizeof (float), mixer->spec.channels, track->spatialization_panning, track->spatialization_speakers, mixer->gain);
++                        MixSpatializedFloat32Audio(group_mixbuf, getbuf, br / sizeof (float), mixer->spec.channels, track->spatialization_panning, track->spatialization_speakers, track->spatialization_current_panning, track->spatialization_current_speakers, &track->spatialization_current_valid, mixer->gain);
+                         group_bytes = SDL_max(group_bytes, br * mixer->spec.channels);
+                         break;
+
+@@ -2845,6 +2857,7 @@
+     const bool toggling = (track->spatialization_mode != new_mode);
+     if (toggling) {
+         track->spatialization_mode = new_mode;
++        track->spatialization_current_valid = false;
+         SetTrackOutputStreamFormat(track, NULL);   // change output format to stereo (or back to normal) if necessary.
+     }
+
+@@ -2852,7 +2865,7 @@
+         track->position3d[0] = track->position3d[1] = track->position3d[2] = 0.0f;
+     } else {
+         float *tposition3d = track->position3d;
+-        if (toggling || ((tposition3d[0] != position->x) || (tposition3d[2] != position->y) || (tposition3d[2] != position->z))) {
++        if (toggling || ((tposition3d[0] != position->x) || (tposition3d[1] != position->y) || (tposition3d[2] != position->z))) {
+             tposition3d[0] = position->x;
+             tposition3d[1] = position->y;
+             tposition3d[2] = position->z;

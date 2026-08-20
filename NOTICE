@@ -1,0 +1,7 @@
+Silex GFX.Audio
+Copyright 2026 Matanek and Silex contributors
+
+This product is licensed under the Apache License, Version 2.0.
+
+GFX.Audio distributes target-specific SDL3_mixer static artifacts. Its notice
+is kept in the Licenses directory. SDL3 is supplied by the GFX dependency.

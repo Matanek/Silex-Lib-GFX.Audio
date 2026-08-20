@@ -1,0 +1,15 @@
+use GFX.Audio as GFXAudio
+use GFX.Plugins
+use GFX.Resources
+
+func injected_audio(audio:&Resources.Audio) {}
+
+test "consume GFX.Audio through public package boundaries" {
+    let playback = GFXAudio.Playback(
+        volume:0.5,
+        repeat:GFXAudio.Repeat.times(2)
+    )
+    let plugin = Plugins.Audio()
+    assert(playback.volume == 0.5)
+    assert(plugin.id() == "GFX.Audio.Plugin")
+}

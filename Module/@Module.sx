@@ -1,0 +1,310 @@
+use GFX.Audio.Native
+use STD.Math
+
+public struct Sound {
+    module let sound_index:int
+    module let sound_generation:int
+
+    init() {
+        self.sound_index = -1
+        self.sound_generation = 0
+    }
+
+    module init(index:int, generation:int) {
+        self.sound_index = index
+        self.sound_generation = generation
+    }
+
+    func is_valid() bool {
+        return self.sound_index >= 0 && self.sound_generation > 0
+    }
+}
+
+public struct PlayingSound {
+    module let playback_index:int
+    module let playback_generation:int
+
+    init() {
+        self.playback_index = -1
+        self.playback_generation = 0
+    }
+
+    module init(index:int, generation:int) {
+        self.playback_index = index
+        self.playback_generation = generation
+    }
+
+    func is_valid() bool {
+        return self.playback_index >= 0 && self.playback_generation > 0
+    }
+}
+
+public struct Repeat {
+    private let extra_plays:int
+
+    init() { self.extra_plays = 0 }
+    module init(extra_plays:int) { self.extra_plays = extra_plays }
+
+    static func once() Repeat { return Repeat() }
+    static func forever() Repeat { return Repeat(extra_plays:-1) }
+
+    static func times(count:int) Repeat {
+        if count < 1 { panic("GFX.Audio repeat count must be at least one") }
+        return Repeat(extra_plays:count - 1)
+    }
+
+    module func native_loops() int { return self.extra_plays }
+}
+
+public struct Playback {
+    var volume:float
+    var repeat:Repeat
+    var position:Math.Vec3?
+    var speed:float
+    var reverse_stereo:bool
+    var fade_in_seconds:float
+
+    init(
+        volume:float = 1.0,
+        repeat:Repeat = Repeat(),
+        position:Math.Vec3? = null,
+        speed:float = 1.0,
+        reverse_stereo:bool = false,
+        fade_in_seconds:float = 0.0
+    ) {
+        self.volume = volume
+        self.repeat = repeat
+        self.position = position
+        self.speed = speed
+        self.reverse_stereo = reverse_stereo
+        self.fade_in_seconds = fade_in_seconds
+    }
+}
+
+class SoundEntry {
+    var handle:uint
+    var generation:int
+    var active:bool
+
+    init(handle:uint) {
+        self.handle = handle
+        self.generation = 1
+        self.active = true
+    }
+}
+
+class PlaybackEntry {
+    var handle:uint
+    var generation:int
+    var active:bool
+
+    init(handle:uint) {
+        self.handle = handle
+        self.generation = 1
+        self.active = true
+    }
+}
+
+public class Audio {
+    private let mixer:uint
+    private var sounds:SoundEntry[]
+    private var playbacks:PlaybackEntry[]
+
+    init() {
+        Native.initialize()
+        self.mixer = Native.create_mixer()
+        self.sounds = []
+        self.playbacks = []
+    }
+
+    drop {
+        var playback_index = 0
+        while playback_index < self.playbacks.count() {
+            var playback = self.playbacks[playback_index]
+            if playback.active { Native.destroy_track(playback.handle) }
+            playback_index++
+        }
+        var sound_index = 0
+        while sound_index < self.sounds.count() {
+            var sound = self.sounds[sound_index]
+            if sound.active { Native.destroy_audio(sound.handle) }
+            sound_index++
+        }
+        Native.destroy_mixer(self.mixer)
+        Native.shutdown()
+    }
+
+    func load(path:str) Sound {
+        var sounds = self.sounds
+        sounds.append(SoundEntry(Native.load(self.mixer, path)))
+        self.sounds = sounds
+        return Sound(sounds.count() - 1, 1)
+    }
+
+    func contains(sound:Sound) bool {
+        if !sound.is_valid() || sound.sound_index >= self.sounds.count() { return false }
+        var entry = self.sounds[sound.sound_index]
+        return entry.active && entry.generation == sound.sound_generation
+    }
+
+    func unload(sound:Sound) bool {
+        if !self.contains(sound) { return false }
+        var entry = self.sounds[sound.sound_index]
+        Native.destroy_audio(entry.handle)
+        entry.handle = 0 as uint
+        entry.active = false
+        entry.generation++
+        return true
+    }
+
+    func play(sound:Sound, settings:Playback = Playback()) PlayingSound {
+        let audio = self.require_sound(sound).handle
+        validate_volume(settings.volume)
+        validate_speed(settings.speed)
+        validate_fade(settings.fade_in_seconds)
+
+        self.collect_finished()
+        let track = Native.create_track(self.mixer, audio)
+        Native.set_volume(track, settings.volume)
+        Native.set_speed(track, settings.speed)
+        if settings.reverse_stereo { Native.set_reverse_stereo(track, true) }
+        if let position = settings.position { Native.set_position(track, position) }
+        Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds)
+
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if !entry.active {
+                entry.handle = track
+                entry.active = true
+                return PlayingSound(index, entry.generation)
+            }
+            index++
+        }
+
+        var playbacks = self.playbacks
+        playbacks.append(PlaybackEntry(track))
+        self.playbacks = playbacks
+        return PlayingSound(playbacks.count() - 1, 1)
+    }
+
+    func is_playing(sound:PlayingSound) bool {
+        if !self.contains_playback(sound) { return false }
+        return Native.is_playing(self.playbacks[sound.playback_index].handle)
+    }
+
+    func is_paused(sound:PlayingSound) bool {
+        if !self.contains_playback(sound) { return false }
+        return Native.is_paused(self.playbacks[sound.playback_index].handle)
+    }
+
+    func pause(sound:PlayingSound) {
+        Native.pause(self.require_playback(sound).handle)
+    }
+
+    func resume(sound:PlayingSound) {
+        Native.resume(self.require_playback(sound).handle)
+    }
+
+    func wait(sound:PlayingSound) {
+        let playback = self.require_playback(sound).handle
+        while Native.is_playing(playback) || Native.is_paused(playback) {
+            Native.wait()
+        }
+        self.collect_finished()
+    }
+
+    func stop(sound:PlayingSound, fade_out_seconds:float = 0.0) {
+        validate_fade(fade_out_seconds)
+        Native.stop(self.require_playback(sound).handle, fade_out_seconds)
+    }
+
+    func release(sound:PlayingSound) bool {
+        if !self.contains_playback(sound) { return false }
+        var entry = self.playbacks[sound.playback_index]
+        Native.destroy_track(entry.handle)
+        entry.handle = 0 as uint
+        entry.active = false
+        entry.generation++
+        return true
+    }
+
+    func set_master_volume(volume:float) {
+        validate_volume(volume)
+        Native.set_master_volume(self.mixer, volume)
+    }
+
+    func set_volume(sound:PlayingSound, volume:float) {
+        validate_volume(volume)
+        Native.set_volume(self.require_playback(sound).handle, volume)
+    }
+
+    func set_speed(sound:PlayingSound, speed:float) {
+        validate_speed(speed)
+        Native.set_speed(self.require_playback(sound).handle, speed)
+    }
+
+    func set_position(sound:PlayingSound, position:Math.Vec3) {
+        Native.set_position(self.require_playback(sound).handle, position)
+    }
+
+    func clear_position(sound:PlayingSound) {
+        Native.clear_position(self.require_playback(sound).handle)
+    }
+
+    func set_reverse_stereo(sound:PlayingSound, reversed:bool) {
+        Native.set_reverse_stereo(self.require_playback(sound).handle, reversed)
+    }
+
+    module func collect_finished() {
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) {
+                Native.destroy_track(entry.handle)
+                entry.handle = 0 as uint
+                entry.active = false
+                entry.generation++
+            }
+            index++
+        }
+    }
+
+    private func require_sound(sound:Sound) SoundEntry {
+        if !self.contains(sound) { panic("GFX.Audio sound handle is stale or invalid") }
+        return self.sounds[sound.sound_index]
+    }
+
+    private func contains_playback(sound:PlayingSound) bool {
+        if !sound.is_valid() || sound.playback_index >= self.playbacks.count() { return false }
+        var entry = self.playbacks[sound.playback_index]
+        return entry.active && entry.generation == sound.playback_generation
+    }
+
+    private func require_playback(sound:PlayingSound) PlaybackEntry {
+        if !self.contains_playback(sound) { panic("GFX.Audio playback handle is stale or invalid") }
+        return self.playbacks[sound.playback_index]
+    }
+}
+
+func validate_volume(volume:float) {
+    if volume < 0.0 { panic("GFX.Audio volume cannot be negative") }
+}
+
+func validate_speed(speed:float) {
+    if speed < 0.01 || speed > 100.0 {
+        panic("GFX.Audio speed must be between 0.01 and 100.0")
+    }
+}
+
+func validate_fade(seconds:float) {
+    if seconds < 0.0 { panic("GFX.Audio fade duration cannot be negative") }
+}
+
+contribute GFX.Plugins {
+    public use GFX.Audio.Plugin as Audio
+}
+
+contribute GFX.Resources {
+    public use GFX.Audio.Audio as Audio
+}

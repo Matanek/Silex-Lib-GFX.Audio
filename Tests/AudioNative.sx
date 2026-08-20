@@ -1,0 +1,93 @@
+use GFX.Audio
+use GFX.Application
+use GFX.Window
+use STD.File
+use STD.Math
+
+struct AudioPluginProbe {
+    var played:bool
+}
+
+func play_from_plugin(audio:&Audio, probe:&AudioPluginProbe) {
+    let sound = audio.load("/private/tmp/silex-gfx-plugin-tone.wav")
+    let playing = audio.play(sound)
+    assert(audio.is_playing(playing))
+    audio.stop(playing)
+    assert(audio.release(playing))
+    assert(audio.unload(sound))
+    probe.played = true
+}
+
+test "load control spatialize wait and release a real sound" {
+    let encoded = embed_bytes("../Assets/Audio/SpatialTone.wav")
+    let path = "/private/tmp/silex-gfx-spatial-tone.wav"
+    match File.write_all(path, @encoded[0:encoded.count()]) {
+        failure(error) => { panic(error.detail) }
+        success => {}
+    }
+
+    var audio = Audio()
+    let sound = audio.load(path)
+    let playing = audio.play(sound, Audio.Playback(
+        volume:0.5,
+        repeat:Audio.Repeat.forever(),
+        position:Math.Vec3(-2.0, 0.0, -1.0),
+        fade_in_seconds:0.01
+    ))
+
+    assert(sound.is_valid())
+    assert(playing.is_valid())
+    assert(audio.is_playing(playing))
+    audio.set_master_volume(0.8)
+    audio.set_volume(playing, 0.25)
+    audio.set_speed(playing, 1.1)
+    audio.set_position(playing, Math.Vec3(2.0, 0.0, -1.0))
+    audio.clear_position(playing)
+    audio.set_reverse_stereo(playing, true)
+    audio.set_reverse_stereo(playing, false)
+    audio.pause(playing)
+    assert(audio.is_paused(playing))
+    audio.resume(playing)
+    assert(audio.is_playing(playing))
+    audio.stop(playing, 0.01)
+    assert(audio.release(playing))
+    let completed = audio.play(sound, Audio.Playback(volume:0.1))
+    audio.wait(completed)
+    assert(!audio.is_playing(completed))
+    assert(audio.unload(sound))
+}
+
+test "share SDL safely between audio and windows in either order" {
+    if true {
+        var audio = Audio()
+        var window = Window(Window.Settings(title:"Audio first", hidden:true))
+        assert(window.id().value != 0)
+    }
+    if true {
+        var window = Window(Window.Settings(title:"Window first", hidden:true))
+        var audio = Audio()
+        assert(window.id().value != 0)
+    }
+}
+
+test "play through the added audio plugin from a consumer system" {
+    let encoded = embed_bytes("../Assets/Audio/SpatialTone.wav")
+    let path = "/private/tmp/silex-gfx-plugin-tone.wav"
+    match File.write_all(path, @encoded[0:encoded.count()]) {
+        failure(error) => { panic(error.detail) }
+        success => {}
+    }
+
+    var application = Application()
+    application.add_resource(AudioPluginProbe(played:false))
+    application
+        ..add_plugin(Audio.Plugin())
+        ..add_system(Application.Schedule.startup, play_from_plugin)
+    application.run_schedule(Application.Schedule.startup)
+    if true {
+        var resources = application.resources()
+        let probe:@AudioPluginProbe = resources.get<AudioPluginProbe>()
+        assert(probe.played)
+    }
+    application.run_schedule(Application.Schedule.shutdown)
+}

@@ -1,0 +1,234 @@
+use Interop.Boundary
+use Interop.C
+use STD.Math
+
+func initialize() {
+    if sdl_init_subsystem(audio_flags()) == 0 {
+        panic("GFX.Audio could not initialize the SDL audio subsystem: " + error())
+    }
+    if mix_init() == 0 {
+        sdl_quit_subsystem(audio_flags())
+        panic("GFX.Audio could not initialize SDL_mixer: " + error())
+    }
+}
+
+func shutdown() {
+    mix_quit()
+    sdl_quit_subsystem(audio_flags())
+}
+
+func audio_flags() uint32 { return 0x0000_0010 as uint32 }
+
+func create_mixer() uint {
+    let default_playback:uint32 = 0xffff_ffff as uint32
+    let mixer = C.address_bits(mix_create_mixer_device(default_playback, C.pointer_bits(0 as uint)))
+    if mixer == 0 as uint { panic("GFX.Audio could not open the default playback device: " + error()) }
+    return mixer
+}
+
+func destroy_mixer(mixer:uint) {
+    mix_destroy_mixer(C.pointer_bits(mixer))
+}
+
+func load(mixer:uint, path:str) uint {
+    let audio = C.address_bits(mix_load_audio(
+        C.pointer_bits(mixer), C.terminated_pointer(path), 1
+    ))
+    if audio == 0 as uint { panic("GFX.Audio could not load '" + path + "': " + error()) }
+    return audio
+}
+
+func destroy_audio(audio:uint) {
+    mix_destroy_audio(C.pointer_bits(audio))
+}
+
+func create_track(mixer:uint, audio:uint) uint {
+    let track = C.address_bits(mix_create_track(C.pointer_bits(mixer)))
+    if track == 0 as uint { panic("GFX.Audio could not create a playback: " + error()) }
+    require(mix_set_track_audio(C.pointer_bits(track), C.pointer_bits(audio)) != 0, "assign a sound")
+    return track
+}
+
+func destroy_track(track:uint) {
+    mix_destroy_track(C.pointer_bits(track))
+}
+
+func play(track:uint, loops:int, fade_in_seconds:float) {
+    let properties = sdl_create_properties()
+    if properties == 0 { panic("GFX.Audio could not configure playback: " + error()) }
+    if sdl_set_number_property(
+        properties,
+        C.terminated_pointer("SDL_mixer.play.loops"),
+        loops
+    ) == 0 {
+        sdl_destroy_properties(properties)
+        panic("GFX.Audio could not configure repeat: " + error())
+    }
+    if fade_in_seconds > 0.0 && sdl_set_number_property(
+        properties,
+        C.terminated_pointer("SDL_mixer.play.fade_in_milliseconds"),
+        seconds_to_milliseconds(fade_in_seconds)
+    ) == 0 {
+        sdl_destroy_properties(properties)
+        panic("GFX.Audio could not configure fade-in: " + error())
+    }
+    let started = mix_play_track(C.pointer_bits(track), properties) != 0
+    sdl_destroy_properties(properties)
+    require(started, "start playback")
+}
+
+func stop(track:uint, fade_out_seconds:float) {
+    var frames:int = 0
+    if fade_out_seconds > 0.0 {
+        frames = mix_track_ms_to_frames(
+            C.pointer_bits(track), seconds_to_milliseconds(fade_out_seconds)
+        )
+        if frames < 0 { panic("GFX.Audio could not calculate fade-out duration: " + error()) }
+    }
+    require(mix_stop_track(C.pointer_bits(track), frames) != 0, "stop playback")
+}
+
+func pause(track:uint) {
+    require(mix_pause_track(C.pointer_bits(track)) != 0, "pause playback")
+}
+
+func resume(track:uint) {
+    require(mix_resume_track(C.pointer_bits(track)) != 0, "resume playback")
+}
+
+func wait() {
+    sdl_delay(1)
+}
+
+func is_playing(track:uint) bool {
+    return mix_track_playing(C.pointer_bits(track)) != 0
+}
+
+func is_paused(track:uint) bool {
+    return mix_track_paused(C.pointer_bits(track)) != 0
+}
+
+func set_master_volume(mixer:uint, volume:float) {
+    require(mix_set_mixer_gain(C.pointer_bits(mixer), volume as float32) != 0, "change master volume")
+}
+
+func set_volume(track:uint, volume:float) {
+    require(mix_set_track_gain(C.pointer_bits(track), volume as float32) != 0, "change playback volume")
+}
+
+func set_speed(track:uint, speed:float) {
+    require(mix_set_track_frequency_ratio(C.pointer_bits(track), speed as float32) != 0, "change playback speed")
+}
+
+func set_position(track:uint, position:Math.Vec3) {
+    var point:float32[3]
+    point[0] = position.x as float32
+    point[1] = position.y as float32
+    point[2] = position.z as float32
+    require(mix_set_track_3d_position(
+        C.pointer_bits(track),
+        C.pointer_bits(C.address_bits(C.mutable_pointer(point)))
+    ) != 0, "change playback position")
+}
+
+func clear_position(track:uint) {
+    require(mix_set_track_3d_position(
+        C.pointer_bits(track), C.pointer_bits(0 as uint)
+    ) != 0, "disable spatial playback")
+}
+
+func set_reverse_stereo(track:uint, reversed:bool) {
+    let count = track_channels(track)
+    if !reversed {
+        require(mix_set_track_output_channel_map(
+            C.pointer_bits(track), C.pointer_bits(0 as uint), count as int32
+        ) != 0, "restore stereo channels")
+        return
+    }
+    if count < 2 || count > 16 {
+        panic("GFX.Audio stereo inversion requires an output with 2 to 16 channels")
+    }
+    var channels:int32[16]
+    var index = 0
+    while index < count {
+        channels[index] = index as int32
+        index++
+    }
+    channels[0] = 1
+    channels[1] = 0
+    require(mix_set_track_output_channel_map(
+        C.pointer_bits(track),
+        C.pointer_bits(C.address_bits(C.mutable_pointer(channels))),
+        count as int32
+    ) != 0, "reverse stereo channels")
+}
+
+func track_channels(track:uint) int {
+    let mixer = C.address_bits(mix_get_track_mixer(C.pointer_bits(track)))
+    if mixer == 0 as uint { panic("GFX.Audio could not identify a playback mixer: " + error()) }
+    var format:uint32[3]
+    require(mix_get_mixer_format(
+        C.pointer_bits(mixer),
+        C.pointer_bits(C.address_bits(C.mutable_pointer(format)))
+    ) != 0, "query output channels")
+    let channels = C.load<int32>(C.address_bits(C.mutable_pointer(format)), 4 as uint) as int
+    if channels <= 0 { panic("GFX.Audio received an invalid output channel count") }
+    return channels
+}
+
+func seconds_to_milliseconds(seconds:float) int {
+    if seconds < 0.0 { panic("GFX.Audio fade duration cannot be negative") }
+    return (seconds * 1_000.0) as int
+}
+
+func require(success:bool, action:str) {
+    if !success { panic("GFX.Audio could not " + action + ": " + error()) }
+}
+
+func error() str {
+    let address = C.address_bits(sdl_get_error())
+    if address == 0 as uint { return "unknown SDL error" }
+    var bytes:uint8[] = []
+    var index = 0
+    while index < 4096 {
+        let byte = C.load<uint8>(address, index as uint)
+        if byte == 0 { return C.string(@bytes[0:bytes.count()]) }
+        bytes.append(byte)
+        index++
+    }
+    return "invalid SDL error"
+}
+
+let mix_init = C.function<func() int32>(library:Boundary.SDL3_mixer, name:"MIX_Init")
+let mix_quit = C.function<func() void>(library:Boundary.SDL3_mixer, name:"MIX_Quit")
+let mix_create_mixer_device = C.function<func(uint32, C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_CreateMixerDevice")
+let mix_destroy_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyMixer")
+let mix_load_audio = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_LoadAudio")
+let mix_destroy_audio = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyAudio")
+let mix_create_track = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_CreateTrack")
+let mix_destroy_track = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyTrack")
+let mix_set_track_audio = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackAudio")
+let mix_get_track_mixer = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_GetTrackMixer")
+let mix_get_mixer_format = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_GetMixerFormat")
+let mix_play_track = C.function<func(C.Pointer<uint8>, uint32) int32>(library:Boundary.SDL3_mixer, name:"MIX_PlayTrack")
+let mix_stop_track = C.function<func(C.Pointer<uint8>, int) int32>(library:Boundary.SDL3_mixer, name:"MIX_StopTrack")
+let mix_pause_track = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_PauseTrack")
+let mix_resume_track = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_ResumeTrack")
+let mix_track_playing = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_TrackPlaying")
+let mix_track_paused = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_TrackPaused")
+let mix_track_ms_to_frames = C.function<func(C.Pointer<uint8>, int) int>(library:Boundary.SDL3_mixer, name:"MIX_TrackMSToFrames")
+let mix_set_mixer_gain = C.function<func(C.Pointer<uint8>, float32) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetMixerGain")
+let mix_set_track_gain = C.function<func(C.Pointer<uint8>, float32) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackGain")
+let mix_set_track_frequency_ratio = C.function<func(C.Pointer<uint8>, float32) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackFrequencyRatio")
+let mix_set_track_output_channel_map = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackOutputChannelMap")
+let mix_set_track_3d_position = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrack3DPosition")
+
+// GFX.Audio owns these calls while its SDL3_mixer provider privately requires
+// the SDL3 provider shipped by the parent GFX package.
+let sdl_init_subsystem = C.function<func(uint32) int32>(library:Boundary.SDL3_mixer, name:"SDL_InitSubSystem")
+let sdl_quit_subsystem = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_QuitSubSystem")
+let sdl_create_properties = C.function<func() uint32>(library:Boundary.SDL3_mixer, name:"SDL_CreateProperties")
+let sdl_destroy_properties = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_DestroyProperties")
+let sdl_set_number_property = C.function<func(uint32, C.Pointer<uint8>, int) int32>(library:Boundary.SDL3_mixer, name:"SDL_SetNumberProperty")
+let sdl_get_error = C.function<func() C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"SDL_GetError")
+let sdl_delay = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_Delay")

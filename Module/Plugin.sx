@@ -1,0 +1,28 @@
+use GFX.Application
+use GFX.Application.Plugin as PluginProtocol
+use GFX.Application.Schedule
+use GFX.Audio
+
+public struct Plugin:PluginProtocol {
+    func id() str { return "GFX.Audio.Plugin" }
+
+    func build(application:&Application) {
+        application.add_system(Schedule.startup, start_audio)
+        application.add_system(Schedule.post_update, collect_finished_audio)
+        application.add_system(Schedule.shutdown, stop_audio)
+    }
+}
+
+func start_audio(application:Application) {
+    application.resources().insert(Audio())
+}
+
+func collect_finished_audio(audio:&Audio) {
+    audio.collect_finished()
+}
+
+func stop_audio(application:Application) {
+    var resources = application.resources()
+    var removed = resources.remove<Audio>()
+    assert(removed != null)
+}

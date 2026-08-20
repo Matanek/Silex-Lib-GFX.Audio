@@ -1,0 +1,19 @@
+{
+  "library": "SDL_mixer",
+  "version": "3.2.4",
+  "target": "windows-x64",
+  "linkage": "static",
+  "backends": [
+    "aiff",
+    "au",
+    "drflac",
+    "drmp3",
+    "stb_vorbis",
+    "voc",
+    "wave"
+  ],
+  "sha256": "c08fd0a05ee3295ef71e2f2849df00c27dd98049f292ce92fd78bdaf892603e4",
+  "source_sha256": "182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901",
+  "patch_sha256": "97235a66f3f1fc1287f71d4ba7a478183184cc05b69006ee475f5add5e97824d",
+  "provenance": "Official SDL_mixer 3.2.4 source patched by SDL3_mixer-3.2.4-silex.2.patch and built against SDL 3.4.10"
+}

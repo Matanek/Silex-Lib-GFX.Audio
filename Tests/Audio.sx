@@ -1,0 +1,30 @@
+use GFX.Audio
+use STD.Math
+
+test "describe an audible spatial playback without exposing the mixer" {
+    let sound = Audio.Sound()
+    let playing = Audio.PlayingSound()
+    let playback = Audio.Playback(
+        volume:0.65,
+        repeat:Audio.Repeat.times(3),
+        position:Math.Vec3(4.0, 1.0, -2.0),
+        speed:1.25,
+        reverse_stereo:true,
+        fade_in_seconds:0.2
+    )
+
+    assert(!sound.is_valid())
+    assert(!playing.is_valid())
+    assert(playback.volume == 0.65)
+    assert(playback.position != null)
+    assert(playback.speed == 1.25)
+    assert(playback.reverse_stereo)
+    assert(playback.fade_in_seconds == 0.2)
+}
+
+test "add audio through its capability plugin" {
+    var application = GFX.Application()
+    application.add_plugin(Audio.Plugin())
+    assert(application.has_plugin("GFX.Audio.Plugin"))
+    assert(!application.resources().has<Audio>())
+}
