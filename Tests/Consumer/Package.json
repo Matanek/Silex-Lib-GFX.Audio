@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "GFX": "^0.36.0",
-    "GFX.Audio": "^0.1.0"
+    "GFX": "^0.37.0",
+    "GFX.Audio": "^0.2.0"
   }
 }

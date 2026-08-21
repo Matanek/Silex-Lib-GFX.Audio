@@ -43,7 +43,7 @@ func main() {
         ..add_plugin(Plugins.Audio())
         ..add_plugin(Plugins.Time())
         ..add_plugin(Plugins.FramePacing(60))
-        ..add_plugin(Plugins.Window(Plugins.WindowSettings()
+        ..add_plugin(Plugins.Window(Plugins.Window.Settings()
             ..title = "GFX Spatial Audio"
             ..width = 640
             ..height = 360
