@@ -1,7 +1,9 @@
 {
   "name": "GFX.Audio",
-  "version": "0.2.0",
-  "requires": { "silex": ">=0.38.36" },
+  "version": "0.3.0",
+  "description": "Sound loading and playback with fades, routing, spatial position, and GFX integration.",
+  "authors": ["Matanek"],
+  "requires": { "silex": ">=0.39.0" },
   "dependencies": {
     "GFX": "^0.37.0",
     "STD": "^0.16.0"
