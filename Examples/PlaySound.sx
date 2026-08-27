@@ -1,9 +1,0 @@
-use GFX.Audio as GFXAudio
-use GFX.Resources
-
-func main() {
-    var audio = Resources.Audio()
-    let sound = audio.load("../Assets/Audio/SpatialTone.wav")
-    let playing = audio.play(sound, GFXAudio.Playback(volume:0.2))
-    audio.wait(playing)
-}

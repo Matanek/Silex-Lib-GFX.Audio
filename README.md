@@ -19,8 +19,8 @@ func main() {
 }
 ```
 
-The package owns its portable Audio API, application plugin, examples, tests,
-sample asset and complete SDL3_mixer boundary. Its private `SDL3_mixer`
+The package owns its portable Audio API, application plugin, tests, sample
+asset and complete SDL3_mixer boundary. Its private `SDL3_mixer`
 provider requires the `GFX.SDL3` provider; SDL types and handles never enter the
 public API.
 
@@ -30,3 +30,6 @@ own manifest; it verifies those declarations and the native provider dependency
 from outside the package.
 
 See [Docs/README.md](Docs/README.md) for the complete API contract.
+The moving spatial-audio application belongs to the central
+[Silex-Examples](https://github.com/Matanek/Silex-Examples/blob/main/Sources/SpatialAudio.sx)
+catalogue.
