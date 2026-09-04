@@ -50,7 +50,9 @@ case "$target" in
         esac
         archive_name="SDL3_mixer-3.2.4-linux-arm64.a"
         target_c_flags="-mno-outline-atomics"
-        cmake_target_arguments=()
+        cmake_target_arguments=(
+            -DSDL_UNIX_CONSOLE_BUILD=ON
+        )
         ;;
     *)
         echo "unsupported SDL3_mixer target: $target" >&2
