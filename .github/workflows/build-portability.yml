@@ -11,6 +11,7 @@ on:
       - .github/workflows/build-portability.yml
       - Native/build-sdl3-mixer.sh
       - Boundary/SDL3_mixer-3.2.4-silex.2.patch
+      - Boundary/SHA256SUMS.txt
 
 permissions:
   contents: read
@@ -124,10 +125,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected="$(awk -v archive='${{ matrix.archive }}' '$2 == archive { print $1 }' GFX.Audio/Boundary/SHA256SUMS.txt)"
+          test -n "$expected"
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "$RUNNER_TEMP/output-a/${{ matrix.archive }}"
+            echo "$expected  $RUNNER_TEMP/output-a/${{ matrix.archive }}" | sha256sum -c -
           else
-            shasum -a 256 "$RUNNER_TEMP/output-a/${{ matrix.archive }}"
+            echo "$expected  $RUNNER_TEMP/output-a/${{ matrix.archive }}" | shasum -a 256 -c -
           fi
 
       - name: Preserve candidate archive

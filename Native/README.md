@@ -21,3 +21,8 @@ Native/build-sdl3-mixer.sh /path/to/SDL3-3.4.10 /path/to/SDL3_mixer-3.2.4 linux-
 The script requires the native target host, fixes archive timestamps, remaps
 source and build paths, verifies the patch checksum, inspects the architecture
 and required mixer symbols, then prints the archive SHA-256.
+
+Both missing archives were reproduced byte for byte by GitHub Actions run
+`33908070086`. Their target manifests and hashes are recorded alongside the
+four established targets under `Boundary/`. The future `silex.3` release URLs
+are declared for packaging, but this validation does not create that release.
