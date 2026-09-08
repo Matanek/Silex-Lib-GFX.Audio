@@ -9,7 +9,7 @@ silex install GFX.Audio
 
 ## Documentation
 
-- [Documentation française](Docs/FR/README.md)
+- [French documentation](Docs/FR/README.md)
 - [English documentation](Docs/EN/README.md)
 
 The package requires Silex 0.43.0 or newer.
