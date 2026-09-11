@@ -8,7 +8,7 @@ public struct Plugin:PluginProtocol {
 
     func build(application:&Application) {
         application.add_system(Schedule.startup, start_audio)
-        application.add_system(Schedule.post_update, collect_finished_audio)
+        application.add_system(Schedule.post_update, collect_finished_audio, process_mode:GFX.Application.ProcessMode.always)
         application.add_system(Schedule.shutdown, stop_audio)
     }
 }
