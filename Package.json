@@ -14,6 +14,7 @@
   "boundary": {
     "macos-arm64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/macos-arm64/libSDL3_mixer.a",
           "requires": ["GFX.SDL3"]
@@ -22,6 +23,7 @@
     },
     "macos-x64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/macos-x64/libSDL3_mixer.a",
           "requires": ["GFX.SDL3"]
@@ -30,6 +32,7 @@
     },
     "linux-x64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/linux-x64/libSDL3_mixer.a",
           "requires": ["GFX.SDL3"]
@@ -38,6 +41,7 @@
     },
     "linux-arm64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/linux-arm64/libSDL3_mixer.a",
           "requires": ["GFX.SDL3"]
@@ -46,6 +50,7 @@
     },
     "windows-x64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/windows-x64/SDL3_mixer.lib",
           "requires": ["GFX.SDL3"]
@@ -54,6 +59,7 @@
     },
     "windows-arm64": {
       "providers": {
+        "SDL3": { "requires": ["GFX.SDL3"] },
         "SDL3_mixer": {
           "archive": "Boundary/windows-arm64/SDL3_mixer.lib",
           "requires": ["GFX.SDL3"]

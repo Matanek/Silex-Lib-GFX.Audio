@@ -223,12 +223,12 @@ let mix_set_track_frequency_ratio = C.function<func(C.Pointer<uint8>, float32) i
 let mix_set_track_output_channel_map = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackOutputChannelMap")
 let mix_set_track_3d_position = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"MIX_SetTrack3DPosition")
 
-// GFX.Audio owns these calls while its SDL3_mixer provider privately requires
-// the SDL3 provider shipped by the parent GFX package.
-let sdl_init_subsystem = C.function<func(uint32) int32>(library:Boundary.SDL3_mixer, name:"SDL_InitSubSystem")
-let sdl_quit_subsystem = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_QuitSubSystem")
-let sdl_create_properties = C.function<func() uint32>(library:Boundary.SDL3_mixer, name:"SDL_CreateProperties")
-let sdl_destroy_properties = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_DestroyProperties")
-let sdl_set_number_property = C.function<func(uint32, C.Pointer<uint8>, int) int32>(library:Boundary.SDL3_mixer, name:"SDL_SetNumberProperty")
-let sdl_get_error = C.function<func() C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"SDL_GetError")
-let sdl_delay = C.function<func(uint32) void>(library:Boundary.SDL3_mixer, name:"SDL_Delay")
+// SDL core calls use the parent provider directly; SDL3_mixer privately
+// requires the same provider for its own implementation.
+let sdl_init_subsystem = C.function<func(uint32) int32>(library:Boundary.SDL3, name:"SDL_InitSubSystem")
+let sdl_quit_subsystem = C.function<func(uint32) void>(library:Boundary.SDL3, name:"SDL_QuitSubSystem")
+let sdl_create_properties = C.function<func() uint32>(library:Boundary.SDL3, name:"SDL_CreateProperties")
+let sdl_destroy_properties = C.function<func(uint32) void>(library:Boundary.SDL3, name:"SDL_DestroyProperties")
+let sdl_set_number_property = C.function<func(uint32, C.Pointer<uint8>, int) int32>(library:Boundary.SDL3, name:"SDL_SetNumberProperty")
+let sdl_get_error = C.function<func() C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_GetError")
+let sdl_delay = C.function<func(uint32) void>(library:Boundary.SDL3, name:"SDL_Delay")
