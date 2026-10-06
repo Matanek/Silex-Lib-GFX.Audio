@@ -8,7 +8,7 @@ import tempfile
 
 owner = Path(__file__).resolve().parents[1]
 workspace = owner.parents[1]
-compiler = workspace / "Silex/Toolchain/zig-out/bin/silex"
+compiler = Path(os.environ.get("SILEX_EXECUTABLE", str(workspace / "Silex/Toolchain/zig-out/bin/silex")))
 cases = [
     ("empty", "[]", "48_000", "1", "samples must contain at least one complete frame"),
     ("partial_frame", "[0.0 as float32]", "48_000", "2", "samples must contain at least one complete frame"),

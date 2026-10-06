@@ -14,7 +14,7 @@ d’échantillons. Le package s’utilise directement ou avec son plugin
 silex install GFX.Audio
 ```
 
-GFX.Audio demande Silex 0.39.0 ou une version plus récente.
+GFX.Audio demande Silex 0.44.0 ou une version plus récente.
 
 ## Jouer un son dans une application
 
@@ -50,6 +50,41 @@ invalide le handle, mais les lectures qui le détiennent déjà peuvent finir.
 Les artefacts distribués décodent WAV, AIFF, AU, VOC, FLAC, MP3 et Ogg Vorbis.
 La prise en charge appartient à l’artefact et ne se déduit pas de l’extension du
 fichier.
+
+## Charger depuis la mémoire et traiter un échec
+
+`Audio.try_decode(bytes:@uint8[..])` décode des octets encodés, par exemple
+un WAV embarqué. `Audio.try_load(path:str)` charge un fichier. Ces deux
+opérations retournent `Result<Sound, STD.Error.Error>` ; `load(path)` conserve
+son `panic` sur échec.
+
+Le [programme complet](../MemorySound.sx) charge un WAV sans fichier temporaire :
+
+```sx
+use GFX.Audio
+
+func main() {
+    var audio = Audio()
+    let bytes = embed_bytes("../../Assets/Audio/SpatialTone.wav")
+    match audio.try_decode(@bytes[0:bytes.count()]) {
+        failure(error) => { panic(error.detail) }
+        success(sound) => { audio.wait(audio.play(sound)) }
+    }
+}
+```
+
+Le décodage complet possède son résultat : la source peut être modifiée ou
+libérée dès le retour. Les octets vides, tronqués ou non reconnus produisent
+`invalid_data`. Un échec d’ouverture de fichier conserve la cause `other`
+actuellement fournie par STD.File et le message du provider ; il ne prétend pas
+distinguer fichier absent et permission refusée. L’erreur précise aussi
+`operation` (`audio.load` ou `audio.decode`) et le chemin dans `subject` pour
+un fichier. Un échec n’empêche pas les chargements suivants.
+
+Les handles `Sound` et `PlayingSound` appartiennent à leur instance d’Audio.
+Une autre instance ne peut ni les décharger ni contrôler ses propres lectures
+avec eux. Les handles périmés restent rejetés même après réutilisation d’une
+place ou destruction du propriétaire.
 
 ## Créer un son depuis des échantillons
 

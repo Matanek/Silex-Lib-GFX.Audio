@@ -1,0 +1,9 @@
+use GFX.Audio
+func main() {
+    var audio = Audio()
+    let bytes = embed_bytes("../Assets/Audio/SpatialTone.wav")
+    match audio.try_decode(@bytes[0:bytes.count()]) {
+        failure(error) => { panic(error.detail) }
+        success(sound) => { audio.wait(audio.play(sound)) }
+    }
+}

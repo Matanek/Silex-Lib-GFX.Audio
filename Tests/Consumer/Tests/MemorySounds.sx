@@ -1,0 +1,54 @@
+use GFX.Audio
+use STD.Error.Kind
+func decode_source(audio:&Audio) Audio.Sound {
+    let embedded = embed_bytes("../../../Assets/Audio/SpatialTone.wav")
+    var bytes:uint8[] = []
+    for byte in embedded { bytes.append(byte) }
+    match audio.try_decode(@bytes[0:bytes.count()]) {
+        failure(error) => { panic(error.detail) }
+        success(sound) => { bytes[0] = 0; bytes.clear(); return sound }
+    }
+}
+test "decode owned memory after recoverable failures and release source" {
+    var audio = Audio()
+    var empty:uint8[] = []
+    match audio.try_decode(@empty[0:0]) {
+        success(sound) => { panic("empty bytes decoded") }
+        failure(error) => { assert(error.kind == Kind.invalid_data()); assert(error.detail != "") }
+    }
+    let truncated = embed_bytes("../../../Assets/Audio/SpatialTone.wav")
+    match audio.try_decode(@truncated[0:12]) {
+        success(sound) => { panic("truncated bytes decoded") }
+        failure(error) => { assert(error.kind == Kind.invalid_data()) }
+    }
+    var invalid:uint8[] = [1, 2, 3, 4, 5, 6, 7, 8]
+    match audio.try_decode(@invalid[0:invalid.count()]) {
+        success(sound) => { panic("unknown bytes decoded") }
+        failure(error) => { assert(error.detail != "") }
+    }
+    match audio.try_load("/private/tmp/silex-gfx-definitely-absent.wav") {
+        success(sound) => { panic("missing file loaded") }
+        failure(error) => { assert(error.kind == Kind.other()); assert(error.operation == "audio.load") }
+    }
+    let sound = decode_source(audio)
+    let playback = audio.play(sound)
+    audio.wait(playback)
+    assert(audio.unload(sound))
+}
+test "handles are scoped to an owner even with equal indices" {
+    var first = Audio()
+    var second = Audio()
+    let a = decode_source(first)
+    let b = decode_source(second)
+    assert(first.contains(a) && second.contains(b))
+    assert(!second.contains(a) && !first.contains(b))
+    assert(!second.unload(a))
+    let playing_a = first.play(a, Audio.Playback(repeat:Audio.Repeat.forever()))
+    let playing_b = second.play(b, Audio.Playback(repeat:Audio.Repeat.forever()))
+    assert(!second.is_playing(playing_a))
+    assert(!second.release(playing_a))
+    assert(second.is_playing(playing_b))
+    first.stop(playing_a)
+    second.stop(playing_b)
+    assert(first.release(playing_a) && second.release(playing_b))
+}

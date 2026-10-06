@@ -30,12 +30,16 @@ func destroy_mixer(mixer:uint) {
     mix_destroy_mixer(C.pointer_bits(mixer))
 }
 
-func load(mixer:uint, path:str) uint {
-    let audio = C.address_bits(mix_load_audio(
-        C.pointer_bits(mixer), C.terminated_pointer(path), 1
-    ))
-    if audio == 0 as uint { panic("GFX.Audio could not load '" + path + "': " + error()) }
-    return audio
+func try_load(mixer:uint, path:str) uint {
+    return C.address_bits(mix_load_audio(C.pointer_bits(mixer), C.terminated_pointer(path), 1))
+}
+
+func try_decode(mixer:uint, bytes:@uint8[..]) uint {
+    let packed = C.string(bytes)
+    let io = C.address_bits(sdl_io_from_const_mem(C.pointer(packed), C.byte_count(packed)))
+    if io == 0 as uint { return 0 as uint }
+    // Full predecode finishes every access to the borrowed encoded bytes here.
+    return C.address_bits(mix_load_audio_io(C.pointer_bits(mixer), C.pointer_bits(io), 1, 1))
 }
 
 func destroy_audio(audio:uint) {
@@ -266,3 +270,6 @@ let sdl_get_error = C.function<func() C.Pointer<uint8> >(library:Boundary.SDL3, 
 let sdl_delay = C.function<func(uint32) void>(library:Boundary.SDL3, name:"SDL_Delay")
 let sdl_malloc = C.function<func(C.Size) C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_malloc")
 let sdl_free = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3, name:"SDL_free")
+
+let sdl_io_from_const_mem = C.function<func(C.Pointer<uint8>, C.Size) C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_IOFromConstMem")
+let mix_load_audio_io = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32, int32) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_LoadAudio_IO")

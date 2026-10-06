@@ -1,16 +1,23 @@
 use GFX.Audio.Native
 use STD.Math
+use STD.Error
+use STD.Error.Kind
+use STD.File
+use Interop.C
 
 public struct Sound {
+    module var owner:Owner?
     module let sound_index:int
     module let sound_generation:int
 
     init() {
+        self.owner = null
         self.sound_index = -1
         self.sound_generation = 0
     }
 
-    module init(index:int, generation:int) {
+    module init(owner:Owner, index:int, generation:int) {
+        self.owner = owner
         self.sound_index = index
         self.sound_generation = generation
     }
@@ -21,15 +28,18 @@ public struct Sound {
 }
 
 public struct PlayingSound {
+    module var owner:Owner?
     module let playback_index:int
     module let playback_generation:int
 
     init() {
+        self.owner = null
         self.playback_index = -1
         self.playback_generation = 0
     }
 
-    module init(index:int, generation:int) {
+    module init(owner:Owner, index:int, generation:int) {
+        self.owner = owner
         self.playback_index = index
         self.playback_generation = generation
     }
@@ -81,6 +91,14 @@ public struct Playback {
     }
 }
 
+class Owner {
+    init() {}
+    func matches(other:Owner?) bool {
+        if let value = other { return C.object_address(self) == C.object_address(value) }
+        return false
+    }
+}
+
 class SoundEntry {
     var handle:uint
     var generation:int
@@ -106,11 +124,13 @@ class PlaybackEntry {
 }
 
 public class Audio {
+    private var owner:Owner
     private let mixer:uint
     private var sounds:SoundEntry[]
     private var playbacks:PlaybackEntry[]
 
     init() {
+        self.owner = Owner()
         Native.initialize()
         self.mixer = Native.create_mixer()
         self.sounds = []
@@ -135,7 +155,35 @@ public class Audio {
     }
 
     func load(path:str) Sound {
-        return self.add_sound(Native.load(self.mixer, path))
+        match self.try_load(path) {
+            failure(error) => { panic("GFX.Audio could not load '" + path + "': " + error.detail) }
+            success(sound) => { return sound }
+        }
+    }
+
+    func try_load(path:str) Result<Sound, Error> {
+        let handle = Native.try_load(self.mixer, path)
+        if handle != 0 as uint { return Result<Sound, Error>.success(self.add_sound(handle)) }
+        let detail = Native.error()
+        // Consult the system error only after failure, without reading the file twice.
+        match File.open(path, File.OpenOptions(access:File.Access.read(), creation:File.Creation.open_existing(), append:false)) {
+            failure(error) => {
+                return Result<Sound, Error>.failure(Error(kind:error.kind, operation:"audio.load", subject:path, detail:detail))
+            }
+            success(var file) => { let closed = File.close(move file) }
+        }
+        return Result<Sound, Error>.failure(Error(kind:Kind.invalid_data(), operation:"audio.load", subject:path, detail:detail))
+    }
+
+    func try_decode(bytes:@uint8[..]) Result<Sound, Error> {
+        if bytes.is_empty() {
+            return Result<Sound, Error>.failure(Error(kind:Kind.invalid_data(), operation:"audio.decode", subject:null, detail:"encoded audio is empty"))
+        }
+        let handle = Native.try_decode(self.mixer, bytes)
+        if handle == 0 as uint {
+            return Result<Sound, Error>.failure(Error(kind:Kind.invalid_data(), operation:"audio.decode", subject:null, detail:Native.error()))
+        }
+        return Result<Sound, Error>.success(self.add_sound(handle))
     }
 
     func create(samples:@float32[..], sample_rate:int, channels:int = 1) Sound {
@@ -147,11 +195,11 @@ public class Audio {
         var sounds = self.sounds
         sounds.append(SoundEntry(handle))
         self.sounds = sounds
-        return Sound(sounds.count() - 1, 1)
+        return Sound(self.owner, sounds.count() - 1, 1)
     }
 
     func contains(sound:Sound) bool {
-        if !sound.is_valid() || sound.sound_index >= self.sounds.count() { return false }
+        if !self.owner.matches(sound.owner) || !sound.is_valid() || sound.sound_index >= self.sounds.count() { return false }
         var entry = self.sounds[sound.sound_index]
         return entry.active && entry.generation == sound.sound_generation
     }
@@ -186,7 +234,7 @@ public class Audio {
             if !entry.active {
                 entry.handle = track
                 entry.active = true
-                return PlayingSound(index, entry.generation)
+                return PlayingSound(self.owner, index, entry.generation)
             }
             index++
         }
@@ -194,7 +242,7 @@ public class Audio {
         var playbacks = self.playbacks
         playbacks.append(PlaybackEntry(track))
         self.playbacks = playbacks
-        return PlayingSound(playbacks.count() - 1, 1)
+        return PlayingSound(self.owner, playbacks.count() - 1, 1)
     }
 
     func is_playing(sound:PlayingSound) bool {
@@ -285,7 +333,7 @@ public class Audio {
     }
 
     private func contains_playback(sound:PlayingSound) bool {
-        if !sound.is_valid() || sound.playback_index >= self.playbacks.count() { return false }
+        if !self.owner.matches(sound.owner) || !sound.is_valid() || sound.playback_index >= self.playbacks.count() { return false }
         var entry = self.playbacks[sound.playback_index]
         return entry.active && entry.generation == sound.playback_generation
     }

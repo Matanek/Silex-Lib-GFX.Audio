@@ -13,7 +13,7 @@ package works directly or through its `GFX.Application` plugin.
 silex install GFX.Audio
 ```
 
-GFX.Audio requires Silex 0.39.0 or newer.
+GFX.Audio requires Silex 0.44.0 or newer.
 
 ## Play a sound in an application
 
@@ -48,6 +48,39 @@ invalidates the handle, but playbacks that already retain it can finish.
 
 Distributed artifacts decode WAV, AIFF, AU, VOC, FLAC, MP3, and Ogg Vorbis.
 Support belongs to the artifact and is not inferred from a file extension.
+
+## Load from memory and handle a failure
+
+`Audio.try_decode(bytes:@uint8[..])` decodes encoded bytes, such as an embedded
+WAV. `Audio.try_load(path:str)` loads a file. Both operations return
+`Result<Sound, STD.Error.Error>`; `load(path)` retains its panic on failure.
+
+The [complete program](../MemorySound.sx) loads a WAV without a temporary file:
+
+```sx
+use GFX.Audio
+
+func main() {
+    var audio = Audio()
+    let bytes = embed_bytes("../../Assets/Audio/SpatialTone.wav")
+    match audio.try_decode(@bytes[0:bytes.count()]) {
+        failure(error) => { panic(error.detail) }
+        success(sound) => { audio.wait(audio.play(sound)) }
+    }
+}
+```
+
+Full decoding owns its result: source bytes may be changed or released as soon
+as the call returns. Empty, truncated or unrecognized bytes produce
+`invalid_data`. File opening failures retain the `other` cause currently
+provided by STD.File and the provider message; they do not claim to distinguish
+missing files from denied access. The error also provides `operation`
+(`audio.load` or `audio.decode`) and the file path in `subject`. A failure does
+not prevent subsequent loads.
+
+`Sound` and `PlayingSound` handles belong to their Audio instance. Another
+instance cannot unload them or control its own playbacks with them. Stale handles
+remain rejected after slot reuse or destruction of their owner.
 
 ## Create a sound from samples
 
