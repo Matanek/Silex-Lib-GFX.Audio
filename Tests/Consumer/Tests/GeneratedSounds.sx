@@ -1,0 +1,51 @@
+use GFX.Audio
+use STD.Math
+
+func generated_sound(audio:&Audio, channels:int) Audio.Sound {
+    var samples:float32[] = []
+    var frame = 0
+    while frame < 2_400 {
+        let sample = (0.1 * Math.sin(2.0 * Math.pi() * 440.0 * frame as float / 24_000.0)) as float32
+        samples.append(sample)
+        if channels == 2 { samples.append(-sample) }
+        frame++
+    }
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:24_000, channels:channels)
+    // The caller may change and release its storage before playback starts.
+    samples[0] = 1.0 as float32
+    samples.clear()
+    return sound
+}
+
+test "play a generated mono sound after releasing its source samples" {
+    var audio = Audio()
+    let sound = generated_sound(audio, 1)
+    assert(audio.contains(sound))
+    let first = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever()))
+    let second = audio.play(sound)
+    assert(audio.is_playing(first))
+    assert(audio.is_playing(second))
+    audio.pause(first)
+    assert(audio.is_paused(first))
+    audio.resume(first)
+    audio.set_volume(first, 0.5)
+    audio.set_speed(first, 1.25)
+    audio.set_position(first, Math.Vec3(-1.0, 0.0, -1.0))
+    assert(audio.unload(sound))
+    assert(!audio.contains(sound))
+    audio.wait(second)
+    assert(!audio.is_playing(second))
+    audio.stop(first)
+    assert(audio.release(first))
+}
+
+test "play and reuse a generated interleaved stereo sound" {
+    var audio = Audio()
+    let sound = generated_sound(audio, 2)
+    let first = audio.play(sound)
+    audio.wait(first)
+    let second = audio.play(sound)
+    audio.set_reverse_stereo(second, true)
+    audio.wait(second)
+    assert(audio.unload(sound))
+}

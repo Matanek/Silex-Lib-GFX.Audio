@@ -1,0 +1,34 @@
+use GFX.Audio.Native
+use Interop.Boundary
+use Interop.C
+
+let create_mixer = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_CreateMixer")
+let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
+
+test "preserve stereo sample values and order in an independent native copy" {
+    Native.initialize()
+    var spec:uint[2]
+    let spec_address = C.address_bits(C.mutable_pointer(spec))
+    let format = C.store<uint32>(spec_address, 0 as uint, 0x8120 as uint32)
+    let channels = C.store<int32>(spec_address, 4 as uint, 2 as int32)
+    let frequency = C.store<int32>(spec_address, 8 as uint, 24_000 as int32)
+    let mixer = C.address_bits(create_mixer(C.pointer_bits(spec_address)))
+    assert(mixer != 0 as uint, Native.error())
+    var samples:float32[] = [0.75 as float32, 0.25 as float32, -0.5 as float32, -1.0 as float32, 1.0 as float32, -0.75 as float32]
+    let sound = Native.create(mixer, @samples[1:5], 24_000, 2)
+    samples[1] = 0.0 as float32
+    samples.clear()
+    let track = Native.create_track(mixer, sound)
+    Native.play(track, 0, 0.0)
+    Native.destroy_audio(sound)
+    var output:uint[2]
+    let output_address = C.address_bits(C.mutable_pointer(output))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(output_address), 16) == 16)
+    assert(C.load<float32>(output_address, 0 as uint) == 0.25 as float32)
+    assert(C.load<float32>(output_address, 4 as uint) == -0.5 as float32)
+    assert(C.load<float32>(output_address, 8 as uint) == -1.0 as float32)
+    assert(C.load<float32>(output_address, 12 as uint) == 1.0 as float32)
+    Native.destroy_track(track)
+    Native.destroy_mixer(mixer)
+    Native.shutdown()
+}

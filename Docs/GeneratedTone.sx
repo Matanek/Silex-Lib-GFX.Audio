@@ -1,0 +1,19 @@
+use GFX.Audio
+use STD.Math
+
+func main() {
+    var samples:float32[] = []
+    var frame = 0
+    while frame < 12_000 {
+        let time = frame as float / 48_000.0
+        samples.append((0.1 * Math.sin(2.0 * Math.pi() * 440.0 * time)) as float32)
+        frame++
+    }
+
+    var audio = Audio()
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    samples.clear()
+    let playing = audio.play(sound)
+    audio.wait(playing)
+    assert(audio.unload(sound))
+}

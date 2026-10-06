@@ -1,7 +1,8 @@
 # Play sounds with GFX.Audio
 
-`GFX.Audio` loads reusable sounds and controls every audible playback without
-exposing SDL devices, mixers, tracks, channel maps, or sample formats. The
+`GFX.Audio` loads reusable sounds or creates them from samples, and controls
+every audible playback without exposing SDL devices, mixers, tracks, channel
+maps, or native sample formats. The
 package works directly or through its `GFX.Application` plugin.
 
 [Lire cette documentation en français.](../FR/README.md)
@@ -47,6 +48,51 @@ invalidates the handle, but playbacks that already retain it can finish.
 
 Distributed artifacts decode WAV, AIFF, AU, VOC, FLAC, MP3, and Ogg Vorbis.
 Support belongs to the artifact and is not inferred from a file extension.
+
+## Create a sound from samples
+
+`Audio.create(samples:@float32[..], sample_rate:int, channels:int = 1)` creates
+a reusable `Sound` from a sample view. No file is needed. This program produces
+a 440 Hz A tone for a quarter of a second:
+
+```sx
+use GFX.Audio
+use STD.Math
+
+func main() {
+    var samples:float32[] = []
+    var frame = 0
+    while frame < 12_000 {
+        let time = frame as float / 48_000.0
+        samples.append((0.1 * Math.sin(2.0 * Math.pi() * 440.0 * time)) as float32)
+        frame++
+    }
+
+    var audio = Audio()
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    samples.clear()
+    let playing = audio.play(sound)
+    audio.wait(playing)
+    assert(audio.unload(sound))
+}
+```
+
+The [runnable source](../GeneratedTone.sx) contains this program. From
+`SilexProject/`, run `silex run Packages/GFX.Audio/Docs/GeneratedTone.sx`.
+
+Each sample must be finite and between `-1.0` and `1.0`; zero represents
+silence. `sample_rate` is the number of audio frames per second and must be
+between 1 and 2,147,483,647. `channels` defaults to 1 (mono) and accepts 1 to 8
+channels. Channels are interleaved: stereo values follow left, right, left,
+right order. The buffer must contain at least one complete frame and its
+size must be a multiple of `channels`. Invalid input causes a `panic`.
+
+`create` copies the values before returning. The source array can therefore
+be changed or released immediately. Sound duration is
+`samples.count() / channels / sample_rate` seconds. Like a loaded sound,
+it supports simultaneous playbacks and every playback control; `unload`
+invalidates its handle without interrupting playbacks that retain it.
+Creation consumes a complete buffer and does not provide continuous streaming.
 
 ## Control one playback
 

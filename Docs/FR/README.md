@@ -1,7 +1,8 @@
 # Jouer des sons avec GFX.Audio
 
-`GFX.Audio` charge des sons réutilisables et contrôle chaque lecture audible
-sans exposer devices SDL, mixers, pistes, cartes de canaux ou formats
+`GFX.Audio` charge des sons réutilisables ou les crée depuis des échantillons,
+et contrôle chaque lecture audible
+sans exposer devices SDL, mixers, pistes, cartes de canaux ou formats natifs
 d’échantillons. Le package s’utilise directement ou avec son plugin
 `GFX.Application`.
 
@@ -49,6 +50,52 @@ invalide le handle, mais les lectures qui le détiennent déjà peuvent finir.
 Les artefacts distribués décodent WAV, AIFF, AU, VOC, FLAC, MP3 et Ogg Vorbis.
 La prise en charge appartient à l’artefact et ne se déduit pas de l’extension du
 fichier.
+
+## Créer un son depuis des échantillons
+
+`Audio.create(samples:@float32[..], sample_rate:int, channels:int = 1)` crée
+un `Sound` réutilisable depuis une vue d’échantillons. Aucun fichier n’est
+nécessaire. Ce programme produit un la de 440 Hz pendant un quart de seconde :
+
+```sx
+use GFX.Audio
+use STD.Math
+
+func main() {
+    var samples:float32[] = []
+    var frame = 0
+    while frame < 12_000 {
+        let time = frame as float / 48_000.0
+        samples.append((0.1 * Math.sin(2.0 * Math.pi() * 440.0 * time)) as float32)
+        frame++
+    }
+
+    var audio = Audio()
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    samples.clear()
+    let playing = audio.play(sound)
+    audio.wait(playing)
+    assert(audio.unload(sound))
+}
+```
+
+La [source exécutable](../GeneratedTone.sx) reprend ce programme. Depuis
+`SilexProject/`, lancez `silex run Packages/GFX.Audio/Docs/GeneratedTone.sx`.
+
+Chaque échantillon doit être fini et compris entre `-1.0` et `1.0` ; zéro
+représente le silence. `sample_rate` indique le nombre de frames audio par
+seconde et doit être compris entre 1 et 2 147 483 647. `channels` vaut 1 par
+défaut (mono) et accepte de 1 à 8 canaux. Les canaux sont entrelacés : en
+stéréo, les valeurs suivent l’ordre gauche, droite, gauche, droite.
+Le tampon doit contenir au moins une frame complète et sa taille doit être
+un multiple de `channels`. Une entrée invalide provoque un `panic`.
+
+`create` copie les valeurs avant de retourner. Le tableau source peut donc
+être modifié ou libéré immédiatement. La durée du son est
+`samples.count() / channels / sample_rate` secondes. Comme un son chargé,
+il accepte plusieurs lectures simultanées et tous les contrôles de lecture ;
+`unload` invalide son handle sans interrompre les lectures qui le détiennent.
+La création porte sur un tampon complet, sans alimentation continue.
 
 ## Contrôler une lecture
 

@@ -135,8 +135,17 @@ public class Audio {
     }
 
     func load(path:str) Sound {
+        return self.add_sound(Native.load(self.mixer, path))
+    }
+
+    func create(samples:@float32[..], sample_rate:int, channels:int = 1) Sound {
+        validate_samples(samples, sample_rate, channels)
+        return self.add_sound(Native.create(self.mixer, samples, sample_rate, channels))
+    }
+
+    private func add_sound(handle:uint) Sound {
         var sounds = self.sounds
-        sounds.append(SoundEntry(Native.load(self.mixer, path)))
+        sounds.append(SoundEntry(handle))
         self.sounds = sounds
         return Sound(sounds.count() - 1, 1)
     }
@@ -284,6 +293,26 @@ public class Audio {
     private func require_playback(sound:PlayingSound) PlaybackEntry {
         if !self.contains_playback(sound) { panic("GFX.Audio playback handle is stale or invalid") }
         return self.playbacks[sound.playback_index]
+    }
+}
+
+func validate_samples(samples:@float32[..], sample_rate:int, channels:int) {
+    if sample_rate <= 0 || sample_rate > 2_147_483_647 {
+        panic("GFX.Audio sample rate must be between 1 and 2147483647 Hz")
+    }
+    if channels < 1 || channels > 8 {
+        panic("GFX.Audio sample channels must be between 1 and 8")
+    }
+    if samples.is_empty() || samples.count() % channels != 0 {
+        panic("GFX.Audio samples must contain at least one complete frame")
+    }
+    if samples.count() > 2_305_843_009_213_693_951 {
+        panic("GFX.Audio sample buffer is too large")
+    }
+    for sample in samples {
+        if !Math.is_finite(sample) || sample < -1.0 || sample > 1.0 {
+            panic("GFX.Audio samples must be finite and between -1 and 1")
+        }
     }
 }
 

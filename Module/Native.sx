@@ -42,6 +42,37 @@ func destroy_audio(audio:uint) {
     mix_destroy_audio(C.pointer_bits(audio))
 }
 
+func create(mixer:uint, samples:@float32[..], sample_rate:int, channels:int) uint {
+    let byte_count = samples.count() * 4
+    let data = C.address_bits(sdl_malloc(byte_count as C.Size))
+    if data == 0 as uint { panic("GFX.Audio could not allocate samples: " + error()) }
+    var index = 0
+    while index < samples.count() {
+        let stored = C.store<float32>(data, (index * 4) as uint, samples[index])
+        index++
+    }
+
+    // SDL_AudioSpec: F32 little-endian, channel count, frames per second.
+    // Every distributed Silex target is little-endian.
+    // Pack the C fields explicitly; Silex collection slots have a private layout.
+    var spec:uint[2]
+    let spec_address = C.address_bits(C.mutable_pointer(spec))
+    let format = C.store<uint32>(spec_address, 0 as uint, 0x8120 as uint32)
+    let channel_count = C.store<int32>(spec_address, 4 as uint, channels as int32)
+    let frequency = C.store<int32>(spec_address, 8 as uint, sample_rate as int32)
+    // Transfer the private copy to SDL_mixer, which frees it with the audio.
+    let audio = C.address_bits(mix_load_raw_audio_no_copy(
+        C.pointer_bits(mixer), C.pointer_bits(data), byte_count as C.Size,
+        C.pointer_bits(spec_address), 1
+    ))
+    if audio == 0 as uint {
+        let detail = error()
+        sdl_free(C.pointer_bits(data))
+        panic("GFX.Audio could not create a sound from samples: " + detail)
+    }
+    return audio
+}
+
 func create_track(mixer:uint, audio:uint) uint {
     let track = C.address_bits(mix_create_track(C.pointer_bits(mixer)))
     if track == 0 as uint { panic("GFX.Audio could not create a playback: " + error()) }
@@ -204,6 +235,7 @@ let mix_quit = C.function<func() void>(library:Boundary.SDL3_mixer, name:"MIX_Qu
 let mix_create_mixer_device = C.function<func(uint32, C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_CreateMixerDevice")
 let mix_destroy_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyMixer")
 let mix_load_audio = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_LoadAudio")
+let mix_load_raw_audio_no_copy = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, C.Size, C.Pointer<uint8>, int32) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_LoadRawAudioNoCopy")
 let mix_destroy_audio = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyAudio")
 let mix_create_track = C.function<func(C.Pointer<uint8>) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_CreateTrack")
 let mix_destroy_track = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_DestroyTrack")
@@ -232,3 +264,5 @@ let sdl_destroy_properties = C.function<func(uint32) void>(library:Boundary.SDL3
 let sdl_set_number_property = C.function<func(uint32, C.Pointer<uint8>, int) int32>(library:Boundary.SDL3, name:"SDL_SetNumberProperty")
 let sdl_get_error = C.function<func() C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_GetError")
 let sdl_delay = C.function<func(uint32) void>(library:Boundary.SDL3, name:"SDL_Delay")
+let sdl_malloc = C.function<func(C.Size) C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_malloc")
+let sdl_free = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3, name:"SDL_free")

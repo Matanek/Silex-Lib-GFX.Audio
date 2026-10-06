@@ -1,7 +1,8 @@
 # GFX.Audio
 
-`GFX.Audio` loads reusable sounds and controls playback, repetition, fades,
-speed, stereo routing, and spatial position, directly or through GFX.Application.
+`GFX.Audio` loads reusable sounds or creates them from samples, and controls
+playback, repetition, fades, speed, stereo routing, and spatial position,
+directly or through GFX.Application.
 
 ```text
 silex install GFX.Audio
