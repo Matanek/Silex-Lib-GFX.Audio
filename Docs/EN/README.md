@@ -13,7 +13,9 @@ package works directly or through its `GFX.Application` plugin.
 silex install GFX.Audio
 ```
 
-GFX.Audio requires Silex 0.44.0 or newer.
+GFX.Audio requires Silex 0.47.1 or newer. For `Processing`, use the local toolchain
+including the mutable method-view correction described in
+[Block processing](Processing.md) until that correction is published.
 
 ## Play a sound in an application
 
@@ -206,3 +208,5 @@ demonstration belongs to Silex-Examples.
 [Control playback groups](Groups.md).
 
 [Render a mix in memory](Offline.md).
+
+[Process samples and measure their levels](Processing.md).

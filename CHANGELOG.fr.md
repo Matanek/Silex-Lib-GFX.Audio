@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Traitements de blocs à état : passe-bas, délai/écho, égalisation trois bandes et crête/RMS. Vues mutables sur le thread applicatif, réglages récupérables et remise à zéro explicite.
+
 - Audio.offline et render produisent du PCM possédé par blocs, sans périphérique, normalisation ni écrêtage caché.
 
 - Groupes de lecture : gains composés, pauses indépendantes, réaffectation et destruction sans perdre les réglages individuels.

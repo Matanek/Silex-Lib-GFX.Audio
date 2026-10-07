@@ -1,0 +1,94 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use STD.Math
+class Producer {
+    var frame:int
+    init() { self.frame = 0 }
+    func next(frames:int) float32[] {
+        var samples:float32[] = []
+        var i = 0
+        while i < frames {
+            let value = ((self.frame % 16 - 8) as float64 / 32.0) as float32
+            samples.append(value); samples.append(-value)
+            self.frame++; i++
+        }
+        return samples
+    }
+}
+func offline() Audio {
+    match Audio.offline(sample_rate:48_000, channels:2) { failure(error) => { panic(error.detail) }; success(audio) => { return audio } }
+}
+func stream(audio:&Audio) Audio.Stream {
+    match audio.stream(sample_rate:24_000, channels:2, capacity_frames:160) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func render(audio:&Audio, frames:int) float32[] {
+    match audio.render(frames) { failure(error) => { panic(error.detail) }; success(samples) => { return samples } }
+}
+func process(effect:Processing.Processor, samples:&float32[..]) {
+    match effect.process(samples) { failure(error) => { panic(error.detail) }; success => {} }
+}
+func make_filter(format:Processing.Format) Processing.LowPass {
+    match Processing.LowPass.create(format, cutoff_hz:1_000.0) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func make_echo(format:Processing.Format) Processing.Delay {
+    match Processing.Delay.create(format, delay_frames:4, feedback:0.5, wet:0.5) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func make_equalizer(format:Processing.Format) Processing.Equalizer {
+    match Processing.Equalizer.create(format, low_gain:0.5, mid_gain:0.5, high_gain:0.5) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+test "pure scalar producer processed blocks match a complete source after output conversion" {
+    let format = Processing.Format(sample_rate:24_000, channels:2)
+    var reference = offline()
+    var actual = offline()
+    var producer = Producer()
+    var complete:float32[] = []
+    let source = stream(actual)
+    var filter:Processing.Processor = make_filter(format)
+    var echo:Processing.Processor = make_echo(format)
+    var equalizer:Processing.Processor = make_equalizer(format)
+    var block = 0
+    while block < 5 {
+        var samples = producer.next(32)
+        process(filter, &samples[0:samples.count()])
+        process(echo, &samples[0:samples.count()])
+        process(equalizer, &samples[0:samples.count()])
+        for sample in samples { complete.append(sample) }
+        match actual.write(source, @samples[0:samples.count()]) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 32) } }
+        block++
+    }
+    assert(producer.frame == 160)
+    assert(complete[0] < 0.0 as float32 && complete[0] > -0.1 as float32)
+    match actual.close(source) { failure(error) => { panic(error.detail) }; success => {} }
+    let sound = reference.create(@complete[0:complete.count()], sample_rate:24_000, channels:2)
+    let a = actual.play(source)
+    let b = reference.play(sound)
+    var expected = render(reference, 360)
+    var output:float32[] = []
+    block = 0
+    while block < 72 {
+        var samples = render(actual, 5)
+        for sample in samples { output.append(sample) }
+        block++
+    }
+    assert(output.count() == expected.count())
+    var i = 0
+    while i < output.count() { assert(Math.abs(output[i] as float64 - expected[i] as float64) < 0.000001); i++ }
+    match actual.stream_info(source) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.written_frames == 160 && info.consumed_frames == 160 && info.queued_frames == 0 && info.discarded_frames == 0 && info.drained) } }
+    assert(actual.release(source))
+}
+
+test "the same processor contract treats owned offline mixer output" {
+    var audio = offline()
+    var samples:float32[] = [0.5 as float32, -0.5 as float32, 0.25 as float32, -0.25 as float32]
+    let sound = audio.create(@samples[0:4], sample_rate:48_000, channels:2)
+    let playing = audio.play(sound)
+    var output = render(audio, 2)
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    var actual = make_filter(format)
+    var reference = make_filter(format)
+    process(actual, &output[0:4])
+    process(reference, &samples[0:4])
+    var i = 0
+    while i < 4 { assert(output[i] == samples[i]); i++ }
+    assert(output[0] > 0.0 as float32 && output[0] < 0.5 as float32)
+}

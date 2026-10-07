@@ -1,0 +1,182 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public struct Format { let sample_rate:int; let channels:int }
+public protocol Processor {
+    format:Format { get }
+    func process(samples:&float32[..]) Result<void, Error>
+    func reset()
+}
+
+func valid_format(format:Format) bool { return format.sample_rate > 0 && format.sample_rate <= 2_147_483_647 && format.channels >= 1 && format.channels <= 8 }
+func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.process", subject:null, detail:detail) }
+func overflow() Error { return Error(kind:Kind.limit_exceeded(), operation:"audio.process", subject:null, detail:"processing exceeds finite float32 range; reset and rebuild the block before retrying") }
+func valid_gain(value:float32) bool { return Math.is_finite(value) && value >= 0.0 }
+func coefficient(format:Format, cutoff:float32) float32 { let rate:float32 = format.sample_rate; return 1.0 - Math.exp(-2.0 * Math.pi<float32>() * cutoff / rate) }
+func valid_cutoff(format:Format, cutoff:float32) bool {
+    let rate:float32 = format.sample_rate
+    return Math.is_finite(cutoff) && cutoff > 0.0 && cutoff < rate / 2.0 && coefficient(format, cutoff) > 0.0
+}
+func zeros(count:int) float32[] {
+    var values:float32[] = []
+    var i = 0
+    while i < count { values.append(0.0); i++ }
+    return values
+}
+func validate_block(samples:@float32[..], channels:int) Result<void, Error> {
+    if channels < 1 || channels > 8 || samples.count() % channels != 0 { return Result<void, Error>.failure(invalid("samples must contain complete frames for 1 to 8 channels")) }
+    for sample in samples { if !Math.is_finite(sample) { return Result<void, Error>.failure(invalid("samples must be finite")) } }
+    return Result<void, Error>.success()
+}
+
+public class LowPass:Processor {
+    let format:Format
+    private var alpha:float32
+    private var history:float32[]
+    private init(format:Format, alpha:float32) { self.format = format; self.alpha = alpha; self.history = zeros(format.channels) }
+    static func create(format:Format, cutoff_hz:float32) Result<LowPass, Error> {
+        if !valid_format(format) || !valid_cutoff(format, cutoff_hz) { return Result<LowPass, Error>.failure(invalid("invalid format or cutoff below Nyquist")) }
+        return Result<LowPass, Error>.success(LowPass(format, coefficient(format, cutoff_hz)))
+    }
+    func set_cutoff(cutoff_hz:float32) Result<void, Error> {
+        if !valid_cutoff(self.format, cutoff_hz) { return Result<void, Error>.failure(invalid("cutoff must be positive and below Nyquist")) }
+        self.alpha = coefficient(self.format, cutoff_hz)
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let channel = i % self.format.channels
+            let input = samples[i]
+            let output = (1.0 - self.alpha) * self.history[channel] + self.alpha * input
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            self.history[channel] = output
+            samples[i] = output
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.history.count() { self.history[i] = 0.0; i++ } }
+}
+
+public class Delay:Processor {
+    let format:Format
+    let delay_frames:int
+    private var feedback:float32
+    private var wet:float32
+    private var ring:float32[]
+    private var cursor:int
+    private init(format:Format, delay_frames:int, feedback:float32, wet:float32) {
+        self.format = format; self.delay_frames = delay_frames; self.feedback = feedback; self.wet = wet
+        self.ring = zeros(delay_frames * format.channels); self.cursor = 0
+    }
+    static func create(format:Format, delay_frames:int, feedback:float32 = 0.5, wet:float32 = 0.5) Result<Delay, Error> {
+        if !valid_format(format) || delay_frames < 1 || delay_frames > 1_048_576 / format.channels || !Math.is_finite(feedback) || Math.abs(feedback) >= 1.0 || !valid_gain(wet) {
+            return Result<Delay, Error>.failure(invalid("invalid format, delay capacity, feedback magnitude below one or nonnegative wet gain"))
+        }
+        return Result<Delay, Error>.success(Delay(format, delay_frames, feedback, wet))
+    }
+    func set_feedback(feedback:float32) Result<void, Error> {
+        if !Math.is_finite(feedback) || Math.abs(feedback) >= 1.0 { return Result<void, Error>.failure(invalid("feedback magnitude must be below one")) }
+        self.feedback = feedback
+        return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !valid_gain(wet) { return Result<void, Error>.failure(invalid("wet gain must be finite and nonnegative")) }
+        self.wet = wet
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let input = samples[i]
+            let delayed = self.ring[self.cursor]
+            let output = input + self.wet * delayed
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            let retained = input + self.feedback * delayed
+            if !Math.is_finite(retained) { return Result<void, Error>.failure(overflow()) }
+            self.ring[self.cursor] = retained
+            samples[i] = output
+            self.cursor++
+            if self.cursor == self.ring.count() { self.cursor = 0 }
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.ring.count() { self.ring[i] = 0.0; i++ }
+        self.cursor = 0 }
+}
+
+public class Equalizer:Processor {
+    let format:Format
+    private let low_alpha:float32
+    private let high_alpha:float32
+    private var low_history:float32[]
+    private var high_history:float32[]
+    private var low_gain:float32
+    private var mid_gain:float32
+    private var high_gain:float32
+    private init(format:Format, low_hz:float32, high_hz:float32, low_gain:float32, mid_gain:float32, high_gain:float32) {
+        self.format = format; self.low_alpha = coefficient(format, low_hz); self.high_alpha = coefficient(format, high_hz)
+        self.low_history = zeros(format.channels); self.high_history = zeros(format.channels)
+        self.low_gain = low_gain; self.mid_gain = mid_gain; self.high_gain = high_gain
+    }
+    static func create(format:Format, low_hz:float32 = 250.0, high_hz:float32 = 4_000.0, low_gain:float32 = 1.0, mid_gain:float32 = 1.0, high_gain:float32 = 1.0) Result<Equalizer, Error> {
+        if !valid_format(format) || !valid_cutoff(format, low_hz) || !valid_cutoff(format, high_hz) || low_hz >= high_hz || !valid_gain(low_gain) || !valid_gain(mid_gain) || !valid_gain(high_gain) {
+            return Result<Equalizer, Error>.failure(invalid("invalid format, ordered cutoffs below Nyquist or nonnegative gains"))
+        }
+        return Result<Equalizer, Error>.success(Equalizer(format, low_hz, high_hz, low_gain, mid_gain, high_gain))
+    }
+    func set_gains(low:float32, mid:float32, high:float32) Result<void, Error> {
+        if !valid_gain(low) || !valid_gain(mid) || !valid_gain(high) { return Result<void, Error>.failure(invalid("equalizer gains must be finite and nonnegative")) }
+        self.low_gain = low; self.mid_gain = mid; self.high_gain = high
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let channel = i % self.format.channels
+            let input = samples[i]
+            let low = (1.0 - self.low_alpha) * self.low_history[channel] + self.low_alpha * input
+            let high_lowpass = (1.0 - self.high_alpha) * self.high_history[channel] + self.high_alpha * input
+            let output = self.low_gain * low + self.mid_gain * (high_lowpass - low) + self.high_gain * (input - high_lowpass)
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            self.low_history[channel] = low; self.high_history[channel] = high_lowpass
+            samples[i] = output
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.low_history.count() { self.low_history[i] = 0.0; self.high_history[i] = 0.0; i++ } }
+}
+
+public struct Level { let peak:float64; let rms:float64 }
+public func levels(samples:@float32[..], channels:int) Result<Level[], Error> {
+    try validate_block(samples, channels)
+    var peaks:float64[] = []
+    var energies:float64[] = []
+    var initial = 0
+    while initial < channels { peaks.append(0.0); energies.append(0.0); initial++ }
+    var i = 0
+    while i < samples.count() {
+        let channel = i % channels
+        let value = samples[i] as float64
+        let magnitude = Math.abs(value)
+        if magnitude > peaks[channel] { peaks[channel] = magnitude }
+        energies[channel] += value * value
+        i++
+    }
+    let frames = samples.count() / channels
+    var output:Level[] = []
+    i = 0
+    while i < channels {
+        var rms:float64 = 0.0
+        if frames > 0 { rms = Math.sqrt(energies[i] / frames as float64) }
+        output.append(Level(peak:peaks[i], rms:rms)); i++
+    }
+    return Result<Level[], Error>.success(output)
+}

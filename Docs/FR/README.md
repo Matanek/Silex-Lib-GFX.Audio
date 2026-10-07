@@ -14,7 +14,9 @@ d’échantillons. Le package s’utilise directement ou avec son plugin
 silex install GFX.Audio
 ```
 
-GFX.Audio demande Silex 0.44.0 ou une version plus récente.
+GFX.Audio demande Silex 0.47.1 ou une version plus récente. Pour `Processing`,
+utiliser la toolchain locale intégrant la correction des vues mutables par méthode
+décrite dans [Traitement des blocs](Processing.md), jusqu’à sa publication.
 
 ## Jouer un son dans une application
 
@@ -212,3 +214,5 @@ appartient à Silex-Examples.
 [Commander des groupes de lectures](Groups.md).
 
 [Rendre un mix en mémoire](Offline.md).
+
+[Traiter les échantillons et mesurer leurs niveaux](Processing.md).

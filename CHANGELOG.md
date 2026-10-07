@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Stateful block processing adds a low-pass filter, delay/echo, three-band equalizer and peak/RMS analysis, using application-thread mutable views, recoverable settings and explicit reset.
+
 - Audio.offline and render produce owned PCM blocks without a device, normalization or hidden clipping.
 
 - Playback groups compose gains and independent pause reasons, with reassignment and destruction preserving individual settings.
