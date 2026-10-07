@@ -1,0 +1,55 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+func noise_state(seed:int) int {
+    var value = seed % 2_147_483_646
+    if value < 0 { value = -value }
+    return value + 1
+}
+
+public class WhiteNoise:Generator {
+    let format:Processing.Format
+    let seed:int
+    private var state:int
+    private var amplitude:float32
+
+    private init(format:Processing.Format, seed:int, amplitude:float32) {
+        self.format = format
+        self.seed = seed
+        self.state = noise_state(seed)
+        self.amplitude = amplitude
+    }
+
+    static func create(format:Processing.Format, seed:int, amplitude:float32 = 1.0) Result<WhiteNoise, Error> {
+        if !valid_format(format) || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<WhiteNoise, Error>.failure(invalid("invalid format or amplitude outside [0, 1]"))
+        }
+        return Result<WhiteNoise, Error>.success(WhiteNoise(format, seed, amplitude))
+    }
+
+    func set_amplitude(amplitude:float32) Result<void, Error> {
+        if !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<void, Error>.failure(invalid("amplitude must be finite and between zero and one"))
+        }
+        self.amplitude = amplitude
+        return Result<void, Error>.success()
+    }
+
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var index = 0
+        while index < samples.count() {
+            // Bounded Park-Miller recurrence; no rejection loop or per-frame allocation.
+            self.state = (self.state * 48_271) % 2_147_483_647
+            let bits = self.state % 16_777_216
+            let value = self.amplitude * (2.0 * (bits as float32 / 16_777_216.0) - 1.0)
+            var channel = 0
+            while channel < self.format.channels { samples[index + channel] = value; channel++ }
+            index += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+
+    func reset() { self.state = noise_state(self.seed) }
+}

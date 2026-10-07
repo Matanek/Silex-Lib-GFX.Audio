@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `GFX.Audio.Synthesis` adds an extensible generator, sine oscillator, seeded white noise and ADSR envelope. Rendering uses prepared views with persistent block state, recoverable settings and examples without sound banks.
+
 - Stream/group integration preserves independent pauses, stable end identities and handle ownership. Seconds remain available for large source frame durations.
 
 - Stateful block processing adds a low-pass filter, delay/echo, three-band equalizer and peak/RMS analysis, using application-thread mutable views, recoverable settings and explicit reset.

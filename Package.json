@@ -2,8 +2,8 @@
   "name": "GFX.Audio",
   "version": "0.4.0",
   "description": {
-    "en": "Sound loading and playback with fades, routing, spatial position, and GFX integration.",
-    "fr": "Chargement et lecture audio avec fondus, routage, position spatiale et intégration GFX."
+    "en": "Procedural synthesis and sound playback with envelopes, fades, routing, spatial position, and GFX integration.",
+    "fr": "Synthèse procédurale et lecture audio avec enveloppes, fondus, routage, position spatiale et intégration GFX."
   },
   "authors": ["Matanek"],
   "requires": { "silex": ">=0.47.1" },

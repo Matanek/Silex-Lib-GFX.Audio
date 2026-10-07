@@ -96,23 +96,26 @@ nécessaire. Ce programme produit un la de 440 Hz pendant un quart de seconde :
 
 ```sx
 use GFX.Audio
-use STD.Math
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
 
 func main() {
-    var samples:float32[] = []
-    var frame = 0
-    while frame < 12_000 {
-        let time = frame as float / 48_000.0
-        samples.append((0.1 * Math.sin(2.0 * Math.pi() * 440.0 * time)) as float32)
-        frame++
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    match Synthesis.Oscillator.create(format, frequency_hz:440.0, amplitude:0.1) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples:float32[] = []
+            var frame = 0
+            while frame < 12_000 { samples.append(0.0); frame++ }
+            match source.render(&samples[0:samples.count()]) {
+                failure(error) => { panic(error.detail) }; success => {}
+            }
+            var audio = Audio()
+            let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+            let playing = audio.play(sound)
+            audio.wait(playing)
+        }
     }
-
-    var audio = Audio()
-    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
-    samples.clear()
-    let playing = audio.play(sound)
-    audio.wait(playing)
-    assert(audio.unload(sound))
 }
 ```
 
@@ -218,3 +221,5 @@ appartient à Silex-Examples.
 [Traiter les échantillons et mesurer leurs niveaux](Processing.md).
 
 [Vérifier les parcours audio](Validation.md).
+
+[Fabriquer des sons procéduraux et des enveloppes](Synthesis.md).

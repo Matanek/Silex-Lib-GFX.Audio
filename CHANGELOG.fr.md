@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `GFX.Audio.Synthesis` ajoute un générateur extensible, un oscillateur sinus, un bruit blanc avec graine et une enveloppe ADSR. Rendu dans des vues préparées, état conservé entre blocs, paramètres récupérables et exemples sans banque de sons.
+
 - Flux et groupes qualifiés ensemble : pauses indépendantes, fins stables et propriété des handles. La durée en secondes reste disponible pour les grandes durées en frames.
 
 - Traitements de blocs à état : passe-bas, délai/écho, égalisation trois bandes et crête/RMS. Vues mutables sur le thread applicatif, réglages récupérables et remise à zéro explicite.

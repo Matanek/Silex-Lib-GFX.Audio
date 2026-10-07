@@ -6,7 +6,7 @@ under `Boundary/`; `Package.json` records paths and hashes. The
 [provider guide](../../Native/README.md) covers rebuilding and separate publication.
 
 ```sh
-SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
 python3 Packages/GFX.Audio/Tests/OfflineValidation.py
@@ -15,14 +15,18 @@ python3 Packages/GFX.Audio/Tests/OfflineValidation.py
 The suite covers memory loading, handles and owners, timeline, groups and pause,
 stream capacity, silence/resume, draining, device-free rendering, processing
 and levels. The dummy driver supports playback control checks; PCM comparisons
-support mixing and processing guarantees. Rejection checks require a diagnostic
+support mixing and processing guarantees. The dummy video driver also enables
+the SDL window coexistence test without desktop access. Rejection checks require a diagnostic
 and failure exit code, with timeouts to detect waits that cannot progress.
 
-`ReleaseValidation.py` runs the 13 public `Processing`, `Production` and
-`StreamGroups` oracles in Release. It selects a deliberately nonexistent driver:
+`ReleaseValidation.py` runs the 23 public `Processing`, `Production`,
+`StreamGroups` and `Synthesis` oracles in Release. It selects a deliberately
+nonexistent driver:
 these oracles use offline rendering and require no device. They cover the
 stateful chain and the same scalar producer as a complete source and stream,
 including 24→48 kHz conversion, absolute 10⁻⁶ tolerance and frame counters.
+Synthesis oracles cover sine waves, reproducible noise, ADSR levels, invalid
+blocks, and protocol conformances from an external consumer.
 
 ```sh
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py --target macos-x64 --execute
@@ -33,11 +37,12 @@ python3 Packages/GFX.Audio/Tests/ReleaseValidation.py --target linux-x64
 artifact and requires a host-compatible target. Package targets are
 `macos-arm64`, `macos-x64`, `linux-arm64`, `linux-x64`, `windows-arm64` and
 `windows-x64`. Linking for a target does not prove execution on its system.
-Local qualification executed the oracles on macOS ARM64 and X64 through Rosetta; the other
-systems were checked for composition and linkage.
+The retained qualification below covers the 13 baseline oracles; it does not
+automatically qualify synthesis additions for those targets.
 
-`GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`, `Groups`, `Offline`
-and `ProcessedTone` are executable sources under `Docs/`. For example:
+`GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`, `Groups`, `Offline`,
+`ProcessedTone` and `ProceduralSounds` are executable sources under `Docs/`.
+For example:
 
 ```sh
 SDL_AUDIODRIVER=dummy silex run Packages/GFX.Audio/Docs/ProcessedTone.sx --release --nocache

@@ -1,0 +1,105 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+enum Stage { idle; attacking; decaying; sustaining; releasing }
+
+public class Envelope:Processing.Processor {
+    let format:Processing.Format
+    let attack_frames:int
+    let decay_frames:int
+    let sustain:float32
+    let release_frames:int
+    private var stage:Stage
+    private var elapsed:int
+    private var level:float32
+    private var release_start:float32
+
+    private init(format:Processing.Format, attack_frames:int, decay_frames:int, sustain:float32, release_frames:int) {
+        self.format = format
+        self.attack_frames = attack_frames
+        self.decay_frames = decay_frames
+        self.sustain = sustain
+        self.release_frames = release_frames
+        self.stage = Stage.idle
+        self.elapsed = 0
+        self.level = 0.0
+        self.release_start = 0.0
+    }
+
+    static func create(format:Processing.Format, attack_frames:int, decay_frames:int, sustain:float32, release_frames:int) Result<Envelope, Error> {
+        if !valid_format(format) || attack_frames < 0 || attack_frames > 16_777_216 || decay_frames < 0 || decay_frames > 16_777_216 || release_frames < 0 || release_frames > 16_777_216 || !Math.is_finite(sustain) || sustain < 0.0 || sustain > 1.0 {
+            return Result<Envelope, Error>.failure(invalid("invalid format, stage durations in [0, 16777216] or sustain in [0, 1]"))
+        }
+        return Result<Envelope, Error>.success(Envelope(format, attack_frames, decay_frames, sustain, release_frames))
+    }
+
+    private func begin_decay() {
+        self.elapsed = 0
+        self.level = 1.0
+        if self.decay_frames == 0 { self.stage = Stage.sustaining; self.level = self.sustain }
+        else { self.stage = Stage.decaying }
+    }
+
+    func note_on() {
+        self.elapsed = 0
+        self.level = 0.0
+        self.release_start = 0.0
+        if self.attack_frames == 0 { self.begin_decay() }
+        else { self.stage = Stage.attacking }
+    }
+
+    func note_off() {
+        match self.stage {
+            idle => { return }
+            releasing => { return }
+            else => {}
+        }
+        self.elapsed = 0
+        self.release_start = self.level
+        if self.release_frames == 0 { self.level = 0.0; self.stage = Stage.idle }
+        else { self.stage = Stage.releasing }
+    }
+
+    func is_active() bool {
+        match self.stage { idle => { return false }; else => { return true } }
+    }
+
+    private func advance() {
+        match self.stage {
+            attacking => {
+                self.elapsed++
+                if self.elapsed == self.attack_frames { self.begin_decay() }
+                else { self.level = self.elapsed as float32 / self.attack_frames as float32 }
+            }
+            decaying => {
+                self.elapsed++
+                if self.elapsed == self.decay_frames { self.level = self.sustain; self.stage = Stage.sustaining }
+                else { self.level = 1.0 - (1.0 - self.sustain) * (self.elapsed as float32 / self.decay_frames as float32) }
+            }
+            releasing => {
+                self.elapsed++
+                if self.elapsed == self.release_frames { self.level = 0.0; self.stage = Stage.idle }
+                else { self.level = self.release_start * (1.0 - self.elapsed as float32 / self.release_frames as float32) }
+            }
+            else => {}
+        }
+    }
+
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        for sample in samples {
+            if !Math.is_finite(sample) { return Result<void, Error>.failure(invalid("samples must be finite")) }
+        }
+        var index = 0
+        while index < samples.count() {
+            var channel = 0
+            while channel < self.format.channels { samples[index + channel] *= self.level; channel++ }
+            self.advance()
+            index += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+
+    func reset() { self.stage = Stage.idle; self.elapsed = 0; self.level = 0.0; self.release_start = 0.0 }
+}

@@ -1,0 +1,24 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+
+// All public declarations in these atoms belong to the Synthesis vocabulary.
+public protocol Generator {
+    format:Processing.Format { get }
+    func render(samples:&float32[..]) Result<void, Error>
+    func reset()
+}
+
+func valid_format(format:Processing.Format) bool {
+    // The integer rate must be exactly representable by the float32 DSP path.
+    return format.sample_rate > 0 && format.sample_rate <= 16_777_216 && format.channels >= 1 && format.channels <= 8
+}
+func invalid(detail:str) Error {
+    return Error(kind:Kind.invalid_input(), operation:"audio.synthesis", subject:null, detail:detail)
+}
+func validate_block(samples:@float32[..], channels:int) Result<void, Error> {
+    if samples.count() % channels != 0 {
+        return Result<void, Error>.failure(invalid("samples must contain complete interleaved frames"))
+    }
+    return Result<void, Error>.success()
+}

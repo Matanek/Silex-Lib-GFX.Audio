@@ -1,0 +1,65 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class Oscillator:Generator {
+    let format:Processing.Format
+    private let initial_phase:float32
+    private var phase:float32
+    private var step:float32
+    private var amplitude:float32
+
+    private init(format:Processing.Format, step:float32, amplitude:float32, phase:float32) {
+        self.format = format
+        self.initial_phase = phase
+        self.phase = phase
+        self.step = step
+        self.amplitude = amplitude
+    }
+
+    static func create(format:Processing.Format, frequency_hz:float32 = 440.0, amplitude:float32 = 1.0, phase:float32 = 0.0) Result<Oscillator, Error> {
+        if !valid_format(format) || !Math.is_finite(frequency_hz) || frequency_hz < 0.0 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(phase) || phase < 0.0 || phase >= 1.0 {
+            return Result<Oscillator, Error>.failure(invalid("invalid format, frequency, unit amplitude or phase in [0, 1)"))
+        }
+        let rate = format.sample_rate as float32
+        let step = frequency_hz / rate
+        if frequency_hz >= rate / 2.0 || (frequency_hz > 0.0 && step == 0.0) {
+            return Result<Oscillator, Error>.failure(invalid("frequency must be representable and below Nyquist"))
+        }
+        return Result<Oscillator, Error>.success(Oscillator(format, step, amplitude, phase))
+    }
+
+    func set_frequency(frequency_hz:float32) Result<void, Error> {
+        let rate = self.format.sample_rate as float32
+        let step = frequency_hz / rate
+        if !Math.is_finite(frequency_hz) || frequency_hz < 0.0 || frequency_hz >= rate / 2.0 || (frequency_hz > 0.0 && step == 0.0) {
+            return Result<void, Error>.failure(invalid("frequency must be finite, nonnegative, representable and below Nyquist"))
+        }
+        self.step = step
+        return Result<void, Error>.success()
+    }
+
+    func set_amplitude(amplitude:float32) Result<void, Error> {
+        if !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<void, Error>.failure(invalid("amplitude must be finite and between zero and one"))
+        }
+        self.amplitude = amplitude
+        return Result<void, Error>.success()
+    }
+
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var index = 0
+        while index < samples.count() {
+            let value = self.amplitude * Math.sin(2.0 * Math.pi() * self.phase)
+            var channel = 0
+            while channel < self.format.channels { samples[index + channel] = value; channel++ }
+            self.phase += self.step
+            if self.phase >= 1.0 { self.phase -= 1.0 }
+            index += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+
+    func reset() { self.phase = self.initial_phase }
+}
