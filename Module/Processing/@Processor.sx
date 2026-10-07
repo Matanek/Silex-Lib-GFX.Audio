@@ -29,4 +29,3 @@ func validate_block(samples:@float32[..], channels:int) Result<void, Error> {
     for sample in samples { if !Math.is_finite(sample) { return Result<void, Error>.failure(invalid("samples must be finite")) } }
     return Result<void, Error>.success()
 }
-
