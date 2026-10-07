@@ -40,3 +40,6 @@ les ressources mais conserve les notifications jusqu’au drainage. Aucun callba
 utilisateur ne s’exécute sur le thread audio.
 
 [Retour au guide Audio](README.md)
+
+La durée en secondes est une approximation en `float`, y compris pour les
+sources longues. La durée et les positions en frames restent les unités exactes.

@@ -1,0 +1,105 @@
+use GFX.Audio
+use STD.Math
+use STD.Error.Kind
+func offline() Audio {
+    match Audio.offline(sample_rate:48_000, channels:1) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func stream(audio:&Audio) Audio.Stream {
+    match audio.stream(sample_rate:48_000, capacity_frames:4) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func write(audio:&Audio, source:Audio.Stream, samples:@float32[..]) {
+    match audio.write(source, samples) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 4) } }
+}
+func close(audio:&Audio, source:Audio.Stream) {
+    match audio.close(source) { failure(error) => { panic(error.detail) }; success => {} }
+}
+func render(audio:&Audio, frames:int) float32[] {
+    match audio.render(frames) { failure(error) => { panic(error.detail) }; success(samples) => { return samples } }
+}
+func watch(audio:&Audio, playing:Audio.PlayingSound) {
+    match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+}
+func near(actual:float32, expected:float32) { assert(Math.abs(actual - expected) < 0.000001) }
+test "continuous groups preserve PCM gains independent pauses and a finished event" {
+    var audio = offline()
+    let group = audio.group(volume:0.5)
+    audio.pause(group)
+    audio.set_master_volume(0.5)
+    let source = stream(audio)
+    var samples:float32[] = [0.5 as float32, 0.25 as float32, -0.5 as float32, -0.25 as float32]
+    write(audio, source, @samples[0:4]); close(audio, source)
+    let playing = audio.play(source, Audio.Playback(volume:0.5, group:group))
+    watch(audio, playing)
+    assert(audio.is_paused(playing))
+    near(render(audio, 1)[0], 0.0)
+    assert(audio.drain_end_events().is_empty())
+    audio.resume(group)
+    near(render(audio, 1)[0], 0.0625)
+    audio.pause(playing); audio.pause(group); audio.resume(playing)
+    assert(audio.is_paused(playing))
+    near(render(audio, 1)[0], 0.0)
+    audio.resume(group)
+    near(render(audio, 1)[0], 0.03125)
+    audio.pause(playing); audio.pause(group)
+    assert(audio.destroy_group(group))
+    assert(audio.is_paused(playing))
+    near(render(audio, 1)[0], 0.0)
+    audio.resume(playing)
+    var tail = render(audio, 3)
+    near(tail[0], -0.125); near(tail[1], -0.0625); near(tail[2], 0.0)
+    match audio.stream_info(source) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.written_frames == 4 && info.consumed_frames == 4 && info.queued_frames == 0 && info.discarded_frames == 0 && info.drained && !info.stopped) } }
+    var events = audio.drain_end_events()
+    assert(events.count() == 1 && events[0].reason == Audio.EndReason.finished() && events[0].playback.matches(playing))
+    assert(audio.release(source))
+    assert(audio.drain_end_events().is_empty())
+}
+test "dry streams stay active until a group stop and account for pending frames" {
+    var audio = offline()
+    let group = audio.group(volume:0.25)
+    let source = stream(audio)
+    let playing = audio.play(source, Audio.Playback(group:group))
+    watch(audio, playing)
+    var silence = render(audio, 3)
+    near(silence[0], 0.0); near(silence[2], 0.0)
+    assert(audio.is_playing(playing) && audio.drain_end_events().is_empty())
+    match audio.stream_info(source) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.starved && !info.drained) } }
+    var samples:float32[] = [0.5 as float32, 0.25 as float32, -0.5 as float32, -0.25 as float32]
+    write(audio, source, @samples[0:4])
+    near(render(audio, 1)[0], 0.125)
+    audio.stop(group)
+    near(render(audio, 1)[0], 0.0)
+    match audio.stream_info(source) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.stopped && !info.drained); assert(info.written_frames == info.consumed_frames + info.queued_frames + info.discarded_frames && info.queued_frames == 0) } }
+    var events = audio.drain_end_events()
+    assert(events.count() == 1 && events[0].reason == Audio.EndReason.stopped() && events[0].playback.matches(playing))
+    assert(audio.release(source))
+    assert(audio.drain_end_events().is_empty())
+}
+test "stream end identities survive slot reuse and reject foreign owners" {
+    var audio = offline()
+    var other = offline()
+    let source = stream(audio)
+    let playing = audio.play(source)
+    watch(audio, playing)
+    assert(audio.release(source))
+    let fresh = stream(audio)
+    let next = audio.play(fresh)
+    let foreign = stream(other)
+    let external = other.play(foreign)
+    assert(!playing.matches(next) && !next.matches(external))
+    var events = audio.drain_end_events()
+    assert(events.count() == 1 && events[0].reason == Audio.EndReason.released() && events[0].playback.matches(playing) && !events[0].playback.matches(next))
+    match audio.stream_info(source) { success(value) => { panic("stale stream accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match audio.assign_group(external, audio.group()) { success => { panic("foreign stream accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match audio.watch_end(external) { success => { panic("foreign watcher accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    assert(!audio.release(foreign))
+    assert(audio.is_playing(next) && other.is_playing(external))
+    assert(audio.release(fresh) && other.release(foreign))
+    let unstarted = stream(audio)
+    assert(audio.release(unstarted))
+    assert(audio.drain_end_events().is_empty())
+}
+test "long source duration conversion stays available beyond exact float32 integer frames" {
+    let info = Audio.SoundInfo(sample_rate:48_000, channels:1, duration:Audio.Duration.frames(16_777_217))
+    if let seconds = info.duration_seconds() { assert(Math.abs(seconds - 349.52535) < 0.001) }
+    else { panic("known duration unavailable") }
+}

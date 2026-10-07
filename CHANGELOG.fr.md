@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Flux et groupes qualifiés ensemble : pauses indépendantes, fins stables et propriété des handles. La durée en secondes reste disponible pour les grandes durées en frames.
+
 - Traitements de blocs à état : passe-bas, délai/écho, égalisation trois bandes et crête/RMS. Vues mutables sur le thread applicatif, réglages récupérables et remise à zéro explicite.
 
 - Audio.offline et render produisent du PCM possédé par blocs, sans périphérique, normalisation ni écrêtage caché.

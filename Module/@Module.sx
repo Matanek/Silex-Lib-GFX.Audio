@@ -79,7 +79,7 @@ public struct SoundInfo {
     let duration:Duration
     func duration_seconds() float? {
         match self.duration {
-            frames(count) => { return count as float / self.sample_rate as float }
+            frames(count) => { let frames:float = count; let rate:float = self.sample_rate; return frames / rate }
             unknown => { return null }
             infinite => { return null }
         }

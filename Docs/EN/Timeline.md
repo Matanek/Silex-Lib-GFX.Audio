@@ -38,3 +38,6 @@ already ended track. The plugin collects resources but retains notifications
 until drained. No user callback executes on the audio thread.
 
 [Return to the Audio guide](README.md)
+
+Seconds are a `float` approximation, including for long sources. Frame duration
+and frame positions remain the exact units.

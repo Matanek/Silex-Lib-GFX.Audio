@@ -104,3 +104,20 @@ produisent des erreurs récupérables lors des opérations `Result`. Les contrô
 historiques de lecture gardent leur convention à `panic` sur handle invalide.
 
 [Retour au guide Audio](README.md)
+
+## Groupes et événements
+
+Une lecture de flux reçoit les mêmes `Playback(group:..., volume:...)` et
+contrôles de groupe qu’un son fini. Les gains maître, groupe et lecture se
+multiplient. Une pause de groupe conserve les frames ; une pause individuelle
+reste active après la reprise ou la destruction du groupe.
+
+Appeler `watch_end(playing)` après `play(stream)`, puis `drain_end_events()` sur
+le thread applicatif. Une source ouverte à court de données ne produit pas de
+fin. `close` suivi du vidage produit `finished`, un arrêt volontaire `stopped`,
+et la libération d’une lecture active `released`. Chaque lecture observée
+produit au plus un événement ; sa référence reste comparable avec `matches`
+après libération, sans désigner une nouvelle lecture au même index.
+
+[Le contrat des événements](Timeline.md) décrit la capacité bornée et les
+erreurs de réservation ; [les groupes](Groups.md) décrivent le détachement.

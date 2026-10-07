@@ -96,3 +96,19 @@ Stale or foreign handles and malformed data produce recoverable errors on
 for invalid handles.
 
 [Back to the Audio guide](README.md)
+
+## Groups and end events
+
+Stream playback accepts the same `Playback(group:..., volume:...)` and group
+controls as a finite sound. Master, group and individual gains multiply. Group
+pause preserves frames; individual pause survives group resume or destruction.
+
+Call `watch_end(playing)` after `play(stream)`, then `drain_end_events()` on the
+application thread. An open source that runs out of data does not finish.
+Closing and draining produces `finished`, deliberate stopping produces
+`stopped`, and releasing active playback produces `released`. Each watched
+playback produces at most one event. Its reference stays comparable through
+`matches` after release without identifying a new playback at the same index.
+
+[End event contracts](Timeline.md) cover bounded capacity and reservation
+errors; [groups](Groups.md) cover detachment.
