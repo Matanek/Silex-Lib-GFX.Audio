@@ -1,0 +1,66 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+func same_format(a:Processing.Format, b:Processing.Format) bool { return a.sample_rate == b.sample_rate && a.channels == b.channels }
+func scratch(count:int) float32[] {
+    var values:float32[] = []
+    var i = 0
+    while i < count { values.append(0.0); i++ }
+    return values
+}
+func finite_block(samples:@float32[..]) Result<void, Error> {
+    for value in samples { if !Math.is_finite(value) { return Result<void, Error>.failure(invalid("composition requires finite samples; reset and rebuild the block after failure")) } }
+    return Result<void, Error>.success()
+}
+func unit_block(samples:@float32[..]) Result<void, Error> {
+    try finite_block(samples)
+    for value in samples { if value < -1.0 || value > 1.0 { return Result<void, Error>.failure(invalid("modulation samples must be in [-1, 1]")) } }
+    return Result<void, Error>.success()
+}
+
+public class Mix:Generator {
+    let format:Processing.Format
+    private var sources:Generator[]
+    private var gains:float32[]
+    private var temporary:float32[]
+    private init(format:Processing.Format, sources:Generator[], gains:float32[]) {
+        self.format = format; self.sources = []; self.gains = gains
+        for source in sources { self.sources.append(source) }
+        self.temporary = scratch(512 * format.channels)
+    }
+    static func create(sources:Generator[], gains:float32[]) Result<Mix, Error> {
+        if sources.count() < 1 || sources.count() > 32 || gains.count() != sources.count() { return Result<Mix, Error>.failure(invalid("mix requires 1 to 32 sources and one gain per source")) }
+        let format = sources[0].format
+        if !valid_format(format) { return Result<Mix, Error>.failure(invalid("invalid source format")) }
+        var i = 0
+        while i < sources.count() {
+            if !same_format(format, sources[i].format) || !Math.is_finite(gains[i]) || Math.abs(gains[i]) > 16.0 { return Result<Mix, Error>.failure(invalid("mix requires matching formats and gains in [-16, 16]")) }
+            i++
+        }
+        return Result<Mix, Error>.success(Mix(format, sources, gains))
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var offset = 0
+        while offset < samples.count() {
+            var count = samples.count() - offset
+            if count > self.temporary.count() { count = self.temporary.count() }
+            var i = 0
+            while i < count { samples[offset + i] = 0.0; i++ }
+            for source, var generator in self.sources.indexed() {
+                try generator.render(&self.temporary[0:count])
+                try finite_block(@self.temporary[0:count])
+                i = 0
+                while i < count {
+                    let value = samples[offset + i] + self.gains[source] * self.temporary[i]
+                    if !Math.is_finite(value) { return Result<void, Error>.failure(invalid("mix exceeds finite float32 range")) }
+                    samples[offset + i] = value; i++
+                }
+            }
+            offset += count
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { for var source in self.sources { source.reset() } }
+}

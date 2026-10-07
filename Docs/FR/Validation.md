@@ -119,3 +119,14 @@ de l’absence de défaut connu. Il a explicitement accepté la clôture le
 7 octobre 2026 : « on clos la spec, puisque tout est ok, et réintégré dans les
 branch main locale ». Les tests, scripts, exemples et explications restent dans
 les dépôts. Cette clôture ne publie ni branche distante, ni tag, ni release.
+
+## Composition et modulation
+
+Le consumer `Tests/Consumer/Tests/Composition.sx` ajoute sept cas : somme et
+états indépendants, traitements personnalisés ordonnés, courbe analytique,
+AM stéréo, intégration de phase FM, refus des paramètres/blocs et propagation
+des erreurs. Ils complètent les oracles Release. `SynthesisSpectrum.py` contrôle
+également les trois composantes analytiques d’AM et la FM contre une somme
+sinusoïdale discrète fermée, en Debug et Release. La FM retenue (porteuse 3 kHz,
+contrôle 375 Hz, déviation 750 Hz à 48 kHz) qualifie un régime musical éloigné
+de Nyquist ; cela ne constitue pas une suppression universelle du repliement.

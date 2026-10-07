@@ -71,6 +71,8 @@ for shape in ('triangle', 'square', 'sawtooth'):
             cases.append((shape, frequency, duty, 4096))
 for shape in ('white', 'pink'):
     cases.append((shape, 0, .5, 131072))
+for shape in ('am', 'fm'):
+    cases.append((shape, 3000, .5, 4096))
 source = '''use GFX.Audio.Synthesis
 use GFX.Audio.Processing
 func dump(source:Synthesis.Generator, count:int) {
@@ -84,6 +86,15 @@ func main() {
     let format = Processing.Format(sample_rate:48_000, channels:1)
 '''
 for shape, frequency, duty, count in cases:
+    if shape in ('am', 'fm'):
+        source += '    match Synthesis.Oscillator.create(format, frequency_hz:375.0) { failure(error) => { panic(error.detail) }; success(var control) => {\n'
+        if shape == 'am':
+            source += '        match Synthesis.Oscillator.create(format, frequency_hz:3000.0) { failure(error) => { panic(error.detail) }; success(var carrier) => {\n'
+            source += '            match Synthesis.AmplitudeModulation.create(carrier, control) { failure(error) => { panic(error.detail) }; success(value) => { dump(value, 4096) } }\n        } }\n'
+        else:
+            source += '        match Synthesis.FrequencyModulation.create(format, control, frequency_hz:3000.0, deviation_hz:750.0, phase:0.125) { failure(error) => { panic(error.detail) }; success(value) => { dump(value, 4096) } }\n'
+        source += '    } }\n'
+        continue
     if shape in ('white', 'pink'):
         expression = f'Synthesis.{"WhiteNoise" if shape == "white" else "PinkNoise"}.create(format, seed:42)'
     else:
@@ -110,6 +121,32 @@ for shape, frequency, duty, count in cases:
         noise[shape] = samples
         continue
     spectrum = fft(samples)
+    if shape == 'am':
+        allowed = {224, 256, 288}
+        expected = {224: .125, 256: -.25j, 288: -.125}
+        total = sum(abs(x) ** 2 for x in spectrum[:count // 2 + 1])
+        unwanted = sum(abs(x) ** 2 for k, x in enumerate(spectrum[:count // 2 + 1]) if k not in allowed)
+        assert unwanted / total < 1e-7
+        for k, value in expected.items():
+            assert abs(spectrum[k] / count - value) < 2e-5, (k, spectrum[k] / count, value)
+        print(f'ok - AM analytical carrier and sidebands, unwanted power {unwanted / total:.3g}')
+        continue
+    if shape == 'fm':
+        # Closed-form discrete sine sum: independent of the render phase loop.
+        omega = 2 * math.pi * 375 / 48000
+        reference = [math.sin(2 * math.pi * (.125 + 3000 * n / 48000 + 750 / 48000 *
+                     math.sin(n * omega / 2) * math.sin((n - 1) * omega / 2) / math.sin(omega / 2)))
+                     for n in range(count)]
+        rms_error = math.sqrt(sum((a - b) ** 2 for a, b in zip(samples, reference)) / count)
+        assert rms_error < 4e-5, rms_error
+        expected = fft(reference)
+        assert max(abs(a - b) / count for a, b in zip(spectrum, expected)) < 2e-5
+        total = sum(abs(x) ** 2 for x in spectrum[:count // 2 + 1])
+        high = sum(abs(x) ** 2 for x in spectrum[768:count // 2 + 1]) / total
+        assert high < 1e-7, high
+        assert abs(spectrum[224]) / count > .1 and abs(spectrum[288]) / count > .1
+        print(f'ok - FM closed-form phase and sidebands, RMS error {rms_error:.3g}, power above 9 kHz {high:.3g}')
+        continue
     fundamental = frequency * count // 48000
     harmonics = min(64, (24000 - 1) // frequency)
     allowed = {0} | {k * fundamental for k in range(1, harmonics + 1)}

@@ -1,0 +1,35 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class Curve:Generator {
+    let format:Processing.Format
+    let start:float32
+    let end:float32
+    let duration_frames:int
+    private var elapsed:int
+    private init(format:Processing.Format, start:float32, end:float32, duration_frames:int) {
+        self.format = format; self.start = start; self.end = end; self.duration_frames = duration_frames; self.elapsed = 0
+    }
+    static func create(format:Processing.Format, start:float32, end:float32, duration_frames:int) Result<Curve, Error> {
+        if !valid_format(format) || !Math.is_finite(start) || !Math.is_finite(end) || Math.abs(start) > 1.0 || Math.abs(end) > 1.0 || duration_frames < 0 || duration_frames > 16_777_216 { return Result<Curve, Error>.failure(invalid("curve requires endpoints in [-1, 1] and duration in [0, 16777216]")) }
+        return Result<Curve, Error>.success(Curve(format, start, end, duration_frames))
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            var value = self.end
+            if self.elapsed < self.duration_frames {
+                let t = self.elapsed as float32 / self.duration_frames as float32
+                value = (1.0 - t) * self.start + t * self.end
+                self.elapsed++
+            }
+            var channel = 0
+            while channel < self.format.channels { samples[i + channel] = value; channel++ }
+            i += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.elapsed = 0 }
+}

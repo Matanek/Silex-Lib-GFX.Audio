@@ -223,3 +223,5 @@ appartient à Silex-Examples.
 [Vérifier les parcours audio](Validation.md).
 
 [Fabriquer des sons procéduraux et des enveloppes](Synthesis.md).
+
+[Composer les sources, traitements et modulations](Composition.md).

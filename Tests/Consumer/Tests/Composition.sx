@@ -1,0 +1,236 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func buffer(count:int, value:float32 = 0.0) float32[] {
+    var values:float32[] = []; var i = 0
+    while i < count { values.append(value); i++ }
+    return values
+}
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("invalid accepted") } } }
+func compare(a:@float32[..], b:@float32[..]) {
+    assert(a.count() == b.count()); var i = 0
+    while i < a.count() { assert(Math.abs(a[i] - b[i]) < 0.000002); i++ }
+}
+class Ramp:Synthesis.Generator {
+    let format:Processing.Format
+    private var frame:int = 0
+    init(format:Processing.Format) { self.format = format }
+    func render(samples:&float32[..]) Result<void, Error> {
+        var i = 0
+        while i < samples.count() {
+            var channel = 0
+            while channel < self.format.channels { samples[i + channel] = (self.frame % 7) as float32 * 0.125 + channel as float32; channel++ }
+            self.frame++; i += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.frame = 0 }
+}
+class Affine:Processing.Processor {
+    let format:Processing.Format
+    let gain:float32
+    let bias:float32
+    var frames:int = 0
+    init(format:Processing.Format, gain:float32, bias:float32) { self.format = format; self.gain = gain; self.bias = bias }
+    func process(samples:&float32[..]) Result<void, Error> {
+        var i = 0
+        while i < samples.count() { samples[i] = self.gain * samples[i] + self.bias; i++ }
+        self.frames += samples.count() / self.format.channels
+        return Result<void, Error>.success()
+    }
+    func reset() { self.frames = 0 }
+}
+func curve(format:Processing.Format, start:float32 = -1.0, end:float32 = 1.0, duration:int = 4) Synthesis.Curve {
+    match Synthesis.Curve.create(format, start, end, duration) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func mix(format:Processing.Format) Synthesis.Mix {
+    var sources:Synthesis.Generator[] = [Ramp(format), Ramp(format)]
+    match Synthesis.Mix.create(sources, [2.0 as float32, -0.5 as float32]) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func am(format:Processing.Format) Synthesis.AmplitudeModulation {
+    var control = curve(Processing.Format(sample_rate:format.sample_rate, channels:1), duration:777)
+    match Synthesis.AmplitudeModulation.create(Ramp(format), control, offset:0.5, depth:0.5) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func fm(format:Processing.Format) Synthesis.FrequencyModulation {
+    var control = curve(Processing.Format(sample_rate:format.sample_rate, channels:1), duration:777)
+    match Synthesis.FrequencyModulation.create(format, control, frequency_hz:300.0, deviation_hz:100.0, amplitude:0.5, phase:0.125) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func split_and_reset(source:Synthesis.Generator) {
+    source.reset()
+    let channels = source.format.channels
+    let count = 1_031 * channels
+    var whole = buffer(count); var split = buffer(count)
+    require(source.render(&whole[0:count]))
+    source.reset()
+    require(source.render(&split[0:0])); require(source.render(&split[0:7 * channels]))
+    require(source.render(&split[7 * channels:514 * channels])); require(source.render(&split[514 * channels:count]))
+    compare(@whole[0:count], @split[0:count])
+    source.reset(); require(source.render(&split[0:count])); compare(@whole[0:count], @split[0:count])
+}
+
+test "mix has analytical signed gains no clipping and independent recipes" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    var source = mix(format)
+    var independent = mix(format)
+    var output = buffer(2_062)
+    require(source.render(&output[0:2_062]))
+    var frame = 0
+    while frame < 1_031 {
+        assert(output[frame * 2] == (frame % 7) as float32 * 0.1875)
+        assert(output[frame * 2 + 1] == ((frame % 7) as float32 * 0.125 + 1.0) * 1.5)
+        frame++
+    }
+    var other = buffer(2_062); require(independent.render(&other[0:2_062])); compare(@output[0:2_062], @other[0:2_062])
+    split_and_reset(mix(format))
+}
+
+test "consumer processors run in declared order and reset their state" {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var first = Affine(format, gain:2.0, bias:0.25)
+    var second = Affine(format, gain:3.0, bias:0.5)
+    var effects:Processing.Processor[] = [first, second]
+    match Synthesis.Processed.create(Ramp(format), effects) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples = buffer(1_031)
+            require(source.render(&samples[0:1_031]))
+            var i = 0
+            while i < samples.count() { assert(samples[i] == (i % 7) as float32 * 0.75 + 1.25); i++ }
+            assert(first.frames == 1_031 && second.frames == 1_031)
+            source.reset(); assert(first.frames == 0 && second.frames == 0)
+            split_and_reset(source)
+        }
+    }
+}
+
+test "linear curves include endpoints hold their end and preserve frame order" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    var control = curve(format)
+    var values = buffer(14)
+    require(control.render(&values[0:14]))
+    let expected:float32[] = [-1.0 as float32, -0.5 as float32, 0.0 as float32, 0.5 as float32, 1.0 as float32, 1.0 as float32, 1.0 as float32]
+    var i = 0
+    while i < 7 { assert(values[i * 2] == expected[i] && values[i * 2 + 1] == expected[i]); i++ }
+    split_and_reset(control)
+    var instant = curve(format, duration:0); require(instant.render(&values[0:14])); for value in values { assert(value == 1.0 as float32) }
+}
+
+test "AM uses one mono control per stereo frame with analytical gain" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    var source = am(format)
+    var values = buffer(2_062)
+    require(source.render(&values[0:2_062]))
+    var frame = 0
+    while frame < 1_031 {
+        let t = Math.min(frame, 777) as float32 / 777.0
+        let control = (1.0 - t) * -1.0 + t
+        let gain = 0.5 + 0.5 * control
+        assert(Math.abs(values[frame * 2] - (frame % 7) as float32 * 0.125 * gain) < 0.000002)
+        assert(Math.abs(values[frame * 2 + 1] - ((frame % 7) as float32 * 0.125 + 1.0) * gain) < 0.000002)
+        frame++
+    }
+    split_and_reset(am(format))
+}
+
+test "FM matches an independent integrated phase oracle and reset" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    var source = fm(format)
+    var values = buffer(2_062)
+    require(source.render(&values[0:2_062]))
+    var phase:float64 = 0.125
+    var frame = 0
+    while frame < 1_031 {
+        let expected = 0.5 * Math.sin(2.0 * Math.pi<float64>() * phase)
+        assert(Math.abs(values[frame * 2] as float64 - expected) < 0.00004)
+        assert(values[frame * 2] == values[frame * 2 + 1])
+        let control = -1.0 + 2.0 * Math.min(frame, 777) as float64 / 777.0
+        phase += (300.0 + 100.0 * control) / 48_000.0
+        if phase >= 1.0 { phase -= 1.0 }
+        frame++
+    }
+    split_and_reset(fm(format))
+}
+
+test "compositions reject mismatched formats parameters and incomplete frames" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    let mono = Processing.Format(sample_rate:48_000, channels:1)
+    var sources:Synthesis.Generator[] = [Ramp(format), Ramp(mono)]
+    match Synthesis.Mix.create(sources, [1.0 as float32, 1.0 as float32]) { success(value) => { panic("format mismatch") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Synthesis.Mix.create([], []) { success(value) => { panic("empty mix") }; failure(error) => {} }
+    sources = [Ramp(format)]
+    match Synthesis.Mix.create(sources, [Math.sqrt(-1.0) as float32]) { success(value) => { panic("NaN gain") }; failure(error) => {} }
+    var effects:Processing.Processor[] = [Affine(mono, gain:1.0, bias:0.0)]
+    match Synthesis.Processed.create(Ramp(format), effects) { success(value) => { panic("format mismatch") }; failure(error) => {} }
+    match Synthesis.AmplitudeModulation.create(Ramp(format), Ramp(format)) { success(value) => { panic("stereo control") }; failure(error) => {} }
+    match Synthesis.FrequencyModulation.create(format, Ramp(mono), frequency_hz:20_000.0, deviation_hz:4_000.0) { success(value) => { panic("Nyquist accepted") }; failure(error) => {} }
+    match Synthesis.FrequencyModulation.create(format, Ramp(mono), frequency_hz:100.0, deviation_hz:101.0) { success(value) => { panic("negative frequency accepted") }; failure(error) => {} }
+    match Synthesis.Curve.create(mono, start:Math.sqrt(-1.0), end:0.0, duration_frames:1) { success(value) => { panic("NaN curve") }; failure(error) => {} }
+    var generators:Synthesis.Generator[] = [mix(format), am(format), fm(format), curve(format)]
+    let expected:float32[] = [0.0 as float32, 0.0 as float32, 0.3535534 as float32, -1.0 as float32]
+    for index, var generator in generators.indexed() {
+        var bad = buffer(3, 0.75)
+        invalid(generator.render(&bad[0:3]))
+        for value in bad { assert(value == 0.75 as float32) }
+        require(generator.render(&bad[0:2]))
+        assert(Math.abs(bad[0] - expected[index]) < 0.000002)
+        split_and_reset(generator)
+    }
+}
+
+class Unreliable:Synthesis.Generator {
+    let format:Processing.Format
+    let mode:int
+    var calls:int = 0
+    init(format:Processing.Format, mode:int) { self.format = format; self.mode = mode }
+    func render(samples:&float32[..]) Result<void, Error> {
+        self.calls++
+        if self.mode == 0 { return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"consumer.generator", subject:null, detail:"fixture failure")) }
+        var value:float32 = 2.0
+        if self.mode == 1 { value = Math.sqrt(-1.0) }
+        var i = 0
+        while i < samples.count() { samples[i] = value; i++ }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.calls = 0 }
+}
+
+test "component errors invalid samples and controls propagate with explicit reset" {
+    let mono = Processing.Format(sample_rate:48_000, channels:1)
+    var failing = Unreliable(mono, mode:0)
+    var sources:Synthesis.Generator[] = [failing]
+    match Synthesis.Mix.create(sources, [1.0 as float32]) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples = buffer(8)
+            require(source.render(&samples[0:0])); assert(failing.calls == 0)
+            match source.render(&samples[0:8]) {
+                success => { panic("generator failure ignored") }
+                failure(error) => { assert(error.operation == "consumer.generator") }
+            }
+            assert(failing.calls == 1); source.reset(); assert(failing.calls == 0)
+        }
+    }
+    var nonfinite = Unreliable(mono, mode:1)
+    var effects:Processing.Processor[] = []
+    match Synthesis.Processed.create(nonfinite, effects) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => { var samples = buffer(8); invalid(source.render(&samples[0:8])); source.reset(); assert(nonfinite.calls == 0) }
+    }
+    var outside = Unreliable(mono, mode:2)
+    match Synthesis.AmplitudeModulation.create(Ramp(mono), outside) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples = buffer(8, 0.75)
+            invalid(source.render(&samples[0:8])); for value in samples { assert(value == 0.75 as float32) }
+            source.reset(); assert(outside.calls == 0)
+        }
+    }
+    match Synthesis.FrequencyModulation.create(mono, outside) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => { var samples = buffer(8, 0.75); invalid(source.render(&samples[0:8])); source.reset(); assert(outside.calls == 0) }
+    }
+}

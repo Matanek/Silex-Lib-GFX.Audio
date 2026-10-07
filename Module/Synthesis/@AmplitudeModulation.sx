@@ -1,0 +1,48 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class AmplitudeModulation:Generator {
+    let format:Processing.Format
+    let offset:float32
+    let depth:float32
+    private var source:Generator
+    private var modulation:Generator
+    private var control:float32[]
+    private init(source:Generator, modulation:Generator, offset:float32, depth:float32) {
+        self.format = source.format; self.source = source; self.modulation = modulation
+        self.offset = offset; self.depth = depth; self.control = scratch(512)
+    }
+    static func create(source:Generator, modulation:Generator, offset:float32 = 0.5, depth:float32 = 0.5) Result<AmplitudeModulation, Error> {
+        if !valid_format(source.format) || modulation.format.channels != 1 || modulation.format.sample_rate != source.format.sample_rate || !Math.is_finite(offset) || !Math.is_finite(depth) || Math.abs(offset) + Math.abs(depth) > 16.0 { return Result<AmplitudeModulation, Error>.failure(invalid("AM requires matching mono control and abs(offset) + abs(depth) <= 16")) }
+        return Result<AmplitudeModulation, Error>.success(AmplitudeModulation(source, modulation, offset, depth))
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var offset = 0
+        while offset < samples.count() {
+            var frames = (samples.count() - offset) / self.format.channels
+            if frames > 512 { frames = 512 }
+            let count = frames * self.format.channels
+            try self.modulation.render(&self.control[0:frames])
+            try unit_block(@self.control[0:frames])
+            try self.source.render(&samples[offset:offset + count])
+            try finite_block(@samples[offset:offset + count])
+            var frame = 0
+            while frame < frames {
+                let gain = self.offset + self.depth * self.control[frame]
+                var channel = 0
+                while channel < self.format.channels {
+                    let index = offset + frame * self.format.channels + channel
+                    let value = samples[index] * gain
+                    if !Math.is_finite(value) { return Result<void, Error>.failure(invalid("AM exceeds finite float32 range")) }
+                    samples[index] = value; channel++
+                }
+                frame++
+            }
+            offset += count
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.source.reset(); self.modulation.reset() }
+}

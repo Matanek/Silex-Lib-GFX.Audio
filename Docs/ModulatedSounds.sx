@@ -1,0 +1,70 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func tone(frequency:float32, amplitude:float32 = 0.12, waveform:Synthesis.Waveform = Synthesis.Waveform.sine) Synthesis.Oscillator {
+    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:1), frequency_hz:frequency, amplitude:amplitude, waveform:waveform) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func modulated(modulation:Synthesis.Generator, frequency:float32, deviation:float32) Synthesis.FrequencyModulation {
+    match Synthesis.FrequencyModulation.create(Processing.Format(sample_rate:48_000, channels:1), modulation, frequency_hz:frequency, deviation_hz:deviation, amplitude:0.15) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func play(audio:&Audio, source:Synthesis.Generator, name:str, sustain:float32 = 0.6) {
+    print(name)
+    var samples:float32[] = []; var i = 0
+    while i < 72_000 { samples.append(0.0); i++ }
+    require(source.render(&samples[0:72_000]))
+    match Synthesis.Envelope.create(source.format, attack_frames:480, decay_frames:8_000, sustain:sustain, release_frames:12_000) {
+        failure(error) => { panic(error.detail) }
+        success(var envelope) => {
+            envelope.note_on(); require(envelope.process(&samples[0:60_000]))
+            envelope.note_off(); require(envelope.process(&samples[60_000:72_000]))
+        }
+    }
+    let sound = audio.create(@samples[0:72_000], sample_rate:48_000)
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+}
+func main() {
+    var audio = Audio()
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var chord:Synthesis.Generator[] = [tone(261.6256, amplitude:0.07), tone(329.6276, amplitude:0.07), tone(391.9954, amplitude:0.07)]
+    match Synthesis.Mix.create(chord, [1.0 as float32, 1.0 as float32, 1.0 as float32]) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value, "Additive chord") }
+    }
+    match Synthesis.AmplitudeModulation.create(tone(220.0, waveform:Synthesis.Waveform.sawtooth), tone(5.0, amplitude:1.0)) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value, "LFO tremolo") }
+    }
+    match Synthesis.AmplitudeModulation.create(tone(440.0), tone(137.0, amplitude:1.0), offset:0.0, depth:1.0) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value, "Ring modulation") }
+    }
+    play(audio, modulated(tone(375.0, amplitude:1.0), 750.0, 500.0), "FM bell", sustain:0.0)
+    match Synthesis.Curve.create(format, start:1.0, end:-1.0, duration_frames:24_000) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, modulated(value, 1_500.0, 1_400.0), "Pitch curve laser") }
+    }
+    match Processing.Delay.create(format, delay_frames:7_200, feedback:0.4, wet:0.4) {
+        failure(error) => { panic(error.detail) }
+        success(var delay) => {
+            match Synthesis.Envelope.create(format, attack_frames:240, decay_frames:4_800, sustain:0.0, release_frames:0) {
+                failure(error) => { panic(error.detail) }
+                success(var envelope) => {
+                    envelope.note_on()
+                    var gates:Processing.Processor[] = [envelope]
+                    match Synthesis.Processed.create(modulated(tone(375.0, amplitude:1.0), 750.0, 500.0), gates) {
+                        failure(error) => { panic(error.detail) }
+                        success(var bell) => {
+                            var effects:Processing.Processor[] = [delay]
+                            match Synthesis.Processed.create(bell, effects) {
+                                failure(error) => { panic(error.detail) }; success(value) => { play(audio, value, "FM bell with echo") }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

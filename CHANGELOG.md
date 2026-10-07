@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composition adds a weighted mix, ordered extensible processing chain, linear curve, amplitude modulation and sine FM with mono controls, persistent state and prepared buffers.
+
 - Synthesis adds triangle, duty-cycle square and sawtooth waves with bounded harmonics below Nyquist, plus reproducible pink noise. An executable palette compares timbres; an independent spectral oracle checks waveforms and noise in Debug and Release.
 
 - `GFX.Audio.Synthesis` adds an extensible generator, sine oscillator, seeded white noise and ADSR envelope. Rendering uses prepared views with persistent block state, recoverable settings and examples without sound banks.

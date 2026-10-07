@@ -217,3 +217,5 @@ demonstration belongs to Silex-Examples.
 [Verify audio paths](Validation.md).
 
 [Generate procedural sounds and envelopes](Synthesis.md).
+
+[Compose sources, treatments and modulation](Composition.md).

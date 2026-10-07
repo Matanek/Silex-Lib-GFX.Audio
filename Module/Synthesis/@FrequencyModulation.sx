@@ -1,0 +1,46 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class FrequencyModulation:Generator {
+    let format:Processing.Format
+    let frequency_hz:float32
+    let deviation_hz:float32
+    let amplitude:float32
+    private let initial_phase:float32
+    private var phase:float32
+    private var modulation:Generator
+    private var control:float32[]
+    private init(format:Processing.Format, modulation:Generator, frequency_hz:float32, deviation_hz:float32, amplitude:float32, phase:float32) {
+        self.format = format; self.modulation = modulation; self.frequency_hz = frequency_hz; self.deviation_hz = deviation_hz
+        self.amplitude = amplitude; self.initial_phase = phase; self.phase = phase; self.control = scratch(512)
+    }
+    static func create(format:Processing.Format, modulation:Generator, frequency_hz:float32 = 440.0, deviation_hz:float32 = 100.0, amplitude:float32 = 1.0, phase:float32 = 0.0) Result<FrequencyModulation, Error> {
+        let rate = format.sample_rate as float32
+        if !valid_format(format) || modulation.format.channels != 1 || modulation.format.sample_rate != format.sample_rate || !Math.is_finite(frequency_hz) || !Math.is_finite(deviation_hz) || deviation_hz < 0.0 || frequency_hz < deviation_hz || frequency_hz + deviation_hz >= rate / 2.0 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(phase) || phase < 0.0 || phase >= 1.0 { return Result<FrequencyModulation, Error>.failure(invalid("FM requires a matching mono control, frequency +/- deviation in [0, Nyquist), unit amplitude and phase in [0, 1)")) }
+        return Result<FrequencyModulation, Error>.success(FrequencyModulation(format, modulation, frequency_hz, deviation_hz, amplitude, phase))
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        let rate = self.format.sample_rate as float32
+        var offset = 0
+        while offset < samples.count() {
+            var frames = (samples.count() - offset) / self.format.channels
+            if frames > 512 { frames = 512 }
+            try self.modulation.render(&self.control[0:frames])
+            try unit_block(@self.control[0:frames])
+            var frame = 0
+            while frame < frames {
+                let value = self.amplitude * Math.sin(2.0 * Math.pi() * self.phase)
+                var channel = 0
+                while channel < self.format.channels { samples[offset + frame * self.format.channels + channel] = value; channel++ }
+                self.phase += (self.frequency_hz + self.deviation_hz * self.control[frame]) / rate
+                if self.phase >= 1.0 { self.phase -= 1.0 }
+                frame++
+            }
+            offset += frames * self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.phase = self.initial_phase; self.modulation.reset() }
+}

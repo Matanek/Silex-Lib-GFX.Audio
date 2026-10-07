@@ -113,3 +113,14 @@ puisque tout est ok, et réintégré dans les branch main locale” (close the S
 since everything is fine and integrated into the local main branches).
 Tests, scripts, examples and explanations remain in the repositories. This
 closure publishes no remote branch, tag or release.
+
+## Composition and modulation
+
+The `Tests/Consumer/Tests/Composition.sx` consumer adds seven cases: weighted
+mix and independent state, ordered custom treatments, analytical curve,
+stereo AM, FM phase integration, invalid parameters/blocks and error propagation.
+They also run as Release oracles. `SynthesisSpectrum.py` checks the three
+analytical AM components and FM against a closed-form discrete sine sum in
+Debug and Release. The selected FM (3 kHz carrier, 375 Hz control and 750 Hz
+deviation at 48 kHz) qualifies a musical regime far from Nyquist; it does not
+constitute universal alias suppression.

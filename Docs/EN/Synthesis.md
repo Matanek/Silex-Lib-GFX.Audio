@@ -156,3 +156,5 @@ after the desired blocks. Partial queues follow the
 
 [Process blocks](Processing.md) · [Render a mix in memory](Offline.md) ·
 [Return to the Audio guide](README.md)
+
+[Compose sources, treatments and modulation](Composition.md).

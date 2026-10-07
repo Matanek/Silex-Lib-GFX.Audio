@@ -158,3 +158,5 @@ le flux après les blocs voulus. Les files partielles restent régies par
 
 [Traiter les blocs](Processing.md) · [Rendre un mix en mémoire](Offline.md) ·
 [Retour au guide Audio](README.md)
+
+[Composer les sources, traitements et modulations](Composition.md).

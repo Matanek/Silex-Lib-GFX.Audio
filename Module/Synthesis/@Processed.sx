@@ -1,0 +1,28 @@
+use GFX.Audio.Processing
+use STD.Error
+
+public class Processed:Generator {
+    let format:Processing.Format
+    private var source:Generator
+    private var effects:Processing.Processor[]
+    private init(source:Generator, effects:Processing.Processor[]) {
+        self.format = source.format; self.source = source; self.effects = []
+        for effect in effects { self.effects.append(effect) }
+    }
+    static func create(source:Generator, effects:Processing.Processor[]) Result<Processed, Error> {
+        if !valid_format(source.format) || effects.count() > 32 { return Result<Processed, Error>.failure(invalid("invalid format or more than 32 treatments")) }
+        for effect in effects {
+            if !same_format(source.format, effect.format) { return Result<Processed, Error>.failure(invalid("treatments must match the source format")) }
+        }
+        return Result<Processed, Error>.success(Processed(source, effects))
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        if samples.count() == 0 { return Result<void, Error>.success() }
+        try self.source.render(samples)
+        try finite_block(@samples[0:samples.count()])
+        for var effect in self.effects { try effect.process(samples); try finite_block(@samples[0:samples.count()]) }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.source.reset(); for var effect in self.effects { effect.reset() } }
+}
