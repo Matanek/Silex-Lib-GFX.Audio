@@ -1,0 +1,69 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func score() Synthesis.Event[] {
+    // Absolute integer frames: 120 BPM at 48 kHz, without accumulated rounding.
+    let beat_frames = 24_000
+    let melody:float32[] = [261.6256 as float32, 329.6276 as float32, 391.9954 as float32, 329.6276 as float32, 349.2282 as float32, 349.2282 as float32, 440.0 as float32, 391.9954 as float32, 391.9954 as float32, 493.8833 as float32, 440.0 as float32, 391.9954 as float32, 329.6276 as float32, 391.9954 as float32, 293.6648 as float32, 261.6256 as float32]
+    let roots:float32[] = [130.8128 as float32, 174.6141 as float32, 195.9977 as float32, 130.8128 as float32]
+    var events:Synthesis.Event[] = []
+    var beat = 0
+    while beat < melody.count() {
+        let frame = beat * beat_frames
+        if beat == 4 { events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.sustain(true))) }
+        if beat == 8 { events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.sustain(false))) }
+        if beat == 12 { events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.pitch_bend(2.0))) }
+        if beat == 14 { events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.pitch_bend(0.0))) }
+        if beat % 4 == 0 {
+            events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.note_on(100 + beat / 4 * 2, roots[beat / 4], 0.3)))
+            events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.note_on(101 + beat / 4 * 2, roots[beat / 4] * 1.5, 0.2)))
+        }
+        var velocity:float32 = 0.4
+        if beat % 4 == 0 { velocity = 0.6 }
+        events.append(Synthesis.Event(frame:frame, command:Synthesis.Command.note_on(beat + 1, melody[beat], velocity)))
+        events.append(Synthesis.Event(frame:frame + 16_800, command:Synthesis.Command.note_off(beat + 1)))
+        if beat % 4 == 3 {
+            events.append(Synthesis.Event(frame:frame + 18_000, command:Synthesis.Command.note_off(100 + beat / 4 * 2)))
+            events.append(Synthesis.Event(frame:frame + 18_000, command:Synthesis.Command.note_off(101 + beat / 4 * 2)))
+        }
+        beat++
+    }
+    events.append(Synthesis.Event(frame:384_000, command:Synthesis.Command.all_notes_off))
+    return events
+}
+func phrase(max_voices:int) float32[] {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var samples:float32[] = []; var i = 0; while i < 408_000 { samples.append(0.0); i++ }
+    match Synthesis.SineInstrument.create(format, max_voices:max_voices, attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800) {
+        failure(error) => { panic(error.detail) }
+        success(var instrument) => {
+            match Synthesis.Sequence.create(instrument, score()) {
+                failure(error) => { panic(error.detail) }
+                success(var source) => {
+                    var start = 0
+                    while start < samples.count() {
+                        var end = start + 512; if end > samples.count() { end = samples.count() }
+                        require(source.render(&samples[start:end])); start = end
+                    }
+                    assert(source.rendered_frames() == 408_000 && instrument.active_voices() == 0)
+                }
+            }
+        }
+    }
+    // Explicit headroom for summed voices, without hidden normalization.
+    i = 0; while i < samples.count() { samples[i] *= 0.3; i++ }
+    return samples
+}
+func play(audio:&Audio, samples:&float32[..], name:str) {
+    print(name)
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+}
+func main() {
+    var audio = Audio()
+    var samples = phrase(16); play(audio, &samples[0:samples.count()], "I1 - Melody with sixteen voices")
+    samples = phrase(2); play(audio, &samples[0:samples.count()], "I2 - Same score with two voices and stealing")
+}

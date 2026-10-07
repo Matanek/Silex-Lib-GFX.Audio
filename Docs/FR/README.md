@@ -237,3 +237,8 @@ appartient à Silex-Examples.
 [Ajouter une réverbération algorithmique](Reverb.md).
 
 [Maîtriser la dynamique avec compresseur et limiteur](Dynamics.md).
+
+## Jouer des notes polyphoniques
+
+Le [guide des instruments](Instruments.md) montre comment jouer une mélodie
+avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de sons.

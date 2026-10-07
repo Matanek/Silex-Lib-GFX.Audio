@@ -158,3 +158,8 @@ after the desired blocks. Partial queues follow the
 [Return to the Audio guide](README.md)
 
 [Compose sources, treatments and modulation](Composition.md).
+
+## Play polyphonic notes
+
+The [instrument guide](Instruments.md) shows how to play a melody with ADSR,
+sustain and pitch bend on a frame timeline, without a sound bank.

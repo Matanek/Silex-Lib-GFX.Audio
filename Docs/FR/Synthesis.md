@@ -160,3 +160,8 @@ le flux après les blocs voulus. Les files partielles restent régies par
 [Retour au guide Audio](README.md)
 
 [Composer les sources, traitements et modulations](Composition.md).
+
+## Jouer des notes polyphoniques
+
+Le [guide des instruments](Instruments.md) montre comment jouer une mélodie
+avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de sons.

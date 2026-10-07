@@ -158,3 +158,5 @@ The ten modulated-delay oracles check causal fractional delay, signed echoes, mo
 The twelve reverb oracles cover analytical first echoes, filtered feedback and decay, independent channels, exact chunking, mix/bypass, changes/reset, rejection, atomic frame overflow, tail energy and color, extreme formats and consumer composition.
 
 The twelve dynamics oracles cover dB curves and explicit makeup, float64 attack/release references, linked channel peaks, chunking/reset, wet/bypass, settings/rejection, atomic frame overflow, float32 extremes and composition with external generators/effects.
+
+The sixteen `Instruments.sx` oracles cover sine sum/velocity/ADSR, identities, stealing/rejection, sample continuity, sustain/stop, phase-preserving bend and atomic rejection, invalid input, simultaneous ordering/boundaries/empty blocks, bit-exact score in 1/2/8 channels, ownership/late events/capacity, prefix on failure, a user instrument with a limiter, the clock beyond 2²⁴, extreme capacities/rates, then absolute float64 conversion. `ReleaseValidation.py` repeats them. `PolyphonicMelody.sx` produces four bars without assets; listening complements numerical proof.

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Instruments polyphoniques sinusoïdaux : identités, vélocité, ADSR, sustain, bend et réattribution bornée avec raccord configurable. Partition de commandes sur l’horloge entière en frames, ordre stable, retards et capacités récupérables, instrument utilisateur composable et mélodie sans banque de sons.
+
 - Compresseur et limiteur composables : seuil/ratio, attaque/relâchement, regain explicite, plafond de samples, crête liée entre canaux et comparaison des accents sans banque.
 
 - Réverbération algorithmique composable : taille préparée, décroissance et amortissement réglables, dosage/bypass, historiques par canal, oracles d’échos/queue/couleur et notes pincées sans banque.

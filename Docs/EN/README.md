@@ -231,3 +231,8 @@ demonstration belongs to Silex-Examples.
 [Add algorithmic reverberation](Reverb.md).
 
 [Control dynamics with a compressor and limiter](Dynamics.md).
+
+## Play polyphonic notes
+
+The [instrument guide](Instruments.md) shows how to play a melody with ADSR,
+sustain and pitch bend on a frame timeline, without a sound bank.

@@ -1,0 +1,35 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public enum Command {
+    note_on(int, float32, float32)
+    note_off(int)
+    sustain(bool)
+    pitch_bend(float32)
+    all_notes_off
+}
+
+// Independent of MIDI, a device and the application's update frequency.
+public protocol Instrument {
+    format:Processing.Format { get }
+    func validate(command:Command) Result<void, Error>
+    func send(command:Command) Result<void, Error>
+    func render(samples:&float32[..]) Result<void, Error>
+    func reset()
+}
+
+public enum VoicePolicy { reject; steal_oldest }
+
+public struct Event {
+    let frame:int
+    let command:Command
+}
+
+// Round an absolute time once; integer frame positions then own the clock.
+public func frame_at(seconds:float64, sample_rate:int) Result<int, Error> {
+    if !Math.is_finite(seconds) || seconds < 0.0 || sample_rate < 1 || sample_rate > 16_777_216 { return Result<int, Error>.failure(invalid("time must be finite and nonnegative with a supported sample rate")) }
+    let frame = Math.round(seconds * sample_rate as float64)
+    if !Math.is_finite(frame) || frame > 9_007_199_254_740_991.0 { return Result<int, Error>.failure(invalid("converted frame exceeds exact float64 integer range; use integer frames")) }
+    return Result<int, Error>.success(frame as int)
+}
