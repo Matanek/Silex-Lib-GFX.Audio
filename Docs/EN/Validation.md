@@ -21,8 +21,8 @@ support mixing and processing guarantees. The dummy video driver also enables
 the SDL window coexistence test without desktop access. Rejection checks require a diagnostic
 and failure exit code, with timeouts to detect waits that cannot progress.
 
-`ReleaseValidation.py` runs the 40 public `Processing`, `Production`,
-`StreamGroups`, `Synthesis`, `Waveforms`, `Composition` and `Bitcrusher` oracles
+`ReleaseValidation.py` runs the 46 public `Processing`, `Production`,
+`StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher` and `Distortion` oracles
 in Release. It selects a deliberately
 nonexistent driver:
 these oracles use offline rendering and require no device. They cover the
@@ -136,3 +136,11 @@ then composition with a consumer-defined generator and processor.
 `ReleaseValidation.py` repeats them in Release. `RetroSounds.sx` compares
 six recipes without assets; listening complements PCM proof for timbre
 and transitions.
+
+## Saturation and distortion
+
+Six `Distortion.sx` consumer oracles cover soft/hard curves, large float32
+values and a subnormal drive, wet/bypass, settings/reset, chunking in 1/2/8
+channels, invalid input before writes, and composition order with a custom
+processor. They repeat in Release. `SaturatedSounds.sx` compares four timbres
+without assets.

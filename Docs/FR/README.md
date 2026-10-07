@@ -227,3 +227,5 @@ appartient à Silex-Examples.
 [Composer les sources, traitements et modulations](Composition.md).
 
 [Donner au son une texture rétro avec le bitcrusher](Bitcrusher.md).
+
+[Saturer ou distordre un son](Distortion.md).

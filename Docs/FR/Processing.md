@@ -1,8 +1,8 @@
 # Traiter les échantillons avant leur sortie
 
 `GFX.Audio.Processing` propose `Format`, le protocole `Processor`, `LowPass`,
-`Delay`, `Equalizer`, `Bitcrusher` et `levels`. Un effet conserve son état
-et modifie une tranche `&float32[..]` fournie par l'application. Il peut traiter les blocs d'un
+`Delay`, `Equalizer`, `Bitcrusher`, `Distortion`, `DistortionMode` et `levels`.
+Un effet conserve son état et modifie une tranche `&float32[..]` fournie par l'application. Il peut traiter les blocs d'un
 producteur, ceux d'un rendu hors ligne, ou ceux à écrire dans un flux.
 
 Les créations retournent un `Result` et reçoivent un `Format(sample_rate:48_000,
@@ -76,3 +76,5 @@ pour les fixtures à niveau maîtrisé ; reset retire toute queue.
 [Exemple : producteur indépendant filtré pendant la lecture](../ProcessedTone.sx).
 
 [Bitcrusher : résolution, maintien, dosage et bypass](Bitcrusher.md).
+
+[Saturer ou distordre un son](Distortion.md).

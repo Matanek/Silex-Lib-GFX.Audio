@@ -1,0 +1,72 @@
+use STD.Error
+use STD.Math
+
+public enum DistortionMode { soft; hard }
+
+public class Distortion:Processor {
+    let format:Format
+    private var drive:float32
+    private var mode:DistortionMode
+    private var output_gain:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private init(format:Format, drive:float32, mode:DistortionMode, output_gain:float32, wet:float32) {
+        self.format = format; self.drive = drive; self.mode = mode; self.output_gain = output_gain; self.wet = wet
+    }
+    private static func valid_drive(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 256.0 }
+    private static func valid_output_gain(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 16.0 }
+    private static func valid_wet(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }
+    static func create(format:Format, drive:float32 = 2.0, mode:DistortionMode = DistortionMode.soft, output_gain:float32 = 1.0, wet:float32 = 1.0) Result<Distortion, Error> {
+        if !valid_format(format) || !Distortion.valid_drive(drive) || !Distortion.valid_output_gain(output_gain) || !Distortion.valid_wet(wet) {
+            return Result<Distortion, Error>.failure(invalid("distortion requires a valid format, drive in [0, 256], output gain in [0, 16] and wet in [0, 1]"))
+        }
+        return Result<Distortion, Error>.success(Distortion(format, drive, mode, output_gain, wet))
+    }
+    func set_drive(drive:float32) Result<void, Error> {
+        if !Distortion.valid_drive(drive) { return Result<void, Error>.failure(invalid("distortion drive must be finite and in [0, 256]")) }
+        self.drive = drive; return Result<void, Error>.success()
+    }
+    func set_mode(mode:DistortionMode) { self.mode = mode }
+    func set_output_gain(output_gain:float32) Result<void, Error> {
+        if !Distortion.valid_output_gain(output_gain) { return Result<void, Error>.failure(invalid("distortion output gain must be finite and in [0, 16]")) }
+        self.output_gain = output_gain; return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !Distortion.valid_wet(wet) { return Result<void, Error>.failure(invalid("distortion wet must be finite and in [0, 1]")) }
+        self.wet = wet; return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        if self.bypass || self.wet == 0.0 { return Result<void, Error>.success() }
+        var hard_threshold:float32 = 1.0
+        if self.drive > 1.0 { hard_threshold = 1.0 / self.drive }
+        var i = 0
+        while i < samples.count() {
+            let dry = samples[i]
+            let magnitude = Math.abs(dry)
+            var shaped:float32 = 0.0
+            match self.mode {
+                soft => {
+                    if magnitude > 1.0 {
+                        // Algebraically z/(1+abs(z)), without overflowing drive*x.
+                        shaped = Math.copy_sign(self.drive / (self.drive + 1.0 / magnitude), dry)
+                    } else {
+                        let driven = self.drive * dry
+                        shaped = driven / (1.0 + Math.abs(driven))
+                    }
+                }
+                hard => {
+                    if self.drive > 1.0 && magnitude >= hard_threshold { shaped = Math.copy_sign(1.0 as float32, dry) }
+                    else { shaped = Math.clamp(self.drive * dry, -1.0 as float32, 1.0 as float32) }
+                }
+            }
+            let processed = self.output_gain * shaped
+            if self.wet == 1.0 { samples[i] = processed }
+            else { samples[i] = (1.0 - self.wet) * dry + self.wet * processed }
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {}
+}

@@ -221,3 +221,5 @@ demonstration belongs to Silex-Examples.
 [Compose sources, treatments and modulation](Composition.md).
 
 [Give sound a retro texture with the bitcrusher](Bitcrusher.md).
+
+[Saturate or distort sound](Distortion.md).

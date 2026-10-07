@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composable soft saturation and hard clipping: drive, output gain, wet mix and bypass, stable float32 evaluation and asset-free examples.
+
 - Composable bitcrusher: 2–24-bit resolution, independent sample hold across blocks, wet mix and bypass; signed 256-level grid at 8 bits, reset and an asset-free retro recipe.
 
 - Composition adds a weighted mix, ordered extensible processing chain, linear curve, amplitude modulation and sine FM with mono controls, persistent state and prepared buffers.

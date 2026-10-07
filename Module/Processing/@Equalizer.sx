@@ -1,0 +1,47 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public class Equalizer:Processor {
+    let format:Format
+    private let low_alpha:float32
+    private let high_alpha:float32
+    private var low_history:float32[]
+    private var high_history:float32[]
+    private var low_gain:float32
+    private var mid_gain:float32
+    private var high_gain:float32
+    private init(format:Format, low_hz:float32, high_hz:float32, low_gain:float32, mid_gain:float32, high_gain:float32) {
+        self.format = format; self.low_alpha = coefficient(format, low_hz); self.high_alpha = coefficient(format, high_hz)
+        self.low_history = zeros(format.channels); self.high_history = zeros(format.channels)
+        self.low_gain = low_gain; self.mid_gain = mid_gain; self.high_gain = high_gain
+    }
+    static func create(format:Format, low_hz:float32 = 250.0, high_hz:float32 = 4_000.0, low_gain:float32 = 1.0, mid_gain:float32 = 1.0, high_gain:float32 = 1.0) Result<Equalizer, Error> {
+        if !valid_format(format) || !valid_cutoff(format, low_hz) || !valid_cutoff(format, high_hz) || low_hz >= high_hz || !valid_gain(low_gain) || !valid_gain(mid_gain) || !valid_gain(high_gain) {
+            return Result<Equalizer, Error>.failure(invalid("invalid format, ordered cutoffs below Nyquist or nonnegative gains"))
+        }
+        return Result<Equalizer, Error>.success(Equalizer(format, low_hz, high_hz, low_gain, mid_gain, high_gain))
+    }
+    func set_gains(low:float32, mid:float32, high:float32) Result<void, Error> {
+        if !valid_gain(low) || !valid_gain(mid) || !valid_gain(high) { return Result<void, Error>.failure(invalid("equalizer gains must be finite and nonnegative")) }
+        self.low_gain = low; self.mid_gain = mid; self.high_gain = high
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let channel = i % self.format.channels
+            let input = samples[i]
+            let low = (1.0 - self.low_alpha) * self.low_history[channel] + self.low_alpha * input
+            let high_lowpass = (1.0 - self.high_alpha) * self.high_history[channel] + self.high_alpha * input
+            let output = self.low_gain * low + self.mid_gain * (high_lowpass - low) + self.high_gain * (input - high_lowpass)
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            self.low_history[channel] = low; self.high_history[channel] = high_lowpass
+            samples[i] = output
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.low_history.count() { self.low_history[i] = 0.0; self.high_history[i] = 0.0; i++ } }
+}

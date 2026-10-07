@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Saturation douce et distorsion dure composables : drive, gain de sortie, dosage et bypass, calcul float32 stabilisé et exemples sans asset.
+
 - Bitcrusher composable : résolution de 2 à 24 bits, maintien indépendant entre blocs, dosage et bypass ; grille signée de 256 niveaux à 8 bits, reset et recette rétro sans asset.
 
 - Composition : mélange dosé, chaîne ordonnée de traitements extensibles, courbe linéaire, modulation d’amplitude et FM sinusoïdale avec contrôles mono, états persistants et tampons préparés.

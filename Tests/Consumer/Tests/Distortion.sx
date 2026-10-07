@@ -1,0 +1,115 @@
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.process") }; success => { panic("invalid accepted") } } }
+func effect(channels:int = 1, drive:float32 = 2.0, mode:Processing.DistortionMode = Processing.DistortionMode.soft, gain:float32 = 1.0, wet:float32 = 1.0) Processing.Distortion {
+    match Processing.Distortion.create(Processing.Format(sample_rate:48_000, channels:channels), drive, mode, output_gain:gain, wet:wet) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+func compare(actual:@float32[..], expected:float32[]) {
+    assert(actual.count() == expected.count()); var i = 0
+    while i < actual.count() { assert(Math.abs(actual[i] - expected[i]) < 0.000001); i++ }
+}
+func sequence(count:int) float32[] { var values:float32[] = []; var i = 0; while i < count { values.append(((i * 17) % 31 - 15) as float32 / 8.0); i++ } return values }
+
+test "soft and hard distortion match known odd curves and explicit output gain" {
+    var soft = effect()
+    var samples:float32[] = [-2.0 as float32, -0.5 as float32, -0.25 as float32, 0.0 as float32, 0.25 as float32, 0.5 as float32, 2.0 as float32]
+    require(soft.process(&samples[0:7]))
+    compare(@samples[0:7], [-0.8 as float32, -0.5 as float32, -1.0 as float32 / 3.0, 0.0 as float32, 1.0 as float32 / 3.0, 0.5 as float32, 0.8 as float32])
+    var hard = effect(mode:Processing.DistortionMode.hard, gain:0.5)
+    samples = [-2.0 as float32, -0.25 as float32, 0.0 as float32, 0.25 as float32, 2.0 as float32]
+    require(hard.process(&samples[0:5])); compare(@samples[0:5], [-0.5 as float32, -0.25 as float32, 0.0 as float32, 0.25 as float32, 0.5 as float32])
+    var muted = effect(drive:0.0, wet:0.75); samples = [-2.0 as float32, 0.0 as float32, 2.0 as float32]
+    require(muted.process(&samples[0:3])); compare(@samples[0:3], [-0.5 as float32, 0.0 as float32, 0.5 as float32])
+}
+
+test "large finite float32 inputs saturate without intermediate overflow" {
+    var soft = effect(drive:256.0, gain:16.0)
+    var samples:float32[] = [-3.402823466e38 as float32, 3.402823466e38 as float32]
+    require(soft.process(&samples[0:2])); compare(@samples[0:2], [-16.0 as float32, 16.0 as float32])
+    soft.set_mode(Processing.DistortionMode.hard)
+    samples = [-3.402823466e38 as float32, 3.402823466e38 as float32]
+    require(soft.process(&samples[0:2])); compare(@samples[0:2], [-16.0 as float32, 16.0 as float32])
+    soft.set_mode(Processing.DistortionMode.soft)
+    let tiny:float32 = 1.0e-40
+    require(soft.set_drive(tiny)); require(soft.set_output_gain(1.0))
+    samples = [-3.402823466e38 as float32, 3.402823466e38 as float32]
+    let magnitude:float32 = tiny * 3.402823466e38
+    let expected = magnitude / (1.0 + magnitude)
+    require(soft.process(&samples[0:2])); compare(@samples[0:2], [-expected, expected])
+    require(soft.set_drive(256.0)); require(soft.set_output_gain(16.0))
+    require(soft.set_wet(0.25)); samples = [-3.402823466e38 as float32, 3.402823466e38 as float32]
+    require(soft.process(&samples[0:2])); assert(Math.is_finite(samples[0]) && Math.is_finite(samples[1]) && samples[0] < 0.0 && samples[1] > 0.0)
+}
+
+test "wet bypass changes and reset retain explicit settings" {
+    var unit = effect(drive:4.0, mode:Processing.DistortionMode.hard, gain:0.5, wet:0.5)
+    var samples:float32[] = [0.5 as float32, -0.125 as float32]
+    require(unit.process(&samples[0:2])); compare(@samples[0:2], [0.5 as float32, -0.1875 as float32])
+    unit.set_bypass(true); samples = [2.0 as float32, -2.0 as float32]; unit.reset()
+    require(unit.process(&samples[0:2])); compare(@samples[0:2], [2.0 as float32, -2.0 as float32])
+    unit.set_bypass(false); require(unit.set_wet(0.0)); require(unit.process(&samples[0:2])); compare(@samples[0:2], [2.0 as float32, -2.0 as float32])
+    require(unit.set_wet(1.0)); require(unit.set_drive(1.0)); require(unit.set_output_gain(2.0)); unit.set_mode(Processing.DistortionMode.soft)
+    samples = [1.0 as float32, -1.0 as float32]; unit.reset()
+    require(unit.process(&samples[0:2])); compare(@samples[0:2], [1.0 as float32, -1.0 as float32])
+}
+
+test "distortion chunking preserves per channel samples without tail or latency" {
+    let counts:int[] = [1, 2, 8]
+    for channels in counts {
+        var unit = effect(channels, drive:7.0, gain:0.25, wet:0.375)
+        var whole = sequence(1_031 * channels); var split = sequence(1_031 * channels)
+        require(unit.process(&whole[0:whole.count()]))
+        require(unit.process(&split[0:0])); require(unit.process(&split[0:5 * channels])); require(unit.process(&split[5 * channels:514 * channels])); require(unit.process(&split[514 * channels:split.count()]))
+        var i = 0; while i < whole.count() { assert(whole[i] == split[i]); i++ }
+        unit.reset(); var zeros:float32[] = []; i = 0; while i < channels * 3 { zeros.append(0.0); i++ }
+        require(unit.process(&zeros[0:zeros.count()])); for value in zeros { assert(value == 0.0 as float32) }
+    }
+}
+
+test "distortion rejects nonfinite and invalid settings before writes" {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    match Processing.Distortion.create(format, drive:257.0) { success(value) => { panic("drive accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Processing.Distortion.create(format, output_gain:17.0) { success(value) => { panic("gain accepted") }; failure(error) => {} }
+    match Processing.Distortion.create(format, wet:Math.sqrt(-1.0)) { success(value) => { panic("NaN accepted") }; failure(error) => {} }
+    match Processing.Distortion.create(Processing.Format(sample_rate:0, channels:1)) { success(value) => { panic("format accepted") }; failure(error) => {} }
+    var unit = effect(channels:2)
+    invalid(unit.set_drive(-1.0)); invalid(unit.set_output_gain(Math.exp(1000.0))); invalid(unit.set_wet(1.01))
+    var samples:float32[] = [0.5 as float32, -0.5 as float32, 0.75 as float32]
+    invalid(unit.process(&samples[0:3])); compare(@samples[0:3], [0.5 as float32, -0.5 as float32, 0.75 as float32])
+    var bad:float32[] = [0.75 as float32, 0.25 as float32, Math.sqrt(-1.0) as float32, 0.5 as float32]
+    invalid(unit.process(&bad[0:4])); assert(bad[0] == 0.75 as float32 && bad[1] == 0.25 as float32 && bad[3] == 0.5 as float32)
+    unit.set_bypass(true); invalid(unit.process(&bad[0:4])); unit.set_bypass(false)
+    require(unit.process(&samples[0:2])); compare(@samples[0:2], [0.5 as float32, -0.5 as float32])
+}
+
+class Constant:Synthesis.Generator {
+    let format:Processing.Format
+    init(format:Processing.Format) { self.format = format }
+    func render(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] = 0.5; i++ } return Result<void, Error>.success() }
+    func reset() {}
+}
+class Double:Processing.Processor {
+    let format:Processing.Format
+    init(format:Processing.Format) { self.format = format }
+    func process(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] *= 2.0; i++ } return Result<void, Error>.success() }
+    func reset() {}
+}
+
+test "custom processing order around distortion changes the intended result" {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var before:Processing.Processor[] = [Double(format), effect(drive:1.0)]
+    var after:Processing.Processor[] = [effect(drive:1.0), Double(format)]
+    match Synthesis.Processed.create(Constant(format), before) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => { var samples:float32[] = [0.0 as float32]; require(source.render(&samples[0:1])); assert(samples[0] == 0.5 as float32) }
+    }
+    match Synthesis.Processed.create(Constant(format), after) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => { var samples:float32[] = [0.0 as float32]; require(source.render(&samples[0:1])); assert(Math.abs(samples[0] - 2.0 as float32 / 3.0) < 0.000001) }
+    }
+}

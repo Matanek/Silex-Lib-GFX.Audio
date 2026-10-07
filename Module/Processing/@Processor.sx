@@ -1,0 +1,32 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public struct Format { let sample_rate:int; let channels:int }
+public protocol Processor {
+    format:Format { get }
+    func process(samples:&float32[..]) Result<void, Error>
+    func reset()
+}
+
+func valid_format(format:Format) bool { return format.sample_rate > 0 && format.sample_rate <= 2_147_483_647 && format.channels >= 1 && format.channels <= 8 }
+func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.process", subject:null, detail:detail) }
+func overflow() Error { return Error(kind:Kind.limit_exceeded(), operation:"audio.process", subject:null, detail:"processing exceeds finite float32 range; reset and rebuild the block before retrying") }
+func valid_gain(value:float32) bool { return Math.is_finite(value) && value >= 0.0 }
+func coefficient(format:Format, cutoff:float32) float32 { let rate:float32 = format.sample_rate; return 1.0 - Math.exp(-2.0 * Math.pi<float32>() * cutoff / rate) }
+func valid_cutoff(format:Format, cutoff:float32) bool {
+    let rate:float32 = format.sample_rate
+    return Math.is_finite(cutoff) && cutoff > 0.0 && cutoff < rate / 2.0 && coefficient(format, cutoff) > 0.0
+}
+func zeros(count:int) float32[] {
+    var values:float32[] = []
+    var i = 0
+    while i < count { values.append(0.0); i++ }
+    return values
+}
+func validate_block(samples:@float32[..], channels:int) Result<void, Error> {
+    if channels < 1 || channels > 8 || samples.count() % channels != 0 { return Result<void, Error>.failure(invalid("samples must contain complete frames for 1 to 8 channels")) }
+    for sample in samples { if !Math.is_finite(sample) { return Result<void, Error>.failure(invalid("samples must be finite")) } }
+    return Result<void, Error>.success()
+}
+

@@ -1,0 +1,30 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public struct Level { let peak:float64; let rms:float64 }
+public func levels(samples:@float32[..], channels:int) Result<Level[], Error> {
+    try validate_block(samples, channels)
+    var peaks:float64[] = []
+    var energies:float64[] = []
+    var initial = 0
+    while initial < channels { peaks.append(0.0); energies.append(0.0); initial++ }
+    var i = 0
+    while i < samples.count() {
+        let channel = i % channels
+        let value = samples[i] as float64
+        let magnitude = Math.abs(value)
+        if magnitude > peaks[channel] { peaks[channel] = magnitude }
+        energies[channel] += value * value
+        i++
+    }
+    let frames = samples.count() / channels
+    var output:Level[] = []
+    i = 0
+    while i < channels {
+        var rms:float64 = 0.0
+        if frames > 0 { rms = Math.sqrt(energies[i] / frames as float64) }
+        output.append(Level(peak:peaks[i], rms:rms)); i++
+    }
+    return Result<Level[], Error>.success(output)
+}

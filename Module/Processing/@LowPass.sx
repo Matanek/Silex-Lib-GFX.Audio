@@ -1,0 +1,34 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public class LowPass:Processor {
+    let format:Format
+    private var alpha:float32
+    private var history:float32[]
+    private init(format:Format, alpha:float32) { self.format = format; self.alpha = alpha; self.history = zeros(format.channels) }
+    static func create(format:Format, cutoff_hz:float32) Result<LowPass, Error> {
+        if !valid_format(format) || !valid_cutoff(format, cutoff_hz) { return Result<LowPass, Error>.failure(invalid("invalid format or cutoff below Nyquist")) }
+        return Result<LowPass, Error>.success(LowPass(format, coefficient(format, cutoff_hz)))
+    }
+    func set_cutoff(cutoff_hz:float32) Result<void, Error> {
+        if !valid_cutoff(self.format, cutoff_hz) { return Result<void, Error>.failure(invalid("cutoff must be positive and below Nyquist")) }
+        self.alpha = coefficient(self.format, cutoff_hz)
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let channel = i % self.format.channels
+            let input = samples[i]
+            let output = (1.0 - self.alpha) * self.history[channel] + self.alpha * input
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            self.history[channel] = output
+            samples[i] = output
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.history.count() { self.history[i] = 0.0; i++ } }
+}

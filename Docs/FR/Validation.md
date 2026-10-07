@@ -23,8 +23,8 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 40 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition` et `Bitcrusher` en Release.
+`ReleaseValidation.py` reprend les 46 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher` et `Distortion` en Release.
 Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
@@ -142,3 +142,11 @@ puis composition avec générateur et traitement définis par le consumer.
 `ReleaseValidation.py` les reprend en Release. `RetroSounds.sx` compare six
 recettes sans asset ; l'écoute complète les preuves PCM sur le timbre et les
 transitions.
+
+## Saturation et distorsion
+
+Six oracles du consumer `Distortion.sx` contrôlent les courbes douce/dure,
+les grandes valeurs float32 et un drive subnormal, wet/bypass, réglages/reset,
+découpage 1/2/8 canaux, invalides avant écriture et ordre de composition avec
+un traitement personnalisé. Ils sont repris en Release. La démonstration
+`SaturatedSounds.sx` compare quatre timbres sans asset.

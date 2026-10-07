@@ -1,0 +1,52 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public class Delay:Processor {
+    let format:Format
+    let delay_frames:int
+    private var feedback:float32
+    private var wet:float32
+    private var ring:float32[]
+    private var cursor:int
+    private init(format:Format, delay_frames:int, feedback:float32, wet:float32) {
+        self.format = format; self.delay_frames = delay_frames; self.feedback = feedback; self.wet = wet
+        self.ring = zeros(delay_frames * format.channels); self.cursor = 0
+    }
+    static func create(format:Format, delay_frames:int, feedback:float32 = 0.5, wet:float32 = 0.5) Result<Delay, Error> {
+        if !valid_format(format) || delay_frames < 1 || delay_frames > 1_048_576 / format.channels || !Math.is_finite(feedback) || Math.abs(feedback) >= 1.0 || !valid_gain(wet) {
+            return Result<Delay, Error>.failure(invalid("invalid format, delay capacity, feedback magnitude below one or nonnegative wet gain"))
+        }
+        return Result<Delay, Error>.success(Delay(format, delay_frames, feedback, wet))
+    }
+    func set_feedback(feedback:float32) Result<void, Error> {
+        if !Math.is_finite(feedback) || Math.abs(feedback) >= 1.0 { return Result<void, Error>.failure(invalid("feedback magnitude must be below one")) }
+        self.feedback = feedback
+        return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !valid_gain(wet) { return Result<void, Error>.failure(invalid("wet gain must be finite and nonnegative")) }
+        self.wet = wet
+        return Result<void, Error>.success()
+    }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var i = 0
+        while i < samples.count() {
+            let input = samples[i]
+            let delayed = self.ring[self.cursor]
+            let output = input + self.wet * delayed
+            if !Math.is_finite(output) { return Result<void, Error>.failure(overflow()) }
+            let retained = input + self.feedback * delayed
+            if !Math.is_finite(retained) { return Result<void, Error>.failure(overflow()) }
+            self.ring[self.cursor] = retained
+            samples[i] = output
+            self.cursor++
+            if self.cursor == self.ring.count() { self.cursor = 0 }
+            i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { var i = 0; while i < self.ring.count() { self.ring[i] = 0.0; i++ }
+        self.cursor = 0 }
+}
