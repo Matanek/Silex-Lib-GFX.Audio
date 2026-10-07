@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Bitcrusher composable : résolution de 2 à 24 bits, maintien indépendant entre blocs, dosage et bypass ; grille signée de 256 niveaux à 8 bits, reset et recette rétro sans asset.
+
 - Composition : mélange dosé, chaîne ordonnée de traitements extensibles, courbe linéaire, modulation d’amplitude et FM sinusoïdale avec contrôles mono, états persistants et tampons préparés.
 
 - Synthèse : triangle, carré à rapport cyclique et dent de scie à harmoniques bornées sous Nyquist, ainsi qu’un bruit rose reproductible. Une palette exécutable compare les timbres ; un oracle spectral indépendant vérifie les formes et les bruits en Debug et Release.

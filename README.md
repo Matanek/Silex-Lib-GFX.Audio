@@ -15,3 +15,5 @@ silex install GFX.Audio
 - [English documentation](Docs/EN/README.md)
 
 The package requires Silex 0.47.1 or newer.
+
+[Create retro textures with bitcrushing and sample hold](Docs/EN/Bitcrusher.md).

@@ -23,8 +23,9 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 27 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis` et `Waveforms` en Release. Il utilise un pilote
+`ReleaseValidation.py` reprend les 40 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition` et `Bitcrusher` en Release.
+Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
 producteur scalaire en source complète et en flux, avec conversion 24→48 kHz,
@@ -130,3 +131,14 @@ des erreurs. Ils complètent les oracles Release. `SynthesisSpectrum.py` contrô
 sinusoïdale discrète fermée, en Debug et Release. La FM retenue (porteuse 3 kHz,
 contrôle 375 Hz, déviation 750 Hz à 48 kHz) qualifie un régime musical éloigné
 de Nyquist ; cela ne constitue pas une suppression universelle du repliement.
+
+## Bitcrusher et recette rétro
+
+Le consumer `Tests/Consumer/Tests/Bitcrusher.sx` ajoute six oracles : grille
+complète de 256 codes et rampe à 8 bits, égalités d'arrondi et saturation,
+maintien seul à 24 bits et valeurs propres aux canaux, découpage exact en
+1/2/8 canaux, reset, dosage, bypass, changements, invalides sans avancement,
+puis composition avec générateur et traitement définis par le consumer.
+`ReleaseValidation.py` les reprend en Release. `RetroSounds.sx` compare six
+recettes sans asset ; l'écoute complète les preuves PCM sur le timbre et les
+transitions.

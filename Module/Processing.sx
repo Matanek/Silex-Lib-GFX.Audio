@@ -180,3 +180,75 @@ public func levels(samples:@float32[..], channels:int) Result<Level[], Error> {
     }
     return Result<Level[], Error>.success(output)
 }
+
+public class Bitcrusher:Processor {
+    let format:Format
+    private var scale:float32
+    private var hold_frames:int
+    private var wet:float32
+    private var bypass:bool = false
+    private var remaining:int = 0
+    private var held:float32[]
+    private init(format:Format, bits:int, hold_frames:int, wet:float32) {
+        self.format = format; self.scale = Bitcrusher.bit_scale(bits)
+        self.hold_frames = hold_frames; self.wet = wet; self.held = zeros(format.channels)
+    }
+    private static func bit_scale(bits:int) float32 {
+        var scale:float32 = 1.0; var i = 1
+        while i < bits { scale *= 2.0; i++ }
+        return scale
+    }
+    private static func valid_wet(wet:float32) bool { return Math.is_finite(wet) && wet >= 0.0 && wet <= 1.0 }
+    static func create(format:Format, bits:int = 8, hold_frames:int = 1, wet:float32 = 1.0) Result<Bitcrusher, Error> {
+        if !valid_format(format) || bits < 2 || bits > 24 || hold_frames < 1 || hold_frames > 16_777_216 || !Bitcrusher.valid_wet(wet) {
+            return Result<Bitcrusher, Error>.failure(invalid("bitcrusher requires a valid format, 2 to 24 bits, 1 to 16777216 hold frames and wet in [0, 1]"))
+        }
+        return Result<Bitcrusher, Error>.success(Bitcrusher(format, bits, hold_frames, wet))
+    }
+    func set_bits(bits:int) Result<void, Error> {
+        if bits < 2 || bits > 24 { return Result<void, Error>.failure(invalid("bitcrusher resolution must be 2 to 24 bits")) }
+        self.scale = Bitcrusher.bit_scale(bits); self.remaining = 0
+        return Result<void, Error>.success()
+    }
+    func set_hold_frames(hold_frames:int) Result<void, Error> {
+        if hold_frames < 1 || hold_frames > 16_777_216 { return Result<void, Error>.failure(invalid("bitcrusher hold must be 1 to 16777216 frames")) }
+        self.hold_frames = hold_frames; self.remaining = 0
+        return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !Bitcrusher.valid_wet(wet) { return Result<void, Error>.failure(invalid("bitcrusher wet must be finite and in [0, 1]")) }
+        self.wet = wet
+        return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var frame = 0
+        while frame < samples.count() {
+            if self.remaining == 0 {
+                var channel = 0
+                while channel < self.format.channels {
+                    let input = Math.clamp(samples[frame + channel], -1.0 as float32, 1.0 - 1.0 / self.scale)
+                    self.held[channel] = Math.round_even(input * self.scale) / self.scale
+                    channel++
+                }
+                self.remaining = self.hold_frames
+            }
+            if !self.bypass && self.wet > 0.0 {
+                var channel = 0
+                while channel < self.format.channels {
+                    if self.wet == 1.0 { samples[frame + channel] = self.held[channel] }
+                    else { samples[frame + channel] = (1.0 - self.wet) * samples[frame + channel] + self.wet * self.held[channel] }
+                    channel++
+                }
+            }
+            self.remaining--; frame += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        self.remaining = 0
+        var channel = 0
+        while channel < self.held.count() { self.held[channel] = 0.0; channel++ }
+    }
+}

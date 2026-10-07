@@ -225,3 +225,5 @@ appartient à Silex-Examples.
 [Fabriquer des sons procéduraux et des enveloppes](Synthesis.md).
 
 [Composer les sources, traitements et modulations](Composition.md).
+
+[Donner au son une texture rétro avec le bitcrusher](Bitcrusher.md).

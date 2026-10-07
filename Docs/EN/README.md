@@ -219,3 +219,5 @@ demonstration belongs to Silex-Examples.
 [Generate procedural sounds and envelopes](Synthesis.md).
 
 [Compose sources, treatments and modulation](Composition.md).
+
+[Give sound a retro texture with the bitcrusher](Bitcrusher.md).

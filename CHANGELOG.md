@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composable bitcrusher: 2–24-bit resolution, independent sample hold across blocks, wet mix and bypass; signed 256-level grid at 8 bits, reset and an asset-free retro recipe.
+
 - Composition adds a weighted mix, ordered extensible processing chain, linear curve, amplitude modulation and sine FM with mono controls, persistent state and prepared buffers.
 
 - Synthesis adds triangle, duty-cycle square and sawtooth waves with bounded harmonics below Nyquist, plus reproducible pink noise. An executable palette compares timbres; an independent spectral oracle checks waveforms and noise in Debug and Release.
