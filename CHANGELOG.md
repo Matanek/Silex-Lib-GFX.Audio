@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Synthesis adds triangle, duty-cycle square and sawtooth waves with bounded harmonics below Nyquist, plus reproducible pink noise. An executable palette compares timbres; an independent spectral oracle checks waveforms and noise in Debug and Release.
+
 - `GFX.Audio.Synthesis` adds an extensible generator, sine oscillator, seeded white noise and ADSR envelope. Rendering uses prepared views with persistent block state, recoverable settings and examples without sound banks.
 
 - Stream/group integration preserves independent pauses, stable end identities and handle ownership. Seconds remain available for large source frame durations.

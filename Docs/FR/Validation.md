@@ -9,6 +9,8 @@ décrit leur reconstruction et leur publication séparée.
 ```sh
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
+python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
+python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
 python3 Packages/GFX.Audio/Tests/OfflineValidation.py
 ```
@@ -21,14 +23,25 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 23 oracles publics de `Processing`,
-`Production`, `StreamGroups` et `Synthesis` en Release. Il utilise un pilote
+`ReleaseValidation.py` reprend les 27 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis` et `Waveforms` en Release. Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
 producteur scalaire en source complète et en flux, avec conversion 24→48 kHz,
 une tolérance absolue de 10⁻⁶ et les compteurs de frames. Les oracles de synthèse
 couvrent sinus, bruit reproductible, niveaux ADSR, blocs invalides et
 conformances de protocoles depuis un consommateur externe.
+
+`SynthesisSpectrum.py` utilise uniquement la bibliothèque standard Python et
+une FFT indépendante. Quinze fixtures à 375, 3 000 et 9 000 Hz contrôlent les
+harmoniques de triangle, carré à 25/50/75 % et dent de scie : puissance hors
+harmoniques inférieure à 10⁻⁷ et écart spectral complexe inférieur à 2×10⁻⁵
+face à une onde idéale filtrée séparément. Une dent de scie naïve à 9 kHz
+échoue au contrôle d’aliasing. Sur 131 072 frames à 48 kHz, le bruit rose doit
+avoir une pente de densité entre −1,2 et −0,8 et un rapport maximal des
+puissances d’octaves inférieur à 2,5, entre 187,5 et 6 000 Hz ; le bruit blanc
+sert de contrôle. Exécuter explicitement les deux modes : `compile` utilise
+Release par défaut, et `--debug` sélectionne Debug.
 
 ```sh
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py --target macos-x64 --execute
@@ -44,7 +57,7 @@ les 13 oracles du socle ; elle ne qualifie pas automatiquement les ajouts de
 synthèse pour ces cibles.
 
 Les exemples `GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`,
-`Groups`, `Offline`, `ProcessedTone` et `ProceduralSounds` sont des sources
+`Groups`, `Offline`, `ProcessedTone`, `ProceduralSounds` et `WaveformPalette` sont des sources
 exécutables sous `Docs/`. Employer par exemple :
 
 ```sh

@@ -1,0 +1,53 @@
+use GFX.Audio
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+
+func require(result:Result<void, Error>) {
+    match result { failure(error) => { panic(error.detail) }; success => {} }
+}
+func play(audio:&Audio, source:Synthesis.Generator) {
+    var samples:float32[] = []
+    var i = 0
+    while i < 16_800 { samples.append(0.0); i++ }
+    require(source.render(&samples[0:16_800]))
+    match Synthesis.Envelope.create(source.format, attack_frames:240, decay_frames:1_200, sustain:0.8, release_frames:4_800) {
+        failure(error) => { panic(error.detail) }
+        success(var envelope) => {
+            envelope.note_on()
+            require(envelope.process(&samples[0:12_000]))
+            envelope.note_off()
+            require(envelope.process(&samples[12_000:16_800]))
+            assert(!envelope.is_active())
+        }
+    }
+    let sound = audio.create(@samples[0:16_800], sample_rate:48_000)
+    audio.wait(audio.play(sound))
+    assert(audio.unload(sound))
+}
+func main() {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var audio = Audio()
+    let names:str[] = ["Sine", "Triangle", "Square 50%", "Sawtooth"]
+    let shapes:Synthesis.Waveform[] = [Synthesis.Waveform.sine, Synthesis.Waveform.triangle, Synthesis.Waveform.square, Synthesis.Waveform.sawtooth]
+    var i = 0
+    while i < shapes.count() {
+        print(names[i])
+        match Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:shapes[i]) {
+            failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
+        }
+        i++
+    }
+    print("Square 25%")
+    match Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:Synthesis.Waveform.square, duty_cycle:0.25) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
+    }
+    print("White noise")
+    match Synthesis.WhiteNoise.create(format, seed:42, amplitude:0.15) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
+    }
+    print("Pink noise")
+    match Synthesis.PinkNoise.create(format, seed:42, amplitude:0.5) {
+        failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
+    }
+}

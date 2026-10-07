@@ -1,0 +1,108 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func buffer(count:int, value:float32 = 0.0) float32[] {
+    var values:float32[] = []
+    var i = 0
+    while i < count { values.append(value); i++ }
+    return values
+}
+func require(result:Result<void, Error>) {
+    match result { failure(error) => { panic(error.detail) }; success => {} }
+}
+func oscillator(waveform:Synthesis.Waveform, frequency:float32 = 375.0, phase:float32 = 0.0) Synthesis.Oscillator {
+    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:2), frequency_hz:frequency, phase:phase, waveform:waveform, duty_cycle:0.25) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func pink(seed:int = 42) Synthesis.PinkNoise {
+    match Synthesis.PinkNoise.create(Processing.Format(sample_rate:48_000, channels:2), seed:seed) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func compare(a:@float32[..], b:@float32[..]) {
+    assert(a.count() == b.count())
+    var i = 0
+    while i < a.count() { assert(Math.abs(a[i] - b[i]) < 0.000001); i++ }
+}
+
+test "every waveform is bounded interleaved and independent of block boundaries" {
+    let shapes:Synthesis.Waveform[] = [Synthesis.Waveform.sine, Synthesis.Waveform.triangle, Synthesis.Waveform.square, Synthesis.Waveform.sawtooth]
+    for shape in shapes {
+        var source = oscillator(shape)
+        var whole = buffer(1_024)
+        var split = buffer(1_024)
+        require(source.render(&whole[0:1_024]))
+        source.reset()
+        require(source.render(&split[0:14]))
+        require(source.render(&split[14:510]))
+        require(source.render(&split[510:1_024]))
+        compare(@whole[0:1_024], @split[0:1_024])
+        var i = 0
+        while i < whole.count() { assert(Math.abs(whole[i]) <= 1.0 && whole[i] == whole[i + 1]); i += 2 }
+    }
+}
+
+test "waveform frequency changes preserve phase and rebuild their bandwidth" {
+    var source = oscillator(Synthesis.Waveform.square)
+    var samples = buffer(16)
+    require(source.render(&samples[0:16]))
+    match source.set_frequency(24_000.0) { success => { panic("Nyquist accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    require(source.set_frequency(9_000.0))
+    var reference = oscillator(Synthesis.Waveform.square, frequency:9_000.0, phase:0.0625)
+    var expected = buffer(16)
+    require(source.render(&samples[0:16]))
+    require(reference.render(&expected[0:16]))
+    compare(@samples[0:16], @expected[0:16])
+    require(source.set_frequency(0.0))
+    source.reset()
+    require(source.render(&samples[0:16]))
+    for value in samples { assert(value == samples[0]) }
+    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:1), duty_cycle:0.0) { success(value) => { panic("zero duty accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:1), duty_cycle:1.0) { success(value) => { panic("unit duty accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:1), duty_cycle:Math.sqrt(-1.0)) { success(value) => { panic("NaN duty accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+}
+
+test "pink noise reset and partition retain seed octave state and channels" {
+    var source = pink()
+    var whole = buffer(20_000)
+    var split = buffer(20_000)
+    require(source.render(&whole[0:20_000]))
+    source.reset()
+    require(source.render(&split[0:14]))
+    require(source.render(&split[14:8_192]))
+    require(source.render(&split[8_192:20_000]))
+    compare(@whole[0:20_000], @split[0:20_000])
+    var i = 0
+    var energy:float64 = 0.0
+    while i < whole.count() {
+        assert(Math.is_finite(whole[i]) && Math.abs(whole[i]) <= 1.0 && whole[i] == whole[i + 1])
+        energy += whole[i] as float64 * whole[i] as float64
+        i += 2
+    }
+    assert(energy > 1.0)
+    require(source.set_amplitude(0.0))
+    source.reset()
+    require(source.render(&split[0:20_000]))
+    for value in split { assert(value == 0.0 as float32) }
+}
+
+test "invalid pink blocks settings and seeds leave generation recoverable" {
+    var source = pink(seed:-9223372036854775808)
+    var reference = pink(seed:-9223372036854775808)
+    var samples = buffer(5, 0.75)
+    match source.render(&samples[0:5]) { success => { panic("incomplete frame accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match source.set_amplitude(-0.1) { success => { panic("negative amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match source.set_amplitude(Math.sqrt(-1.0)) { success => { panic("NaN accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    for sample in samples { assert(sample == 0.75 as float32) }
+    require(source.render(&samples[0:0]))
+    require(source.render(&samples[0:4]))
+    var expected = buffer(4)
+    require(reference.render(&expected[0:4]))
+    compare(@samples[0:4], @expected[0:4])
+    match Synthesis.PinkNoise.create(Processing.Format(sample_rate:0, channels:1), seed:42) { success(value) => { panic("invalid rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Synthesis.PinkNoise.create(Processing.Format(sample_rate:48_000, channels:1), seed:42, amplitude:1.1) { success(value) => { panic("invalid amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+}

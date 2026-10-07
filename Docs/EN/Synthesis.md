@@ -1,7 +1,8 @@
 # Generate a sound without an audio file
 
-`GFX.Audio.Synthesis` generates a sine wave with `Oscillator`, reproducible
-white noise with `WhiteNoise`, and an ADSR envelope with `Envelope`.
+`GFX.Audio.Synthesis` generates sine, triangle, square and sawtooth waves with
+`Oscillator`, reproducible noise with `WhiteNoise` and `PinkNoise`, and an ADSR
+envelope with `Envelope`.
 The [ProceduralSounds.sx program](../ProceduralSounds.sx) produces a beep,
 then an impact combining a bass tone and filtered noise, without a sound bank
 or audio asset.
@@ -11,6 +12,16 @@ From the workspace root, with Silex 0.47.1 or newer:
 ```sh
 silex run Packages/GFX.Audio/Docs/ProceduralSounds.sx --release
 ```
+
+The [WaveformPalette.sx program](../WaveformPalette.sx) compares the four
+waveforms, a 25% square wave, white noise and pink noise:
+
+```sh
+silex run Packages/GFX.Audio/Docs/WaveformPalette.sx --release
+```
+
+ARM64 Release pink noise also requires the local toolchain containing the
+parity loop-backedge correction until that correction is published.
 
 ## Generate and play
 
@@ -56,7 +67,8 @@ on the application thread.
 
 ## Configure sources
 
-`Oscillator.create(format, frequency_hz:440.0, amplitude:1.0, phase:0.0)`
+`Oscillator.create(format, frequency_hz:440.0, amplitude:1.0, phase:0.0,
+waveform:Waveform.sine, duty_cycle:0.5)`
 returns a `Result<Oscillator, Error>`. Initial phase counts cycles in `[0, 1)`.
 Frequency is finite, nonnegative, and strictly below Nyquist; its step must
 remain representable. Zero frequency holds the value at the chosen phase.
@@ -64,8 +76,25 @@ Amplitude is finite and between 0 and 1.
 
 `set_frequency` preserves phase; `set_amplitude` changes the level without
 automatic smoothing. `reset` returns to the initial phase and retains current
-settings. This initial capability produces sine waves; other waveforms are
-not yet available.
+settings. `Waveform` provides `sine`, `triangle`, `square` and `sawtooth`.
+Duty cycle is finite and strictly between 0 and 1; all waveforms validate it,
+and only the square wave uses it. Read `waveform` and `duty_cycle` on an
+instance; choose them at creation.
+
+```sx
+var source = Synthesis.Oscillator.create(format, frequency_hz:375.0,
+    waveform:Synthesis.Waveform.square, duty_cycle:0.25)
+```
+
+Triangle, square and sawtooth waves are harmonic sums: at most 64 harmonics,
+all strictly below Nyquist, weighted by a Fejér mean. Their edges are rounded;
+near Nyquist the timbre becomes simpler and the level may decrease. A square
+wave with a duty cycle other than 50% has a DC component. Waveforms stay in the
+unit range, with float32 rounding headroom of 10⁻⁵. Coefficients are prepared
+at creation and when frequency changes; their count does not grow with duration.
+At phase zero, the triangle rises from zero; the sawtooth rises from −1 toward
++1 and the square begins its positive portion. At ideal discontinuities, the
+harmonic sum produces a smoothed transition.
 
 `WhiteNoise.create(format, seed:42, amplitude:1.0)` returns a
 `Result<WhiteNoise, Error>`. The same seed and commands produce the same sequence;
@@ -73,6 +102,15 @@ not yet available.
 are accepted. Seeds are normalized into a finite state; distinct seeds may
 produce the same sequence. `set_amplitude` accepts the oscillator's range.
 This noise is intended for sound production, not cryptography.
+
+`PinkNoise.create(format, seed:42, amplitude:1.0)` returns a
+`Result<PinkNoise, Error>` with the same seed, amplitude and reset rules.
+It combines twelve values held at octave rates with white noise updated on
+every frame, following Voss-McCartney, and divides their sum by 13. This
+normalization bounds values and gives a lower RMS level than white noise at
+the same amplitude. The pink spectrum remains an approximation; qualification
+checks nearly constant power per octave between 187.5 and 6,000 Hz at 48 kHz.
+It does not guarantee a 1/f law at every frequency.
 
 Calculations and phases use float32, like Processing PCM. The format's sample
 rate ranges from 1 to 16,777,216 Hz and its channel count from 1 to 8; the rate

@@ -1,0 +1,72 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class PinkNoise:Generator {
+    let format:Processing.Format
+    let seed:int
+    private var state:int
+    private var counter:int
+    private var rows:float32[]
+    private var amplitude:float32
+
+    private init(format:Processing.Format, seed:int, amplitude:float32) {
+        self.format = format
+        self.seed = seed
+        self.state = noise_state(seed)
+        self.counter = 0
+        self.rows = []
+        self.amplitude = amplitude
+        var row = 0
+        while row < 12 { self.rows.append(self.white()); row++ }
+    }
+
+    private func white() float32 {
+        self.state = (self.state * 48_271) % 2_147_483_647
+        return 2.0 * ((self.state % 16_777_216) as float32 / 16_777_216.0) - 1.0
+    }
+
+    static func create(format:Processing.Format, seed:int, amplitude:float32 = 1.0) Result<PinkNoise, Error> {
+        if !valid_format(format) || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<PinkNoise, Error>.failure(invalid("invalid format or amplitude outside [0, 1]"))
+        }
+        return Result<PinkNoise, Error>.success(PinkNoise(format, seed, amplitude))
+    }
+
+    func set_amplitude(amplitude:float32) Result<void, Error> {
+        if !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<void, Error>.failure(invalid("amplitude must be finite and between zero and one"))
+        }
+        self.amplitude = amplitude
+        return Result<void, Error>.success()
+    }
+
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var index = 0
+        while index < samples.count() {
+            // Voss-McCartney: one held octave changes, plus white at every frame.
+            self.counter = (self.counter + 1) % 4_096
+            if self.counter > 0 {
+                var key = self.counter
+                var row = 0
+                while key % 2 == 0 { row++; key /= 2 }
+                self.rows[row] = self.white()
+            }
+            var value = self.white()
+            for row in self.rows { value += row }
+            value = self.amplitude * value / 13.0
+            var channel = 0
+            while channel < self.format.channels { samples[index + channel] = value; channel++ }
+            index += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+
+    func reset() {
+        self.state = noise_state(self.seed)
+        self.counter = 0
+        var row = 0
+        while row < 12 { self.rows[row] = self.white(); row++ }
+    }
+}

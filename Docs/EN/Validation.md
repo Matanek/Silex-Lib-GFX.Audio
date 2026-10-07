@@ -8,6 +8,8 @@ under `Boundary/`; `Package.json` records paths and hashes. The
 ```sh
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
+python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
+python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
 python3 Packages/GFX.Audio/Tests/OfflineValidation.py
 ```
@@ -19,14 +21,24 @@ support mixing and processing guarantees. The dummy video driver also enables
 the SDL window coexistence test without desktop access. Rejection checks require a diagnostic
 and failure exit code, with timeouts to detect waits that cannot progress.
 
-`ReleaseValidation.py` runs the 23 public `Processing`, `Production`,
-`StreamGroups` and `Synthesis` oracles in Release. It selects a deliberately
+`ReleaseValidation.py` runs the 27 public `Processing`, `Production`,
+`StreamGroups`, `Synthesis` and `Waveforms` oracles in Release. It selects a deliberately
 nonexistent driver:
 these oracles use offline rendering and require no device. They cover the
 stateful chain and the same scalar producer as a complete source and stream,
 including 24→48 kHz conversion, absolute 10⁻⁶ tolerance and frame counters.
 Synthesis oracles cover sine waves, reproducible noise, ADSR levels, invalid
 blocks, and protocol conformances from an external consumer.
+
+`SynthesisSpectrum.py` uses only Python's standard library and an independent
+FFT. Fifteen fixtures at 375, 3,000 and 9,000 Hz check triangle, 25/50/75%
+square and sawtooth harmonics: power outside the harmonic bins below 10⁻⁷
+and complex spectral error below 2×10⁻⁵ against a separately filtered ideal
+waveform. A naive 9 kHz sawtooth fails the aliasing control. Across 131,072
+frames at 48 kHz, pink noise must have a density slope between −1.2 and −0.8
+and a maximum octave-power ratio below 2.5, between 187.5 and 6,000 Hz; white
+noise serves as a control. Run both modes explicitly: `compile` defaults to
+Release, while `--debug` selects Debug.
 
 ```sh
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py --target macos-x64 --execute
@@ -41,7 +53,7 @@ The retained qualification below covers the 13 baseline oracles; it does not
 automatically qualify synthesis additions for those targets.
 
 `GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`, `Groups`, `Offline`,
-`ProcessedTone` and `ProceduralSounds` are executable sources under `Docs/`.
+`ProcessedTone`, `ProceduralSounds` and `WaveformPalette` are executable sources under `Docs/`.
 For example:
 
 ```sh
