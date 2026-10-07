@@ -8,7 +8,8 @@ rendered blocks, or blocks to feed a stream.
 Factories return `Result` and take `Format(sample_rate:48_000, channels:2)`.
 Format stays fixed for the effect lifetime. Samples must be finite interleaved
 complete frames; an empty view does not advance state. Values beyond ±1 are
-accepted to preserve mix headroom within float32 range. Effect parameters, coefficients and state use float32, like the PCM.
+accepted to preserve mix headroom within float32 range. Effect parameters,
+coefficients and state use float32, like the PCM.
 RMS energy is accumulated in float64.
 
 `process(samples:&buffer[0:buffer.count()])` returns `Result<void, Error>`.
@@ -56,7 +57,7 @@ absolute peak and float64 RMS per channel in interleaved order. The supplied
 view is the exact analysis window; an empty window returns zero. Analysis
 allocates small per-channel arrays and never changes samples.
 
-Invalid inputs are rejected before mutation or state changes. Output overflow
+Invalid inputs are rejected before mutation or state changes. Processing overflow
 returns `limit_exceeded`, without clipping or normalization. A prefix may already
 be processed in this case: reset and reconstruct the original block before
 retrying. Before stream writing or sound creation, explicitly choose a level

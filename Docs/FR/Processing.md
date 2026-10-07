@@ -65,7 +65,7 @@ La fenêtre est exactement la tranche fournie ; une fenêtre vide donne zéro.
 Cette analyse alloue ses petits tableaux par canal, sans modifier les samples.
 
 Les entrées invalides sont rejetées avant mutation et sans changer l'état.
-Un dépassement de sortie retourne `limit_exceeded`, sans écrêtage ni normalisation.
+Un dépassement du calcul ou de l’état retourne `limit_exceeded`, sans écrêtage ni normalisation.
 Dans ce cas un préfixe peut déjà être traité : appeler reset et reconstruire
 le bloc original avant un nouvel essai. Pour écrire dans un flux ou créer un
 son, choisir explicitement un niveau compris entre ±1, par exemple avec les
