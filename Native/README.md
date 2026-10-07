@@ -1,28 +1,58 @@
-# Rebuild the GFX.Audio boundary
+# Build the private streaming provider
 
-GFX.Audio owns its private SDL3_mixer 3.2.4 provider. The source archive is
-the official `SDL3_mixer-3.2.4.tar.gz` release with SHA-256
-`182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901`.
-It is compiled against SDL 3.4.10 from the official release archive with
-SHA-256
-`12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785`.
+`build-stream-provider.py` is the recorded portable build for the
+`SDL3_mixer-3.2.4-silex.4` candidate. It requires Python 3.12 or newer and
+the official Zig **0.16.0** distribution used by the workflow. Its release
+checksum is verified there; a separately built Zig can produce different
+compiler-identification metadata. Download the upstream source archives from the official releases:
 
-`Boundary/SDL3_mixer-3.2.4-silex.2.patch` is applied by the build script. The
-result keeps only the built-in AIFF, AU, dr_flac, dr_mp3, stb_vorbis, VOC, and
-WAVE decoders, and leaves SDL3 itself under the ownership of GFX.
+- [SDL 3.4.10](https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz)
+- [SDL_mixer 3.2.4](https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz)
 
-Run the target build from the package root:
+The script checks both source hashes and the complete patch hash before
+extracting or compiling. For example, from the package directory:
 
-```text
-Native/build-sdl3-mixer.sh /path/to/SDL3-3.4.10 /path/to/SDL3_mixer-3.2.4 macos-x64 /path/to/output
-Native/build-sdl3-mixer.sh /path/to/SDL3-3.4.10 /path/to/SDL3_mixer-3.2.4 linux-arm64 /path/to/output
+```sh
+python3 Native/build-stream-provider.py /tmp/SDL3-3.4.10.tar.gz /tmp/SDL3_mixer-3.2.4.tar.gz macos-arm64 Boundary/macos-arm64/libSDL3_mixer.a
 ```
 
-The script requires the native target host, fixes archive timestamps, remaps
-source and build paths, verifies the patch checksum, inspects the architecture
-and required mixer symbols, then prints the archive SHA-256.
+Repeat for the six targets listed in `Package.json`; Windows outputs use
+`SDL3_mixer.lib`. The builder compiles the SDL_mixer sources, including its
+bundled decoders, against SDL headers. It does not rebuild SDL or enable MIDI.
+It uses temporary build directories, deterministic archive metadata and stable
+COFF source/object names. Set `ZIG` to the recorded official executable.
+`Boundary/*/Artifact.SDL3_mixer.json`, `Boundary/SHA256SUMS.txt` and the package
+manifest record the resulting checksums.
 
-Both missing archives were reproduced byte for byte by GitHub Actions run
-`33908070086`. Their target manifests and hashes are recorded alongside the
-four established targets under `Boundary/`. The future `silex.3` release URLs
-are declared for packaging, but this validation does not create that release.
+The manual `build-portability.yml` workflow rebuilds each target twice and
+checks byte equality, the recorded manifest hash and the private close and drain symbols.
+It uploads workflow artifacts; it does not publish a release. Candidate
+`silex.4` URLs are reserved for a subsequent authorized provider publication.
+Local development requires the verified archives present at their manifest
+paths, or a local rebuild. Do not claim remote installability before that
+publication is complete.
+
+`build-sdl3-mixer.sh` retains the native CMake comparison route for macOS X64
+and Linux ARM64. It applies the same patch, but its toolchain produces separate
+checksums; it is not the source of the Zig candidate hashes. The previous
+spatial-only provider was reproduced for those two targets by GitHub Actions
+run `33908070086`; that historical proof does not qualify this streaming patch.
+
+## What the private patch changes
+
+The patch preserves the existing spatial interpolation correction and adds
+`Silex_MIX_CloseTrackStream` and `Silex_MIX_TrackDrained`, used only inside
+the Silex binding. A close takes
+the track lock, flushes its input and marks explicit EOF. The native mixer
+keeps producing silence for an open dry source; for a closed exhausted source
+it flushes the output resampler before stopping. No Silex callback runs in the
+native audio thread. The new flag is appended to the private track structure.
+
+Cached finite sounds also finalize their resampler at the known last frame.
+This prevents the last filter frames from being deferred to another mixer
+request. Looping sources preserve the filter state between repeats. Runtime
+For small mixer requests, the callback fills enough converted output to cover
+the resampler lookahead. A stopped track is considered drained only when its
+prepared output is empty; explicit stop discards that output. PCM tests cover
+small and large requests, the final frame count and equivalence between a
+complete source and successive blocks.

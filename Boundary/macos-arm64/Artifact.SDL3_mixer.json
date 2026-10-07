@@ -12,8 +12,14 @@
     "voc",
     "wave"
   ],
-  "sha256": "1012654550435658736b393669a166429db974be2986d98d025833c9c7f81dcd",
+  "sha256": "ecb6706ad622736766c07b0dee7047950816ff437b5a31588f8b04ee302bd9c5",
   "source_sha256": "182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901",
-  "patch_sha256": "97235a66f3f1fc1287f71d4ba7a478183184cc05b69006ee475f5add5e97824d",
-  "provenance": "Official SDL_mixer 3.2.4 source patched by SDL3_mixer-3.2.4-silex.2.patch and built against SDL 3.4.10"
+  "patch_sha256": "7c78ca83071bf600f8704a946ed5f4912b13bdb152a30b235d3047312c58d335",
+  "provenance": "Official SDL_mixer 3.2.4 source with SDL3_mixer-3.2.4-silex.4.patch, SDL 3.4.10 headers and the Zig 0.16.0 portable build",
+  "private_extensions": [
+    "Silex_MIX_CloseTrackStream",
+    "Silex_MIX_TrackDrained"
+  ],
+  "build_tool": "Official Zig 0.16.0",
+  "build_tool_archive_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489"
 }

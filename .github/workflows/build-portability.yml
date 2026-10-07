@@ -1,142 +1,70 @@
-name: Build missing SDL3_mixer desktop archives
-
-run-name: Build missing SDL3_mixer desktop archives
+name: Build portable SDL3_mixer streaming archives
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - spec-desktop-platform-portability-07
-    paths:
-      - .github/workflows/build-portability.yml
-      - Native/build-sdl3-mixer.sh
-      - Boundary/SDL3_mixer-3.2.4-silex.2.patch
-      - Boundary/SHA256SUMS.txt
 
 permissions:
   contents: read
 
 concurrency:
-  group: gfx-audio-build-portability-${{ github.ref }}
+  group: gfx-audio-provider-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
+    runs-on: macos-15
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - target: macos-x64
-            runner: macos-15-intel
-            archive: SDL3_mixer-3.2.4-macos-x64.a
-          - target: linux-arm64
-            runner: ubuntu-24.04-arm
-            archive: SDL3_mixer-3.2.4-linux-arm64.a
-
+        target: [macos-arm64, macos-x64, linux-x64, linux-arm64, windows-x64, windows-arm64]
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
-
     steps:
-      - name: Check out GFX.Audio
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
-          path: GFX.Audio
-
-      - name: Select the recorded Xcode toolchain
-        if: runner.os == 'macOS'
+          python-version: '3.12'
+      - name: Download the recorded tools and upstream sources
         shell: bash
         run: |
           set -euo pipefail
-          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
-          xcodebuild -version
-
-      - name: Download and verify upstream sources
+          case "$(uname -m)" in
+            arm64) zig_arch=aarch64; zig_sha=b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489 ;;
+            x86_64) zig_arch=x86_64; zig_sha=0387557ed1877bc6a2e1802c8391953baddba76081876301c522f52977b52ba7 ;;
+            *) exit 1 ;;
+          esac
+          curl -fL --retry 5 "https://ziglang.org/download/0.16.0/zig-$zig_arch-macos-0.16.0.tar.xz" -o "$RUNNER_TEMP/zig.tar.xz"
+          echo "$zig_sha  $RUNNER_TEMP/zig.tar.xz" | shasum -a 256 -c -
+          tar -xf "$RUNNER_TEMP/zig.tar.xz" -C "$RUNNER_TEMP"
+          echo "ZIG=$RUNNER_TEMP/zig-$zig_arch-macos-0.16.0/zig" >> "$GITHUB_ENV"
+          curl -fL --retry 5 https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz -o "$RUNNER_TEMP/SDL3.tar.gz"
+          curl -fL --retry 5 https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz -o "$RUNNER_TEMP/SDL3_mixer.tar.gz"
+      - name: Rebuild twice and compare with the manifest
         shell: bash
+        env:
+          AUDIO_TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/sources"
-          curl -fL --retry 5 --retry-all-errors https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz -o "$RUNNER_TEMP/SDL3.tar.gz"
-          curl -fL --retry 5 --retry-all-errors https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz -o "$RUNNER_TEMP/SDL3_mixer.tar.gz"
-          if command -v sha256sum >/dev/null 2>&1; then
-            echo "12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785  $RUNNER_TEMP/SDL3.tar.gz" | sha256sum -c -
-            echo "182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901  $RUNNER_TEMP/SDL3_mixer.tar.gz" | sha256sum -c -
-          else
-            echo "12b34280415ec8418c864408b93d008a20a6530687ee613d60bfbd20411f2785  $RUNNER_TEMP/SDL3.tar.gz" | shasum -a 256 -c -
-            echo "182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901  $RUNNER_TEMP/SDL3_mixer.tar.gz" | shasum -a 256 -c -
-          fi
-          tar -xzf "$RUNNER_TEMP/SDL3.tar.gz" -C "$RUNNER_TEMP/sources"
-          tar -xzf "$RUNNER_TEMP/SDL3_mixer.tar.gz" -C "$RUNNER_TEMP/sources"
-
-      - name: Build twice on macOS X64
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/output-a" "$RUNNER_TEMP/output-b"
-          env RUNNER_TEMP="$RUNNER_TEMP/rebuild-a" GFX.Audio/Native/build-sdl3-mixer.sh \
-            "$RUNNER_TEMP/sources/SDL3-3.4.10" \
-            "$RUNNER_TEMP/sources/SDL3_mixer-3.2.4" \
-            "${{ matrix.target }}" "$RUNNER_TEMP/output-a"
-          env RUNNER_TEMP="$RUNNER_TEMP/rebuild-b" GFX.Audio/Native/build-sdl3-mixer.sh \
-            "$RUNNER_TEMP/sources/SDL3-3.4.10" \
-            "$RUNNER_TEMP/sources/SDL3_mixer-3.2.4" \
-            "${{ matrix.target }}" "$RUNNER_TEMP/output-b"
-          cmp "$RUNNER_TEMP/output-a/${{ matrix.archive }}" "$RUNNER_TEMP/output-b/${{ matrix.archive }}"
-
-      - name: Build twice in the Linux compatibility baseline
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm --platform linux/arm64 \
-            -e RUNNER_TEMP=/runner-temp/rebuild-a \
-            -v "$GITHUB_WORKSPACE:/workspace:ro" \
-            -v "$RUNNER_TEMP:/runner-temp" \
-            ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc bash -lc '
-              set -euo pipefail
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update -y
-              apt-get install -y build-essential cmake file ninja-build patch
-              mkdir -p /runner-temp/output-a
-              /workspace/GFX.Audio/Native/build-sdl3-mixer.sh \
-                /runner-temp/sources/SDL3-3.4.10 \
-                /runner-temp/sources/SDL3_mixer-3.2.4 \
-                linux-arm64 /runner-temp/output-a
-            '
-          docker run --rm --platform linux/arm64 \
-            -e RUNNER_TEMP=/runner-temp/rebuild-b \
-            -v "$GITHUB_WORKSPACE:/workspace:ro" \
-            -v "$RUNNER_TEMP:/runner-temp" \
-            ubuntu:22.04@sha256:2edbbc5dc405e9612ba3584ce95480277e3eb374407b5505fe26f17df77c7dbc bash -lc '
-              set -euo pipefail
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update -y
-              apt-get install -y build-essential cmake file ninja-build patch
-              mkdir -p /runner-temp/output-b
-              /workspace/GFX.Audio/Native/build-sdl3-mixer.sh \
-                /runner-temp/sources/SDL3-3.4.10 \
-                /runner-temp/sources/SDL3_mixer-3.2.4 \
-                linux-arm64 /runner-temp/output-b
-            '
-          cmp "$RUNNER_TEMP/output-a/${{ matrix.archive }}" "$RUNNER_TEMP/output-b/${{ matrix.archive }}"
-
-      - name: Record candidate checksum
-        shell: bash
-        run: |
-          set -euo pipefail
-          expected="$(awk -v archive='${{ matrix.archive }}' '$2 == archive { print $1 }' GFX.Audio/Boundary/SHA256SUMS.txt)"
-          test -n "$expected"
-          if command -v sha256sum >/dev/null 2>&1; then
-            echo "$expected  $RUNNER_TEMP/output-a/${{ matrix.archive }}" | sha256sum -c -
-          else
-            echo "$expected  $RUNNER_TEMP/output-a/${{ matrix.archive }}" | shasum -a 256 -c -
-          fi
-
-      - name: Preserve candidate archive
-        uses: actions/upload-artifact@v4
+          case "$AUDIO_TARGET" in
+            windows-*) archive=SDL3_mixer.lib ;;
+            *) archive=libSDL3_mixer.a ;;
+          esac
+          python3 Native/build-stream-provider.py "$RUNNER_TEMP/SDL3.tar.gz" "$RUNNER_TEMP/SDL3_mixer.tar.gz" "$AUDIO_TARGET" "$RUNNER_TEMP/output-a/$archive"
+          python3 Native/build-stream-provider.py "$RUNNER_TEMP/SDL3.tar.gz" "$RUNNER_TEMP/SDL3_mixer.tar.gz" "$AUDIO_TARGET" "$RUNNER_TEMP/output-b/$archive"
+          cmp "$RUNNER_TEMP/output-a/$archive" "$RUNNER_TEMP/output-b/$archive"
+          python3 - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          target = os.environ['AUDIO_TARGET']
+          artifact = json.loads(Path('Package.json').read_text())['artifacts'][target]['SDL3_mixer']
+          archive = Path(os.environ['RUNNER_TEMP']) / 'output-a' / Path(artifact['path']).name
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == artifact['sha256']
+          PY
+          nm -g "$RUNNER_TEMP/output-a/$archive" > "$RUNNER_TEMP/symbols.txt"
+          grep -q Silex_MIX_CloseTrackStream "$RUNNER_TEMP/symbols.txt"
+          grep -q Silex_MIX_TrackDrained "$RUNNER_TEMP/symbols.txt"
+      - uses: actions/upload-artifact@v7
         with:
-          name: gfx-audio-${{ matrix.target }}
-          path: ${{ runner.temp }}/output-a/${{ matrix.archive }}
-          retention-days: 7
+          name: SDL3_mixer-3.2.4-silex.4-${{ matrix.target }}
+          path: ${{ runner.temp }}/output-a/*
           if-no-files-found: error

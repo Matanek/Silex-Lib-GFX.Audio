@@ -1,0 +1,74 @@
+use GFX.Audio
+use STD.Error.Kind
+
+class Producer {
+    var frame:int
+    init() { self.frame = 0 }
+    func next() float32[] {
+        var samples:float32[] = []
+        var index = 0
+        while index < 256 {
+            samples.append(((self.frame % 16) as float / 80.0) as float32)
+            self.frame++
+            index++
+        }
+        return samples
+    }
+}
+func source(audio:&Audio) Audio.Stream {
+    match audio.stream(sample_rate:48_000, capacity_frames:512) {
+        failure(error) => { panic(error.detail) }
+        success(value) => { return value }
+    }
+}
+func orphaned_stream() Audio.Stream {
+    var audio = Audio()
+    let stream = source(audio)
+    var producer = Producer()
+    var block = producer.next()
+    match audio.write(stream, @block[0:block.count()]) { failure(error) => { panic(error.detail) }; success(count) => {} }
+    let playing = audio.play(stream)
+    return stream
+}
+test "independent producer writes copied blocks and drains one device playback" {
+    var audio = Audio()
+    let stream = source(audio)
+    var producer = Producer()
+    let playing = audio.play(stream)
+    var index = 0
+    while index < 6 {
+        var block = producer.next()
+        match audio.wait_writable(stream, minimum_frames:256) { failure(error) => { panic(error.detail) }; success => {} }
+        match audio.write(stream, @block[0:block.count()]) {
+            failure(error) => { panic(error.detail) }
+            success(count) => { assert(count == 256) }
+        }
+        block.clear()
+        index++
+    }
+    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+    audio.wait(playing)
+    match audio.stream_info(stream) {
+        failure(error) => { panic(error.detail) }
+        success(info) => { assert(info.drained && info.written_frames == 1536 && info.consumed_frames == 1536 && info.discarded_frames == 0) }
+    }
+    assert(audio.release(stream))
+}
+test "destroy producer owner safely and fade out a starved stream" {
+    let stale = orphaned_stream()
+    var audio = Audio()
+    let current = source(audio)
+    var block:float32[] = [0.25 as float32]
+    match audio.write(stale, @block[0:1]) {
+        success(count) => { panic("destroyed owner's stream targeted another stream") }
+        failure(error) => { assert(error.kind == Kind.invalid_input()) }
+    }
+    let playing = audio.play(current)
+    audio.stop(playing, fade_out_seconds:0.01)
+    audio.wait(playing)
+    match audio.stream_info(current) {
+        failure(error) => { panic(error.detail) }
+        success(info) => { assert(info.stopped && !info.drained && info.queued_frames == 0) }
+    }
+    assert(audio.release(current))
+}

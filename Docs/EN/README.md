@@ -127,6 +127,12 @@ it supports simultaneous playbacks and every playback control; `unload`
 invalidates its handle without interrupting playbacks that retain it.
 Creation consumes a complete buffer and does not provide continuous streaming.
 
+## Produce sound in blocks
+
+A producer can feed one continuous playback with explicit capacity, without
+computing the entire sound. The [streaming guide](Streaming.md) describes
+prefilling, partial writes, controls and closing input.
+
 ## Control one playback
 
 `Audio.play` returns an `Audio.PlayingSound` that identifies one audible
@@ -143,13 +149,14 @@ audio.stop(playing, fade_out_seconds:0.25)
 In a direct program without an Application loop, `wait` blocks efficiently
 until playback finishes, including while it is paused.
 
-Volume is a non-negative linear gain. `1.0` preserves the source level; higher
+Volume is a finite, non-negative linear gain representable as `float32`. `1.0` preserves the source level; higher
 values can clip or become dangerously loud. Speed ranges from `0.01` through
 `100.0` and changes rate and pitch together.
 
 `Repeat.once()` plays once, `Repeat.times(3)` three times in total, and
 `Repeat.forever()` until stopped. `fade_in_seconds` belongs to the initial
-request; `stop` accepts a fade-out duration. A released or collected handle
+request; `stop` accepts a fade-out duration. Durations are finite and
+non-negative; invalid settings cause a `panic`. A released or collected handle
 cannot control a later playback that reuses its slot.
 
 ## Position a sound

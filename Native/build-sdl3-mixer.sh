@@ -13,8 +13,8 @@ sdl_source="$(cd -- "$1" && pwd)"
 mixer_source="$(cd -- "$2" && pwd)"
 target="$3"
 output_dir="$4"
-patch_file="$audio_package_dir/Boundary/SDL3_mixer-3.2.4-silex.2.patch"
-expected_patch_sha256="97235a66f3f1fc1287f71d4ba7a478183184cc05b69006ee475f5add5e97824d"
+patch_file="$audio_package_dir/Boundary/SDL3_mixer-3.2.4-silex.4.patch"
+expected_patch_sha256="7c78ca83071bf600f8704a946ed5f4912b13bdb152a30b235d3047312c58d335"
 
 if command -v sha256sum >/dev/null 2>&1; then
     actual_patch_sha256="$(sha256sum "$patch_file" | cut -d ' ' -f 1)"
@@ -135,7 +135,7 @@ fi
 
 symbols="$build_root/exported-symbols.txt"
 nm -g "$output" > "$symbols"
-for symbol in MIX_CreateMixer MIX_LoadAudio_IO MIX_PlayTrack; do
+for symbol in MIX_CreateMixer MIX_LoadAudio_IO MIX_PlayTrack Silex_MIX_CloseTrackStream Silex_MIX_TrackDrained; do
     grep -Eq "(^|[[:space:]_])${symbol}$" "$symbols" || {
         echo "missing required SDL3_mixer symbol: $symbol" >&2
         exit 1

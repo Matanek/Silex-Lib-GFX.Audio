@@ -1,0 +1,229 @@
+--- a/src/SDL_mixer_internal.h
++++ b/src/SDL_mixer_internal.h
+@@ -141,6 +141,9 @@
+     MIX_SpatializationMode spatialization_mode;
+     float spatialization_panning[2];
+     int spatialization_speakers[2];
++    float spatialization_current_panning[2];
++    int spatialization_current_speakers[2];
++    bool spatialization_current_valid;
+     MIX_Mixer *mixer;
+     SDL_PropertiesID props;
+     float *input_buffer;  // a place to process audio as it progresses through the callback.
+@@ -181,6 +184,7 @@
+     MIX_Track *group_prev;  // double-linked list for the owning group.
+     MIX_Track *group_next;
+     MIX_Track *fire_and_forget_next;  // linked list for the fire-and-forget pool.
++    bool silex_stream_closed;  // Private GFX.Audio: explicit EOF for a supplied stream.
+ };
+ 
+ struct MIX_Group
+--- a/src/SDL_mixer.c
++++ b/src/SDL_mixer.c
+@@ -347,6 +347,8 @@
+     SDL_AudioSpec raw_spec;
+     if (track->input_stream) {
+         SDL_GetAudioStreamFormat(track->input_stream, NULL, &raw_spec);
++    } else {
++        SDL_copyp(&raw_spec, &track->output_spec);
+     }
+ 
+     // do we need to grow our buffer?
+@@ -363,10 +365,18 @@
+     float *pcm = track->input_buffer;  // we always work in float32 format.
+     const int output_framesize = SDL_AUDIO_FRAMESIZE(track->output_spec);
+     int bytes_remaining = additional_amount;
++    // SDL callbacks request input bytes; keep enough converted output available
++    // even when a small request does not cover the resampler's lookahead.
++    const double requested_output_frames = SDL_ceil(((double)total_amount / (sizeof(float) * raw_spec.channels)) *
++        ((double)track->output_spec.freq / raw_spec.freq) / SDL_GetAudioStreamFrequencyRatio(stream));
++    const int requested_output_bytes = (int)SDL_min(requested_output_frames, (double)(SDL_MAX_SINT32 / output_framesize)) * output_framesize;
+ 
+     // Calling TrackStopped() might have a stopped_callback that restarts the track, so don't break the loop
+     //  for simply being stopped, so we can generate audio without gaps. If not restarted, track->state will no longer be PLAYING.
+-    while ((track->state == MIX_STATE_PLAYING) && (bytes_remaining > 0)) {
++    while ((track->state == MIX_STATE_PLAYING) && ((bytes_remaining > 0) || (SDL_GetAudioStreamAvailable(stream) < requested_output_bytes))) {
++        if (bytes_remaining <= 0) {
++            bytes_remaining = additional_amount;
++        }
+         bool end_of_audio = false;
+         int br = 0;   // bytes read.
+ 
+@@ -436,6 +446,11 @@
+ 
+             track->position += frames_read;
+             bytes_remaining -= put_bytes;
++            const bool stream_exhausted = track->silex_stream_closed && SDL_GetAudioStreamQueued(track->input_stream) == 0 && SDL_GetAudioStreamAvailable(track->input_stream) == 0;
++            const bool cached_audio_exhausted = track->input_audio && track->input_audio->precache && track->input_audio->duration_frames >= 0 && track->position >= (Uint64)track->input_audio->duration_frames;
++            if (stream_exhausted || cached_audio_exhausted) {
++                end_of_audio = true;
++            }
+         }
+ 
+         // remember that the callback in TrackStopped() might restart this track,
+@@ -467,7 +482,9 @@
+             }
+ 
+             if (track_stopped) {
+-                if (track->halt_when_exhausted) {
++                if (track->halt_when_exhausted || track->silex_stream_closed) {
++                    // Finish the resampler before marking the source exhausted.
++                    SDL_FlushAudioStream(stream);
+                     TrackStopped(track);
+                 } else {
+                     break;  // done with this track for now, but don't halt the track. We'll try it again later.
+@@ -477,30 +494,42 @@
+     }
+ }
+ 
+-static void MixSpatializedFloat32Audio(float *dst, const float *src, const int samples, const int output_channels, const float *panning, const int *speakers, const float gain)
+-{
+-    const float panning0 = panning[0] * gain;
+-    const float panning1 = panning[1] * gain;
+-    const int speaker0 = speakers[0];
+-    const int speaker1 = speakers[1];
+-
+-    // !!! FIXME: a common case (output_channels==2, speaker0=0, speaker1=1) can be easily SIMD'd.
+-    // !!! FIXME: unroll this loop?
+-    if ((panning0 == 0.0f) && (panning1 == 0.0f)) {
+-        return;  // don't mix silence.
+-    } else if ((panning0 == 1.0f) && (panning1 == 1.0f)) {  // no modulation.
+-        for (int i = 0; i < samples; i++, dst += output_channels, src++) {
+-            const float sample = *src;
+-            dst[speaker0] += sample;
+-            dst[speaker1] += sample;
+-        }
+-    } else {
+-        for (int i = 0; i < samples; i++, dst += output_channels, src++) {
+-            const float sample = *src;
+-            dst[speaker0] += sample * panning0;
+-            dst[speaker1] += sample * panning1;
+-        }
+-    }
++static void MixSpatializedFloat32Audio(float *dst, const float *src, const int samples, const int output_channels, const float *panning, const int *speakers, float *current_panning, int *current_speakers, bool *current_valid, const float gain)
++{
++    if (!*current_valid) {
++        current_panning[0] = panning[0];
++        current_panning[1] = panning[1];
++        current_speakers[0] = speakers[0];
++        current_speakers[1] = speakers[1];
++        *current_valid = true;
++    }
++
++    const float start0 = current_panning[0] * gain;
++    const float start1 = current_panning[1] * gain;
++    const float target0 = panning[0] * gain;
++    const float target1 = panning[1] * gain;
++    const bool same_speakers = (current_speakers[0] == speakers[0]) && (current_speakers[1] == speakers[1]);
++    const float fraction_step = 1.0f / (float) samples;
++
++    for (int i = 0; i < samples; i++, dst += output_channels, src++) {
++        const float sample = *src;
++        const float fraction = (float) (i + 1) * fraction_step;
++        if (same_speakers) {
++            dst[speakers[0]] += sample * (start0 + ((target0 - start0) * fraction));
++            dst[speakers[1]] += sample * (start1 + ((target1 - start1) * fraction));
++        } else {
++            const float remaining = 1.0f - fraction;
++            dst[current_speakers[0]] += sample * start0 * remaining;
++            dst[current_speakers[1]] += sample * start1 * remaining;
++            dst[speakers[0]] += sample * target0 * fraction;
++            dst[speakers[1]] += sample * target1 * fraction;
++        }
++    }
++
++    current_panning[0] = panning[0];
++    current_panning[1] = panning[1];
++    current_speakers[0] = speakers[0];
++    current_speakers[1] = speakers[1];
+ }
+ 
+ static void MixForcedStereoFloat32Audio(float *dst, const float *src, const int sample_frames, const int output_channels, const float *panning, const float gain)
+@@ -599,7 +628,7 @@
+ 
+                     case MIX_SPATIALIZATION_3D:
+                         SDL_assert(track->output_spec.channels == 1);
+-                        MixSpatializedFloat32Audio(group_mixbuf, getbuf, br / sizeof (float), mixer->spec.channels, track->spatialization_panning, track->spatialization_speakers, mixer->gain);
++                        MixSpatializedFloat32Audio(group_mixbuf, getbuf, br / sizeof (float), mixer->spec.channels, track->spatialization_panning, track->spatialization_speakers, track->spatialization_current_panning, track->spatialization_current_speakers, &track->spatialization_current_valid, mixer->gain);
+                         group_bytes = SDL_max(group_bytes, br * mixer->spec.channels);
+                         break;
+ 
+@@ -1637,6 +1666,7 @@
+ 
+     track->input_audio = NULL;
+     track->input_stream = NULL;
++    track->silex_stream_closed = false;
+ 
+     bool retval = true;
+     if (audio) {
+@@ -1740,10 +1770,45 @@
+     }
+ 
+     track->input_stream = stream;
++    track->silex_stream_closed = false;
+     track->position = 0;
+     UnlockTrack(track);
+ 
+     return true;
++}
++
++// Private provider extension: mixing is complete only after queued output drains.
++bool SDLCALL Silex_MIX_TrackDrained(MIX_Track *track)
++{
++    if (!CheckTrackParam(track)) {
++        return false;
++    }
++    LockTrack(track);
++    const bool result = track->state == MIX_STATE_STOPPED &&
++        SDL_GetAudioStreamQueued(track->output_stream) == 0 &&
++        SDL_GetAudioStreamAvailable(track->output_stream) == 0;
++    UnlockTrack(track);
++    return result;
++}
++
++// Private provider extension: finalize a live stream without restarting its track.
++bool SDLCALL Silex_MIX_CloseTrackStream(MIX_Track *track)
++{
++    if (!CheckTrackParam(track)) {
++        return false;
++    }
++    LockTrack(track);
++    bool result = false;
++    if (track->input_stream && !track->input_audio) {
++        result = SDL_FlushAudioStream(track->input_stream);
++        if (result) {
++            track->silex_stream_closed = true;
++        }
++    } else {
++        SDL_SetError("Track does not have an external audio stream");
++    }
++    UnlockTrack(track);
++    return result;
+ }
+ 
+ bool MIX_SetTrackIOStream(MIX_Track *track, SDL_IOStream *io, bool closeio)
+@@ -2405,6 +2470,7 @@
+             if (track->internal_stream) {
+                 SDL_ClearAudioStream(track->internal_stream);  // make sure we don't leave old data hanging around.
+             }
++            SDL_ClearAudioStream(track->output_stream);  // explicit stop discards pending output.
+             track->currently_inuse = true;
+             TrackStopped(track);
+             track->currently_inuse = false;
+@@ -2845,6 +2911,7 @@
+     const bool toggling = (track->spatialization_mode != new_mode);
+     if (toggling) {
+         track->spatialization_mode = new_mode;
++        track->spatialization_current_valid = false;
+         SetTrackOutputStreamFormat(track, NULL);   // change output format to stereo (or back to normal) if necessary.
+     }
+ 
+@@ -2852,7 +2919,7 @@
+         track->position3d[0] = track->position3d[1] = track->position3d[2] = 0.0f;
+     } else {
+         float *tposition3d = track->position3d;
+-        if (toggling || ((tposition3d[0] != position->x) || (tposition3d[2] != position->y) || (tposition3d[2] != position->z))) {
++        if (toggling || ((tposition3d[0] != position->x) || (tposition3d[1] != position->y) || (tposition3d[2] != position->z))) {
+             tposition3d[0] = position->x;
+             tposition3d[1] = position->y;
+             tposition3d[2] = position->z;

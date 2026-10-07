@@ -1,0 +1,60 @@
+use GFX.Audio
+use STD.Math
+
+// A producer owns its chronology independently of Audio and its playback handles.
+class ToneProducer {
+    var frame:int
+    init() { self.frame = 0 }
+    func next(count:int) float32[] {
+        var samples:float32[] = []
+        var index = 0
+        while index < count {
+            samples.append((0.1 * Math.sin(2.0 * Math.pi() * 440.0 * self.frame as float / 48_000.0)) as float32)
+            self.frame++
+            index++
+        }
+        return samples
+    }
+}
+
+func open_stream(audio:&Audio) Audio.Stream {
+    match audio.stream(sample_rate:48_000, capacity_frames:1_024) {
+        failure(error) => { panic(error.detail) }
+        success(stream) => { return stream }
+    }
+}
+
+func write_block(audio:&Audio, stream:Audio.Stream, block:@float32[..]) {
+    match audio.wait_writable(stream, minimum_frames:block.count()) {
+        failure(error) => { panic(error.detail) }
+        success => {}
+    }
+    match audio.write(stream, block) {
+        failure(error) => { panic(error.detail) }
+        success(count) => { assert(count == block.count()) }
+    }
+}
+
+func main() {
+    var audio = Audio()
+    let stream = open_stream(audio)
+    var producer = ToneProducer()
+    var first = producer.next(1_024)
+    write_block(audio, stream, @first[0:first.count()])
+    first.clear()
+    let playing = audio.play(stream)
+    var block_index = 0
+    while block_index < 40 {
+        var block = producer.next(256)
+        write_block(audio, stream, @block[0:block.count()])
+        block.clear()
+        block_index++
+    }
+    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+    audio.wait(playing)
+    match audio.stream_info(stream) {
+        failure(error) => { panic(error.detail) }
+        success(info) => { assert(info.drained && info.written_frames == 11_264 && info.queued_frames == 0) }
+    }
+    assert(audio.release(stream))
+}

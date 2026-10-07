@@ -132,6 +132,12 @@ il accepte plusieurs lectures simultanées et tous les contrôles de lecture ;
 `unload` invalide son handle sans interrompre les lectures qui le détiennent.
 La création porte sur un tampon complet, sans alimentation continue.
 
+## Produire du son par blocs
+
+Un producteur peut alimenter une seule lecture continue avec une capacité
+explicite, sans calculer le son entier. Le [guide du flux](Streaming.md) décrit
+le préremplissage, les écritures partielles, les contrôles et la fermeture.
+
 ## Contrôler une lecture
 
 `Audio.play` retourne un `Audio.PlayingSound` qui identifie une instance
@@ -148,13 +154,14 @@ audio.stop(playing, fade_out_seconds:0.25)
 Dans un programme direct sans boucle Application, `wait` attend efficacement
 la fin de la lecture, y compris pendant une pause.
 
-Le volume est un gain linéaire positif ou nul. `1.0` conserve le niveau source ;
+Le volume est un gain linéaire fini, représentable en `float32`, positif ou nul. `1.0` conserve le niveau source ;
 les valeurs supérieures peuvent saturer ou devenir dangereusement fortes. La
 vitesse va de `0.01` à `100.0` et modifie ensemble le rythme et la hauteur.
 
 `Repeat.once()` joue une fois, `Repeat.times(3)` trois fois au total et
 `Repeat.forever()` jusqu’à l’arrêt. `fade_in_seconds` appartient à la demande
-initiale ; `stop` accepte une durée de fade-out. Un handle libéré ou collecté ne
+initiale ; `stop` accepte une durée de fade-out. Les durées sont finies et
+positives ou nulles ; les réglages non valides provoquent un `panic`. Un handle libéré ou collecté ne
 peut pas contrôler une lecture ultérieure réutilisant son slot.
 
 ## Positionner un son

@@ -1,0 +1,47 @@
+use GFX.Audio.Native
+use Interop.C
+use Interop.Boundary
+use STD.Math
+let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
+let get_position = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) uint8>(library:Boundary.SDL3_mixer, name:"MIX_GetTrack3DPosition")
+test "spatial coordinates use the packed C ABI" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 2)
+    var samples:float32[] = [0.25 as float32, -0.25 as float32]
+    let sound = Native.create(mixer, @samples[0:2], 48_000, 2)
+    let track = Native.create_track(mixer, sound)
+    Native.set_position(track, Math.Vec3(1.0, 2.0, 3.0))
+    var output:uint[2]
+    let address = C.address_bits(C.mutable_pointer(output))
+    assert(get_position(C.pointer_bits(track), C.pointer_bits(address)) != 0)
+    assert(C.load<float32>(address, 0 as uint) == 1.0 as float32)
+    assert(C.load<float32>(address, 4 as uint) == 2.0 as float32)
+    assert(C.load<float32>(address, 8 as uint) == 3.0 as float32)
+    Native.destroy_track(track)
+    Native.destroy_audio(sound)
+    Native.destroy_mixer(mixer)
+    Native.shutdown()
+}
+test "reverse stereo preserves additional output channels" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 6)
+    var samples:float32[] = [0.1 as float32, 0.2 as float32, 0.3 as float32, 0.4 as float32, 0.5 as float32, 0.6 as float32]
+    let sound = Native.create(mixer, @samples[0:6], 48_000, 6)
+    let track = Native.create_track(mixer, sound)
+    Native.set_reverse_stereo(track, true)
+    Native.play(track, 0, 0.0)
+    var output:uint[3]
+    let address = C.address_bits(C.mutable_pointer(output))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(address), 24) == 24)
+    assert(C.load<float32>(address, 0 as uint) == samples[1])
+    assert(C.load<float32>(address, 4 as uint) == samples[0])
+    var index = 2
+    while index < 6 {
+        assert(C.load<float32>(address, (index * 4) as uint) == samples[index])
+        index++
+    }
+    Native.destroy_track(track)
+    Native.destroy_audio(sound)
+    Native.destroy_mixer(mixer)
+    Native.shutdown()
+}

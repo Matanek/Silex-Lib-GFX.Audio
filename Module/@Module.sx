@@ -49,6 +49,53 @@ public struct PlayingSound {
     }
 }
 
+public struct Stream {
+    module var playback:PlayingSound
+    init() { self.playback = PlayingSound() }
+    module init(playback:PlayingSound) { self.playback = playback }
+    func is_valid() bool { return self.playback.is_valid() }
+}
+
+public struct StreamInfo {
+    let sample_rate:int
+    let channels:int
+    let capacity_frames:int
+    let written_frames:int
+    let queued_frames:int
+    let consumed_frames:int
+    let discarded_frames:int
+    let started:bool
+    let closed:bool
+    let drained:bool
+    let stopped:bool
+    let starved:bool
+}
+
+class StreamState {
+    let input:uint
+    let sample_rate:int
+    let channels:int
+    let capacity:int
+    var written:int
+    var discarded:int
+    var started:bool
+    var closed:bool
+    var drained:bool
+    var stopped:bool
+    init(input:uint, sample_rate:int, channels:int, capacity:int) {
+        self.input = input
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.capacity = capacity
+        self.written = 0
+        self.discarded = 0
+        self.started = false
+        self.closed = false
+        self.drained = false
+        self.stopped = false
+    }
+}
+
 public struct Repeat {
     private let extra_plays:int
 
@@ -112,14 +159,25 @@ class SoundEntry {
 }
 
 class PlaybackEntry {
+    var stream:StreamState?
     var handle:uint
     var generation:int
     var active:bool
 
-    init(handle:uint) {
+    init(handle:uint, stream:StreamState? = null) {
+        self.stream = stream
         self.handle = handle
         self.generation = 1
         self.active = true
+    }
+    func dispose() {
+        if !self.active { return }
+        Native.destroy_track(self.handle)
+        if let stream = self.stream { Native.destroy_stream(stream.input) }
+        self.stream = null
+        self.handle = 0 as uint
+        self.active = false
+        self.generation++
     }
 }
 
@@ -137,11 +195,18 @@ public class Audio {
         self.playbacks = []
     }
 
+    module init(native_mixer:uint) {
+        self.owner = Owner()
+        self.mixer = native_mixer
+        self.sounds = []
+        self.playbacks = []
+    }
+
     drop {
         var playback_index = 0
         while playback_index < self.playbacks.count() {
             var playback = self.playbacks[playback_index]
-            if playback.active { Native.destroy_track(playback.handle) }
+            playback.dispose()
             playback_index++
         }
         var sound_index = 0
@@ -228,10 +293,15 @@ public class Audio {
         if let position = settings.position { Native.set_position(track, position) }
         Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds)
 
+        return self.add_playback(track)
+    }
+
+    private func add_playback(track:uint, stream:StreamState? = null) PlayingSound {
         var index = 0
         while index < self.playbacks.count() {
             var entry = self.playbacks[index]
             if !entry.active {
+                entry.stream = stream
                 entry.handle = track
                 entry.active = true
                 return PlayingSound(self.owner, index, entry.generation)
@@ -240,13 +310,145 @@ public class Audio {
         }
 
         var playbacks = self.playbacks
-        playbacks.append(PlaybackEntry(track))
+        playbacks.append(PlaybackEntry(track, stream))
         self.playbacks = playbacks
         return PlayingSound(self.owner, playbacks.count() - 1, 1)
     }
 
+    func stream(sample_rate:int, channels:int = 1, capacity_frames:int = 4_800) Result<Stream, Error> {
+        if sample_rate <= 0 || sample_rate > 2_147_483_647 || channels < 1 || channels > 8 ||
+            capacity_frames < 1 || capacity_frames > 2_147_483_647 / (channels * 4) {
+            return Result<Stream, Error>.failure(stream_error(Kind.invalid_input(), "audio.stream", "invalid sample rate, channels or capacity"))
+        }
+        let input = Native.create_stream(sample_rate, channels)
+        if input == 0 as uint { return Result<Stream, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.stream", Native.error())) }
+        let track = Native.create_stream_track(self.mixer, input)
+        if track == 0 as uint {
+            let detail = Native.error()
+            Native.destroy_stream(input)
+            return Result<Stream, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.stream", detail))
+        }
+        var state = StreamState(input, sample_rate, channels, capacity_frames)
+        return Result<Stream, Error>.success(Stream(self.add_playback(track, state)))
+    }
+
+    func write(stream:Stream, samples:@float32[..]) Result<int, Error> {
+        if !self.contains_stream(stream) { return Result<int, Error>.failure(stream_error(Kind.invalid_input(), "audio.write", "stream handle is stale, invalid or belongs to another Audio")) }
+        var state = self.require_stream(stream)
+        if state.closed || state.stopped { return Result<int, Error>.failure(stream_error(Kind.invalid_input(), "audio.write", "stream input is closed or stopped")) }
+        if samples.count() % state.channels != 0 { return Result<int, Error>.failure(stream_error(Kind.invalid_input(), "audio.write", "samples must contain complete frames")) }
+        for sample in samples {
+            if !Math.is_finite(sample) || sample < -1.0 || sample > 1.0 {
+                return Result<int, Error>.failure(stream_error(Kind.invalid_input(), "audio.write", "samples must be finite and between -1 and 1"))
+            }
+        }
+        let requested = samples.count() / state.channels
+        if requested == 0 { return Result<int, Error>.success(0) }
+        let consumed = self.stream_consumed(stream.playback, state)
+        let available = state.capacity - (state.written - consumed)
+        if available <= 0 { return Result<int, Error>.failure(stream_error(Kind.would_block(), "audio.write", "stream capacity is full")) }
+        var accepted = requested
+        if accepted > available { accepted = available }
+        if state.written > 9_223_372_036_854_775_807 - accepted { return Result<int, Error>.failure(stream_error(Kind.limit_exceeded(), "audio.write", "stream frame counter is exhausted")) }
+        if !Native.put_samples(state.input, @samples[0:accepted * state.channels]) {
+            return Result<int, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.write", Native.error()))
+        }
+        state.written += accepted
+        return Result<int, Error>.success(accepted)
+    }
+
+    func wait_writable(stream:Stream, minimum_frames:int = 1) Result<void, Error> {
+        if !self.contains_stream(stream) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.wait_writable", "stream handle is stale, invalid or belongs to another Audio")) }
+        var state = self.require_stream(stream)
+        if minimum_frames < 1 || minimum_frames > state.capacity { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.wait_writable", "minimum frames must fit stream capacity")) }
+        if state.closed || state.stopped { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.wait_writable", "stream input is closed or stopped")) }
+        var consumed = self.stream_consumed(stream.playback, state)
+        while state.capacity - (state.written - consumed) < minimum_frames {
+            if !state.started || self.is_paused(stream.playback) { return Result<void, Error>.failure(stream_error(Kind.resource_busy(), "audio.wait_writable", "full stream cannot make progress before playback or while paused")) }
+            if !Native.is_playing(self.require_playback(stream.playback).handle) { return Result<void, Error>.failure(stream_error(Kind.other(), "audio.wait_writable", "stream playback ended unexpectedly")) }
+            Native.wait()
+            consumed = self.stream_consumed(stream.playback, state)
+        }
+        return Result<void, Error>.success()
+    }
+
+    func play(sound:Stream, settings:Playback = Playback()) PlayingSound {
+        var stream = sound
+        var state = self.require_stream(stream)
+        if state.started || state.stopped { panic("GFX.Audio stream playback cannot be restarted") }
+        if settings.repeat.native_loops() != 0 { panic("GFX.Audio stream playback does not support repeat") }
+        validate_fade(settings.fade_in_seconds)
+        validate_volume(settings.volume)
+        validate_speed(settings.speed)
+        let track = self.require_playback(stream.playback).handle
+        Native.set_volume(track, settings.volume)
+        Native.set_speed(track, settings.speed)
+        if settings.reverse_stereo { Native.set_reverse_stereo(track, true) }
+        if let position = settings.position { Native.set_position(track, position) }
+        Native.play_stream(track, settings.fade_in_seconds)
+        state.started = true
+        return stream.playback
+    }
+
+    func close(stream:Stream) Result<void, Error> {
+        if !self.contains_stream(stream) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.close", "stream handle is stale, invalid or belongs to another Audio")) }
+        var state = self.require_stream(stream)
+        if state.closed { return Result<void, Error>.success() }
+        if state.stopped { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.close", "stream is stopped")) }
+        if !Native.close_stream(self.require_playback(stream.playback).handle) { return Result<void, Error>.failure(stream_error(Kind.other(), "audio.close", Native.error())) }
+        state.closed = true
+        return Result<void, Error>.success()
+    }
+
+    func stream_info(stream:Stream) Result<StreamInfo, Error> {
+        if !self.contains_stream(stream) { return Result<StreamInfo, Error>.failure(stream_error(Kind.invalid_input(), "audio.stream_info", "stream handle is stale, invalid or belongs to another Audio")) }
+        var state = self.require_stream(stream)
+        let consumed = self.stream_consumed(stream.playback, state)
+        let queued = state.written - consumed - state.discarded
+        return Result<StreamInfo, Error>.success(StreamInfo(
+            sample_rate:state.sample_rate, channels:state.channels, capacity_frames:state.capacity,
+            written_frames:state.written, queued_frames:queued, consumed_frames:consumed, discarded_frames:state.discarded,
+            started:state.started, closed:state.closed, drained:state.drained, stopped:state.stopped,
+            starved:state.started && !state.closed && !state.stopped && queued == 0 && !self.is_paused(stream.playback)
+        ))
+    }
+
+    func release(sound:Stream) bool { return self.release(sound.playback) }
+
+    private func contains_stream(stream:Stream) bool {
+        if !self.contains_playback(stream.playback) { return false }
+        return self.playbacks[stream.playback.playback_index].stream != null
+    }
+
+    private func require_stream(stream:Stream) StreamState {
+        if !self.contains_stream(stream) { panic("GFX.Audio stream handle is stale, invalid or belongs to another Audio") }
+        if var state = self.playbacks[stream.playback.playback_index].stream { return state }
+        panic("GFX.Audio playback is not a stream")
+    }
+
+    private func stream_consumed(playback:PlayingSound, state:&StreamState) int {
+        var consumed = Native.playback_frames(self.require_playback(playback).handle)
+        if consumed < 0 { panic("GFX.Audio could not query stream consumption: " + Native.error()) }
+        if consumed > state.written { consumed = state.written }
+        if state.stopped && !Native.is_playing(self.require_playback(playback).handle) && !Native.is_paused(self.require_playback(playback).handle) {
+            if state.discarded == 0 {
+                Native.clear_stream(state.input)
+                state.discarded = state.written - consumed
+            }
+        }
+        if state.started && state.closed && !state.stopped && consumed == state.written {
+            if state.written == 0 { Native.stop(self.require_playback(playback).handle, 0.0) }
+            state.drained = !Native.is_playing(self.require_playback(playback).handle) && !Native.is_paused(self.require_playback(playback).handle)
+        }
+        return consumed
+    }
+
     func is_playing(sound:PlayingSound) bool {
         if !self.contains_playback(sound) { return false }
+        if var state = self.playbacks[sound.playback_index].stream {
+            let consumed = self.stream_consumed(sound, state)
+            if state.drained { return false }
+        }
         return Native.is_playing(self.playbacks[sound.playback_index].handle)
     }
 
@@ -264,8 +466,8 @@ public class Audio {
     }
 
     func wait(sound:PlayingSound) {
-        let playback = self.require_playback(sound).handle
-        while Native.is_playing(playback) || Native.is_paused(playback) {
+        var entry = self.require_playback(sound)
+        while self.is_playing(sound) || self.is_paused(sound) {
             Native.wait()
         }
         self.collect_finished()
@@ -273,16 +475,21 @@ public class Audio {
 
     func stop(sound:PlayingSound, fade_out_seconds:float = 0.0) {
         validate_fade(fade_out_seconds)
-        Native.stop(self.require_playback(sound).handle, fade_out_seconds)
+        var entry = self.require_playback(sound)
+        if var state = entry.stream {
+            let consumed = self.stream_consumed(sound, state)
+            if !state.drained {
+                Native.require(Native.close_stream(entry.handle), "finalize stopped stream input")
+                state.stopped = true
+            }
+        }
+        Native.stop(entry.handle, fade_out_seconds)
     }
 
     func release(sound:PlayingSound) bool {
         if !self.contains_playback(sound) { return false }
         var entry = self.playbacks[sound.playback_index]
-        Native.destroy_track(entry.handle)
-        entry.handle = 0 as uint
-        entry.active = false
-        entry.generation++
+        entry.dispose()
         return true
     }
 
@@ -317,11 +524,12 @@ public class Audio {
         var index = 0
         while index < self.playbacks.count() {
             var entry = self.playbacks[index]
-            if entry.active && !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) {
-                Native.destroy_track(entry.handle)
-                entry.handle = 0 as uint
-                entry.active = false
-                entry.generation++
+            if entry.active {
+                if var state = entry.stream {
+                    let consumed = self.stream_consumed(PlayingSound(self.owner, index, entry.generation), state)
+                } else if !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) {
+                    entry.dispose()
+                }
             }
             index++
         }
@@ -365,17 +573,17 @@ func validate_samples(samples:@float32[..], sample_rate:int, channels:int) {
 }
 
 func validate_volume(volume:float) {
-    if volume < 0.0 { panic("GFX.Audio volume cannot be negative") }
+    if !Math.is_finite(volume) || !Math.is_finite(volume as float32) || volume < 0.0 { panic("GFX.Audio volume must be finite and non-negative") }
 }
 
 func validate_speed(speed:float) {
-    if speed < 0.01 || speed > 100.0 {
+    if !Math.is_finite(speed) || speed < 0.01 || speed > 100.0 {
         panic("GFX.Audio speed must be between 0.01 and 100.0")
     }
 }
 
 func validate_fade(seconds:float) {
-    if seconds < 0.0 { panic("GFX.Audio fade duration cannot be negative") }
+    if !Math.is_finite(seconds) || seconds < 0.0 { panic("GFX.Audio fade duration must be finite and non-negative") }
 }
 
 contribute GFX.Plugins {
@@ -384,4 +592,8 @@ contribute GFX.Plugins {
 
 contribute GFX.Resources {
     public use GFX.Audio.Audio as Audio
+}
+
+func stream_error(kind:Kind, operation:str, detail:str) Error {
+    return Error(kind:kind, operation:operation, subject:null, detail:detail)
 }
