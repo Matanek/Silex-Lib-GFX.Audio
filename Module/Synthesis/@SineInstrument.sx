@@ -8,7 +8,7 @@ class SineVoice {
     var order:int = 0
     var held:bool = false
     var frequency:float32 = 0.0
-    var step:float32 = 0.0
+    private let rate:float32
     private var phase:float32 = 0.0
     private var velocity:float32 = 0.0
     private var last:float32 = 0.0
@@ -17,21 +17,21 @@ class SineVoice {
     private let fade_frames:int
     private var envelope:Envelope
 
-    init(envelope:Envelope, fade_frames:int) { self.envelope = envelope; self.fade_frames = fade_frames }
+    init(envelope:Envelope, fade_frames:int) { self.envelope = envelope; self.fade_frames = fade_frames; self.rate = envelope.format.sample_rate as float32 }
     func occupied() bool { return self.envelope.is_active() || self.fading > 0 }
-    func start(id:int, frequency:float32, step:float32, velocity:float32, order:int) {
+    func start(id:int, frequency:float32, velocity:float32, order:int) {
         let replacing = self.occupied()
         self.tail = 0.0; self.fading = 0
         if replacing && self.fade_frames > 0 { self.tail = self.last; self.fading = self.fade_frames }
-        self.id = id; self.frequency = frequency; self.step = step; self.velocity = velocity
+        self.id = id; self.frequency = frequency; self.velocity = velocity
         self.order = order; self.held = true; self.phase = 0.0; self.envelope.note_on()
     }
     func release() { self.envelope.note_off() }
-    func render(samples:&float32[..]) Result<void, Error> {
+    func render(samples:&float32[..], ratios:@float32[..]) Result<void, Error> {
         var i = 0
         while i < samples.count() {
             samples[i] = self.velocity * Math.sin(self.phase * 6.283185307179586)
-            self.phase += self.step
+            self.phase += self.frequency * ratios[i] / self.rate
             if self.phase >= 1.0 { self.phase -= 1.0 }
             i++
         }
@@ -60,6 +60,11 @@ public class SineInstrument:Generator, Instrument {
     let steal_fade_frames:int
     private var voices:SineVoice[]
     private var temporary:float32[]
+    private var ratios:float32[]
+    private var gains:float32[]
+    private var bend:RampState
+    private var gain:RampState
+    private var last_bend:float32 = 0.0
     private var pedal:bool = false
     private var bend_ratio:float32 = 1.0
     private var serial:int = 0
@@ -68,6 +73,8 @@ public class SineInstrument:Generator, Instrument {
         self.format = format; self.max_voices = voices.count(); self.voices = voices
         self.voice_policy = voice_policy; self.steal_fade_frames = steal_fade_frames
         self.temporary = scratch(512)
+        self.ratios = scratch(512); self.gains = scratch(512)
+        self.bend = RampState(0.0); self.gain = RampState(1.0)
     }
     static func create(format:Processing.Format, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, attack_frames:int = 240, decay_frames:int = 2_400, sustain:float32 = 0.7, release_frames:int = 4_800, steal_fade_frames:int = 32) Result<SineInstrument, Error> {
         if !valid_format(format) || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 { return Result<SineInstrument, Error>.failure(invalid("instrument requires a valid format, 1 to 64 voices and steal fade in [0, 4096] frames")) }
@@ -86,6 +93,8 @@ public class SineInstrument:Generator, Instrument {
             }
             note_off(id) => { if id < 0 { return Result<void, Error>.failure(invalid("note identity must be nonnegative")) } }
             pitch_bend(semitones) => { if !Math.is_finite(semitones) || semitones < -24.0 || semitones > 24.0 { return Result<void, Error>.failure(invalid("pitch bend must be in [-24, 24] semitones")) } }
+            pitch_bend_to(semitones, frames) => { if !Math.is_finite(semitones) || semitones < -24.0 || semitones > 24.0 || !valid_ramp(frames) { return Result<void, Error>.failure(invalid("pitch bend requires [-24, 24] semitones and ramp in [0, 16777216] frames")) } }
+            gain_to(gain, frames) => { if !Math.is_finite(gain) || gain < 0.0 || gain > 1.0 || !valid_ramp(frames) { return Result<void, Error>.failure(invalid("instrument gain requires [0, 1] and ramp in [0, 16777216] frames")) } }
             else => {}
         }
         return Result<void, Error>.success()
@@ -98,7 +107,7 @@ public class SineInstrument:Generator, Instrument {
         try self.validate(command)
         match command {
             note_on(id, frequency, velocity) => {
-                if !self.valid_pitch(frequency, self.bend_ratio) { return Result<void, Error>.failure(invalid("bent frequency must be positive and below Nyquist")) }
+                if !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.value / 12.0)) || !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.target / 12.0)) { return Result<void, Error>.failure(invalid("bent frequency must remain positive and below Nyquist through the current ramp")) }
                 var slot = -1; var oldest = 0; var i = 0
                 while i < self.voices.count() {
                     var voice = self.voices[i]
@@ -116,7 +125,7 @@ public class SineInstrument:Generator, Instrument {
                 if self.serial == 9_223_372_036_854_775_807 { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.synthesis", subject:null, detail:"note counter exhausted; reset instrument")) }
                 self.serial++
                 var voice = self.voices[slot]
-                voice.start(id, frequency, frequency * self.bend_ratio / self.format.sample_rate as float32, velocity, self.serial)
+                voice.start(id, frequency, velocity, self.serial)
             }
             note_off(id) => {
                 for var voice in self.voices {
@@ -128,13 +137,18 @@ public class SineInstrument:Generator, Instrument {
                 if !down { for var voice in self.voices { if !voice.held { voice.release() } } }
             }
             pitch_bend(semitones) => {
-                let ratio = Math.pow(2.0 as float32, semitones / 12.0)
-                for var voice in self.voices { if voice.occupied() && !self.valid_pitch(voice.frequency, ratio) { return Result<void, Error>.failure(invalid("pitch bend would move an active voice outside the supported frequency range")) } }
-                self.bend_ratio = ratio
-                for var voice in self.voices { voice.step = voice.frequency * ratio / self.format.sample_rate as float32 }
+                try self.set_bend(semitones, 0)
             }
+            pitch_bend_to(semitones, frames) => { try self.set_bend(semitones, frames) }
+            gain_to(gain, frames) => { self.gain.set(gain, frames) }
             all_notes_off => { for var voice in self.voices { voice.held = false; voice.release() } }
         }
+        return Result<void, Error>.success()
+    }
+    private func set_bend(semitones:float32, frames:int) Result<void, Error> {
+        let ratio = Math.pow(2.0 as float32, semitones / 12.0)
+        for var voice in self.voices { if voice.occupied() && !self.valid_pitch(voice.frequency, ratio) { return Result<void, Error>.failure(invalid("pitch bend would move an active voice outside the supported frequency range")) } }
+        self.bend.set(semitones, frames)
         return Result<void, Error>.success()
     }
     func active_voices() int { var count = 0; for var voice in self.voices { if voice.occupied() { count++ } } return count }
@@ -146,9 +160,16 @@ public class SineInstrument:Generator, Instrument {
             if frames > 512 { frames = 512 }
             var i = start
             while i < start + frames * self.format.channels { samples[i] = 0.0; i++ }
+            var control_frame = 0
+            while control_frame < frames {
+                let bend = self.bend.next()
+                if bend != self.last_bend { self.bend_ratio = Math.pow(2.0 as float32, bend / 12.0); self.last_bend = bend }
+                self.ratios[control_frame] = self.bend_ratio; self.gains[control_frame] = self.gain.next()
+                control_frame++
+            }
             for var voice in self.voices {
                 if voice.occupied() {
-                    try voice.render(&self.temporary[0:frames])
+                    try voice.render(&self.temporary[0:frames], @self.ratios[0:frames])
                     var frame = 0
                     while frame < frames {
                         var channel = 0
@@ -157,9 +178,15 @@ public class SineInstrument:Generator, Instrument {
                     }
                 }
             }
+            control_frame = 0
+            while control_frame < frames {
+                var channel = 0
+                while channel < self.format.channels { samples[start + control_frame * self.format.channels + channel] *= self.gains[control_frame]; channel++ }
+                control_frame++
+            }
             start += frames * self.format.channels
         }
         return Result<void, Error>.success()
     }
-    func reset() { for var voice in self.voices { voice.reset() } self.pedal = false; self.bend_ratio = 1.0; self.serial = 0 }
+    func reset() { for var voice in self.voices { voice.reset() } self.pedal = false; self.bend_ratio = 1.0; self.last_bend = 0.0; self.bend.reset(); self.gain.reset(); self.serial = 0 }
 }

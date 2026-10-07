@@ -1,0 +1,68 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+
+// Own one prepared block and one stream; a partial write never renders again.
+public class StreamProducer {
+    let format:Processing.Format
+    private var output:Audio.Stream
+    let duration_frames:int
+    let block_frames:int
+    private var audio:Audio
+    private var source:Generator
+    private var samples:float32[]
+    private var produced:int = 0
+    private var written:int = 0
+    private var pending:int = 0
+    private var offset:int = 0
+    private var closed:bool = false
+    private var failed:bool = false
+
+    private init(audio:Audio, source:Generator, stream:Audio.Stream, duration_frames:int, block_frames:int) {
+        self.audio = audio; self.source = source; self.output = stream; self.format = source.format
+        self.duration_frames = duration_frames; self.block_frames = block_frames
+        self.samples = scratch(block_frames * self.format.channels)
+    }
+    static func create(audio:Audio, source:Generator, duration_frames:int, block_frames:int = 512, capacity_frames:int = 4_800) Result<StreamProducer, Error> {
+        if !valid_format(source.format) || duration_frames < 0 || block_frames < 1 || block_frames > 65_536 { return Result<StreamProducer, Error>.failure(invalid("producer requires a valid format, nonnegative duration and 1 to 65536 block frames")) }
+        var stream = try audio.stream(sample_rate:source.format.sample_rate, channels:source.format.channels, capacity_frames:capacity_frames)
+        return Result<StreamProducer, Error>.success(StreamProducer(audio, source, stream, duration_frames, block_frames))
+    }
+    func produced_frames() int { return self.produced }
+    func stream() Audio.Stream { return self.output }
+    func written_frames() int { return self.written }
+    func pending_frames() int { return self.pending - self.offset }
+    func input_closed() bool { return self.closed }
+    func pump() Result<int, Error> {
+        if self.failed { return Result<int, Error>.failure(invalid("producer failed; release and rebuild with a reset source")) }
+        if self.closed { return Result<int, Error>.success(0) }
+        let info = try self.audio.stream_info(self.output)
+        if info.closed || info.stopped || info.written_frames != self.written { return Result<int, Error>.failure(invalid("producer requires exclusive writes to its open stream")) }
+        if self.offset == self.pending && self.produced < self.duration_frames {
+            var frames = self.duration_frames - self.produced
+            if frames > self.block_frames { frames = self.block_frames }
+            match self.source.render(&self.samples[0:frames * self.format.channels]) {
+                failure(error) => { self.failed = true; return Result<int, Error>.failure(error) }
+                success => {}
+            }
+            self.pending = frames; self.offset = 0; self.produced += frames
+        }
+        var accepted = 0
+        if self.offset < self.pending {
+            match self.audio.write(self.output, @self.samples[self.offset * self.format.channels:self.pending * self.format.channels]) {
+                failure(error) => {
+                    if error.kind != Kind.would_block() { self.failed = true }
+                    return Result<int, Error>.failure(error)
+                }
+                success(count) => { self.offset += count; self.written += count; accepted = count }
+            }
+        }
+        if self.written == self.duration_frames {
+            try self.audio.close(self.output)
+            self.closed = true
+        }
+        return Result<int, Error>.success(accepted)
+    }
+    drop { self.audio.release(self.output) }
+}

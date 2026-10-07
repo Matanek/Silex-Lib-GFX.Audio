@@ -165,3 +165,5 @@ le flux après les blocs voulus. Les files partielles restent régies par
 
 Le [guide des instruments](Instruments.md) montre comment jouer une mélodie
 avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de sons.
+
+[Faire évoluer un son et alimenter un flux](Continuous.md).

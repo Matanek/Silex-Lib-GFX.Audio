@@ -1,0 +1,52 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+func valid_ramp(duration_frames:int) bool { return duration_frames >= 0 && duration_frames <= 16_777_216 }
+
+class RampState {
+    private let initial:float32
+    var value:float32
+    var target:float32
+    private var start:float32
+    private var elapsed:int = 0
+    private var duration:int = 0
+    init(value:float32) { self.initial = value; self.value = value; self.target = value; self.start = value }
+    func set(value:float32, duration:int) {
+        self.start = self.value; self.target = value; self.elapsed = 0; self.duration = duration
+        if duration == 0 { self.value = value }
+    }
+    func next() float32 {
+        let value = self.value
+        if self.elapsed < self.duration {
+            self.elapsed++
+            if self.elapsed == self.duration { self.value = self.target }
+            else { let t = self.elapsed as float32 / self.duration as float32; self.value = (1.0 - t) * self.start + t * self.target }
+        }
+        return value
+    }
+    func reset() { self.value = self.initial; self.target = self.initial; self.start = self.initial; self.elapsed = 0; self.duration = 0 }
+}
+
+// A continuously retargetable mono signal for AM, FM and user generators.
+public class Control:Generator {
+    let format:Processing.Format
+    private var state:RampState
+    private init(sample_rate:int, value:float32) { self.format = Processing.Format(sample_rate:sample_rate, channels:1); self.state = RampState(value) }
+    static func create(sample_rate:int, value:float32 = 0.0) Result<Control, Error> {
+        if !valid_format(Processing.Format(sample_rate:sample_rate, channels:1)) || !Math.is_finite(value) || Math.abs(value) > 1.0 { return Result<Control, Error>.failure(invalid("control requires a supported rate and value in [-1, 1]")) }
+        return Result<Control, Error>.success(Control(sample_rate, value))
+    }
+    func set(value:float32, duration_frames:int = 0) Result<void, Error> {
+        if !Math.is_finite(value) || Math.abs(value) > 1.0 || !valid_ramp(duration_frames) { return Result<void, Error>.failure(invalid("control requires value in [-1, 1] and ramp in [0, 16777216] frames")) }
+        self.state.set(value, duration_frames)
+        return Result<void, Error>.success()
+    }
+    func current_value() float32 { return self.state.value }
+    func render(samples:&float32[..]) Result<void, Error> {
+        var i = 0
+        while i < samples.count() { samples[i] = self.state.next(); i++ }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.state.reset() }
+}

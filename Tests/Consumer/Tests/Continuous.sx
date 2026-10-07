@@ -1,0 +1,215 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func zeros(count:int) float32[] { var samples:float32[] = []; var i = 0; while i < count { samples.append(0.0); i++ } return samples }
+func control(initial:float32 = 0.0) Synthesis.Control { match Synthesis.Control.create(1_000, initial) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func instrument() Synthesis.SineInstrument { match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), attack_frames:0, decay_frames:0, sustain:1.0, release_frames:4) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("invalid accepted") } } }
+func near(actual:float32, expected:float64) { assert(Math.abs(actual as float64 - expected) < 0.00001) }
+test "control ramp has exact frame endpoints retargets from its next value and resets" {
+    var source = control(-1.0); require(source.set(1.0, duration_frames:4))
+    var samples = zeros(3); require(source.render(&samples[0:2])); assert(samples[0] == -1.0 as float32 && samples[1] == -0.5 as float32 && source.current_value() == 0.0 as float32)
+    require(source.render(&samples[0:0])); require(source.set(-1.0, duration_frames:2)); require(source.render(&samples[0:3]))
+    assert(samples[0] == 0.0 as float32 && samples[1] == -0.5 as float32 && samples[2] == -1.0 as float32)
+    require(source.set(0.5)); require(source.render(&samples[0:1])); assert(samples[0] == 0.5 as float32)
+    source.reset(); require(source.render(&samples[0:1])); assert(samples[0] == -1.0 as float32)
+}
+test "control rejects invalid targets durations and formats without changing its ramp" {
+    var source = control(); require(source.set(1.0, duration_frames:4))
+    invalid(source.set(Math.sqrt(-1.0))); invalid(source.set(1.1)); invalid(source.set(-1.1)); invalid(source.set(0.0, duration_frames:-1)); invalid(source.set(0.0, duration_frames:16_777_217))
+    var samples = zeros(5); require(source.render(&samples[0:5])); var i = 0
+    while i < 5 { near(samples[i], i as float64 / 4.0); i++ }
+    for rate in [0, 16_777_217] { match Synthesis.Control.create(rate) { failure(error) => {}; success(value) => { panic("bad rate accepted") } } }
+    match Synthesis.Control.create(1_000, value:2.0) { failure(error) => {}; success(value) => { panic("bad initial value accepted") } }
+}
+test "continuous control composes with FM against an independent phase integral" {
+    var pitch = control(); require(pitch.set(1.0, duration_frames:8))
+    match Synthesis.FrequencyModulation.create(Processing.Format(sample_rate:1_000, channels:2), pitch, frequency_hz:62.5, deviation_hz:62.5, amplitude:0.5) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples = zeros(24); require(source.render(&samples[0:24])); var phase:float64 = 0.0; var frame = 0
+            while frame < 12 {
+                near(samples[frame * 2], 0.5 * Math.sin(2.0 * Math.pi<float64>() * phase)); assert(samples[frame * 2] == samples[frame * 2 + 1])
+                var value = 1.0 as float64; if frame < 8 { value = frame as float64 / 8.0 }
+                phase += (62.5 + 62.5 * value) / 1_000.0; frame++
+            }
+            source.reset(); require(pitch.set(1.0, duration_frames:8)); var split = zeros(24)
+            require(source.render(&split[0:2])); require(source.render(&split[2:14])); require(source.render(&split[14:24]))
+            var i = 0; while i < 24 { assert(samples[i] == split[i]); i++ }
+        }
+    }
+}
+test "instrument bend ramp follows semitones with continuous phase and rejects unsafe targets" {
+    var source = instrument(); require(source.send(Synthesis.Command.note_on(1, 62.5, 0.5)))
+    require(source.send(Synthesis.Command.pitch_bend_to(12.0, 4)))
+    var samples = zeros(7); require(source.render(&samples[0:7])); var phase:float64 = 0.0; var frame = 0
+    while frame < 7 {
+        near(samples[frame], 0.5 * Math.sin(2.0 * Math.pi<float64>() * phase))
+        var semitones = 12.0 as float64; if frame < 4 { semitones = frame as float64 * 3.0 }
+        phase += 62.5 * Math.pow(2.0 as float64, semitones / 12.0) / 1_000.0; frame++
+    }
+    require(source.send(Synthesis.Command.pitch_bend_to(24.0, 16)))
+    invalid(source.send(Synthesis.Command.note_on(2, 150.0, 1.0)))
+    invalid(source.send(Synthesis.Command.pitch_bend_to(Math.sqrt(-1.0), 4)))
+    invalid(source.send(Synthesis.Command.pitch_bend_to(0.0, -1)))
+    source.reset(); require(source.send(Synthesis.Command.note_on(1, 125.0, 1.0)))
+    invalid(source.send(Synthesis.Command.pitch_bend_to(24.0, 16)))
+    require(source.render(&samples[0:2])); near(samples[1], Math.sqrt(0.5))
+}
+test "scheduled gain and pitch ramps remain bit exact across blocks and reset" {
+    var voice = instrument()
+    let events:Synthesis.Event[] = [Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, 125.0, 0.5)), Synthesis.Event(frame:2, command:Synthesis.Command.gain_to(0.0, 4)), Synthesis.Event(frame:4, command:Synthesis.Command.gain_to(1.0, 2)), Synthesis.Event(frame:6, command:Synthesis.Command.pitch_bend_to(7.0, 19)), Synthesis.Event(frame:18, command:Synthesis.Command.pitch_bend_to(-5.0, 17)), Synthesis.Event(frame:40, command:Synthesis.Command.all_notes_off)]
+    match Synthesis.Sequence.create(voice, events) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples = zeros(48); require(source.render(&samples[0:48])); let gains:float64[] = [1.0 as float64, 1.0 as float64, 1.0 as float64, 0.75 as float64, 0.5 as float64, 0.75 as float64]
+            var i = 0; while i < 6 { near(samples[i], 0.5 * gains[i] * Math.sin(i as float64 * Math.pi<float64>() / 4.0)); i++ }
+            source.reset(); var split = zeros(48)
+            require(source.render(&split[0:4])); require(source.render(&split[4:6])); require(source.render(&split[6:7])); require(source.render(&split[7:47])); require(source.render(&split[47:48]))
+            i = 0; while i < 48 { assert(samples[i] == split[i]); i++ }
+            assert(voice.active_voices() == 0)
+            invalid(voice.send(Synthesis.Command.gain_to(-1.0, 4))); invalid(voice.send(Synthesis.Command.gain_to(1.1, 4))); invalid(voice.send(Synthesis.Command.gain_to(0.0, 16_777_217)))
+        }
+    }
+}
+func offline(channels:int = 1) Audio { match Audio.offline(sample_rate:1_000, channels:channels) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func render(audio:&Audio, frames:int) float32[] { match audio.render(frames) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func producer(audio:Audio, source:Synthesis.Generator, duration:int = 11, block:int = 8, capacity:int = 3) Synthesis.StreamProducer { match Synthesis.StreamProducer.create(audio, source, duration, block, capacity) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func pump(source:Synthesis.StreamProducer) int { match source.pump() { failure(error) => { panic(error.detail) }; success(count) => { return count } } }
+func blocked(source:Synthesis.StreamProducer) { match source.pump() { failure(error) => { assert(error.kind == Kind.would_block()) }; success(count) => { panic("full stream accepted") } } }
+class Probe:Synthesis.Instrument {
+    let format:Processing.Format = Processing.Format(sample_rate:1_000, channels:1)
+    var frames:int = 0
+    var commands:int = 0
+    var value:float32 = 0.0
+    func validate(command:Synthesis.Command) Result<void, Error> { return Result<void, Error>.success() }
+    func send(command:Synthesis.Command) Result<void, Error> { self.commands++; match command { note_on(id, frequency, velocity) => { self.value = velocity }; note_off(id) => { self.value = 0.0 }; else => {} }; return Result<void, Error>.success() }
+    func render(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] = self.value; i++ } self.frames += samples.count(); return Result<void, Error>.success() }
+    func reset() { self.frames = 0; self.commands = 0; self.value = 0.0 }
+}
+func score(voice:Synthesis.Instrument) Synthesis.Sequence {
+    let events:Synthesis.Event[] = [Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, 125.0, 0.25)), Synthesis.Event(frame:2, command:Synthesis.Command.note_on(2, 125.0, 0.5)), Synthesis.Event(frame:5, command:Synthesis.Command.note_off(2)), Synthesis.Event(frame:7, command:Synthesis.Command.note_on(3, 125.0, 0.25))]
+    match Synthesis.Sequence.create(voice, events) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+}
+test "partial streaming writes preserve the exact score prefix and never replay commands" {
+    var audio = offline(); var voice = Probe(); var source = producer(audio, score(voice))
+    var reference = score(Probe()); var expected = zeros(11); require(reference.render(&expected[0:11]))
+    assert(pump(source) == 3 && source.produced_frames() == 8 && source.written_frames() == 3 && source.pending_frames() == 5 && voice.frames == 8 && voice.commands == 4)
+    blocked(source); blocked(source); assert(voice.frames == 8 && voice.commands == 4 && source.pending_frames() == 5)
+    let playing = audio.play(source.stream()); var actual:float32[] = []
+    while !source.input_closed() {
+        match source.pump() { failure(error) => { assert(error.kind == Kind.would_block()) }; success(count) => {} }
+        var output = render(audio, 1); actual.append(output[0])
+    }
+    while actual.count() < 11 { var output = render(audio, 1); actual.append(output[0]) }
+    assert(source.produced_frames() == 11 && source.written_frames() == 11 && source.pending_frames() == 0 && voice.commands == 4 && voice.frames == 11)
+    var i = 0; while i < 11 { assert(actual[i] == expected[i]); i++ }
+    assert(pump(source) == 0)
+    var tail = render(audio, 4); for sample in tail { assert(sample == 0.0 as float32) }
+    assert(!audio.is_playing(playing)); match audio.stream_info(source.stream()) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.drained && info.written_frames == 11 && info.consumed_frames == 11 && info.discarded_frames == 0) } }
+}
+test "stream producer pause starvation resume and early stop do not advance a pending block twice" {
+    var audio = offline(); var voice = Probe(); var source = producer(audio, score(voice), duration:40)
+    let playing = audio.play(source.stream())
+    var empty = render(audio, 2); for sample in empty { assert(sample == 0.0 as float32) }
+    match audio.stream_info(source.stream()) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.starved && !info.closed) } }
+    assert(pump(source) == 3); audio.pause(playing); blocked(source)
+    assert(voice.frames == 8); empty = render(audio, 2); for sample in empty { assert(sample == 0.0 as float32) }
+    audio.resume(playing); var first = render(audio, 3); assert(first[0] == 0.25 as float32 && first[2] == 0.5 as float32)
+    assert(pump(source) == 3 && voice.frames == 8)
+    audio.stop(playing); let produced = source.produced_frames()
+    match source.pump() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(count) => { panic("stopped source continued") } }
+    assert(source.produced_frames() == produced)
+    match audio.stream_info(source.stream()) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.stopped && info.written_frames == info.consumed_frames + info.queued_frames + info.discarded_frames) } }
+}
+class Constant:Synthesis.Generator {
+    let format:Processing.Format
+    var calls:int = 0
+    var value:float32
+    init(channels:int = 1, value:float32 = 0.25) { self.format = Processing.Format(sample_rate:1_000, channels:channels); self.value = value }
+    func render(samples:&float32[..]) Result<void, Error> { self.calls++; var i = 0; while i < samples.count() { samples[i] = self.value; i++ } return Result<void, Error>.success() }
+    func reset() { self.calls = 0 }
+}
+test "stream producer respects multichannel frame capacities and the final short block" {
+    for channels in [1, 2, 8] {
+        var audio = offline(channels); var tone = Constant(channels); var source = producer(audio, tone, duration:7, block:4, capacity:2)
+        assert(pump(source) == 2); let playing = audio.play(source.stream()); var actual:float32[] = []
+        while !source.input_closed() {
+            match source.pump() { failure(error) => { assert(error.kind == Kind.would_block()) }; success(count) => {} }
+            var output = render(audio, 1); for sample in output { actual.append(sample) }
+        }
+        while actual.count() < 7 * channels { var output = render(audio, 1); for sample in output { actual.append(sample) } }
+        for sample in actual { assert(sample == 0.25 as float32) }
+        assert(tone.calls == 2 && source.produced_frames() == 7 && source.written_frames() == 7)
+        var tail = render(audio, 2); for sample in tail { assert(sample == 0.0 as float32) }
+        assert(!audio.is_playing(playing))
+    }
+}
+test "zero duration closes without rendering and producer validates preparation bounds" {
+    var audio = offline(); var tone = Constant(); var source = producer(audio, tone, duration:0)
+    assert(pump(source) == 0 && source.input_closed() && tone.calls == 0)
+    let playing = audio.play(source.stream()); var tail = render(audio, 2); for sample in tail { assert(sample == 0.0 as float32) }
+    assert(!audio.is_playing(playing))
+    for block in [0, 65_537] { match Synthesis.StreamProducer.create(audio, tone, duration_frames:10, block_frames:block) { failure(error) => {}; success(value) => { panic("bad block accepted") } } }
+    match Synthesis.StreamProducer.create(audio, tone, duration_frames:-1) { failure(error) => {}; success(value) => { panic("negative duration accepted") } }
+    match Synthesis.StreamProducer.create(audio, tone, duration_frames:10, capacity_frames:0) { failure(error) => {}; success(value) => { panic("zero capacity accepted") } }
+}
+class Failing:Synthesis.Generator {
+    let format:Processing.Format = Processing.Format(sample_rate:1_000, channels:1)
+    var calls:int = 0
+    func render(samples:&float32[..]) Result<void, Error> { self.calls++; samples[0] = 0.25; return Result<void, Error>.failure(Error(kind:Kind.other(), operation:"user.render", subject:null, detail:"intentional failure")) }
+    func reset() { self.calls = 0 }
+}
+test "source failure and invalid PCM stop production before any write or retry of events" {
+    var audio = offline(); var faulty = Failing(); var source = producer(audio, faulty)
+    match source.pump() { failure(error) => { assert(error.operation == "user.render") }; success(count) => { panic("failed source accepted") } }
+    match source.pump() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(count) => { panic("failed source retried") } }
+    assert(faulty.calls == 1 && source.produced_frames() == 0 && source.written_frames() == 0)
+    var bad = Constant(value:2.0); var invalid_source = producer(audio, bad)
+    match invalid_source.pump() { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.write") }; success(count) => { panic("invalid PCM accepted") } }
+    match invalid_source.pump() { failure(error) => {}; success(count) => { panic("invalid source retried") } }
+    assert(bad.calls == 1 && invalid_source.produced_frames() == 8 && invalid_source.written_frames() == 0)
+}
+test "external writes and premature closure reject before rendering more data" {
+    var audio = offline(); var tone = Constant(); var source = producer(audio, tone)
+    var samples:float32[] = [0.25 as float32]
+    match audio.write(source.stream(), @samples[0:1]) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 1) } }
+    match source.pump() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(count) => { panic("foreign writer accepted") } }
+    assert(tone.calls == 0)
+    var closed = producer(audio, tone); require(audio.close(closed.stream()))
+    match closed.pump() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(count) => { panic("closed source advanced") } }
+    assert(tone.calls == 0)
+}
+func released_stream(audio:Audio) Audio.Stream { var source = producer(audio, Constant()); pump(source); return source.stream() }
+func retained_audio() Synthesis.StreamProducer { var audio = offline(); return producer(audio, Constant(), duration:3) }
+test "producer retains its Audio and releases its stream at the last owner" {
+    var audio = offline(); var stale = released_stream(audio)
+    match audio.stream_info(stale) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(info) => { panic("producer leaked its stream") } }
+    var source = retained_audio(); assert(pump(source) == 3 && source.input_closed())
+}
+test "effect tails are explicit in the producer duration and match memory rendering" {
+    var audio = offline(); var voice = instrument(); require(voice.send(Synthesis.Command.note_on(1, 125.0, 0.25)))
+    match Processing.Delay.create(voice.format, delay_frames:3, feedback:0.5, wet:0.5) {
+        failure(error) => { panic(error.detail) }
+        success(var delay) => {
+            match Synthesis.Processed.create(voice, [delay]) {
+                failure(error) => { panic(error.detail) }
+                success(var generator) => {
+                    var expected = zeros(48); require(generator.render(&expected[0:4])); require(voice.send(Synthesis.Command.all_notes_off)); require(generator.render(&expected[4:48]))
+                    generator.reset(); require(voice.send(Synthesis.Command.note_on(1, 125.0, 0.25)))
+                    var source = producer(audio, generator, duration:48, block:4, capacity:4)
+                    assert(pump(source) == 4); require(voice.send(Synthesis.Command.all_notes_off))
+                    let playing = audio.play(source.stream()); var actual = render(audio, 4)
+                    while !source.input_closed() { pump(source); var output = render(audio, 4); for sample in output { actual.append(sample) } }
+                    assert(actual.count() == 48); var i = 0; while i < 48 { assert(actual[i] == expected[i]); i++ }
+                    assert(Math.abs(actual[12]) > 0.0 as float32); var tail = render(audio, 4); assert(!audio.is_playing(playing))
+                }
+            }
+        }
+    }
+}

@@ -112,3 +112,5 @@ playback produces at most one event. Its reference stays comparable through
 
 [End event contracts](Timeline.md) cover bounded capacity and reservation
 errors; [groups](Groups.md) cover detachment.
+
+[Evolve a sound and feed a stream](Continuous.md).

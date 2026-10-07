@@ -62,7 +62,7 @@ occupies a silent voice; the instrument does not apply the MIDI convention
 “zero note-on = note-off”.
 
 `reset()` immediately cuts voices and fades, resets pedal, bend and counter,
-and keeps the configuration. `active_voices()` counts occupied slots,
+restores global gain to 1, and keeps the configuration. `active_voices()` counts occupied slots,
 including releases and fades. No random change or humanization is applied.
 
 ## Set polyphony and envelope
@@ -93,7 +93,8 @@ exactly at its last emitted sample, then blends that held level with the new
 note over the chosen duration. This short connection avoids a jump at the
 first sample; it does not keep an additional voice. Zero cuts directly.
 Another steal during the fade starts from the last blended sample.
-Bend is immediate; this instrument does not provide continuous parameter ramps.
+Simple `pitch_bend` is immediate. [Continuous ramps](Continuous.md) add
+`pitch_bend_to` and `gain_to` without restarting voices.
 
 ## Place commands on the audio clock
 
@@ -147,5 +148,5 @@ The voice pool, envelopes and working buffer are prepared at creation.
 Rendering and valid commands of the built-in instrument do not grow collections.
 Work per frame depends on occupied voices and channel count; this qualification
 does not promise a maximum load on every device. The MIDI parser, user banks,
-realistic instrument models, ramps and humanization remain separate
+realistic instrument models and humanization remain separate
 capabilities to establish.

@@ -7,6 +7,8 @@ public enum Command {
     note_off(int)
     sustain(bool)
     pitch_bend(float32)
+    pitch_bend_to(float32, int)
+    gain_to(float32, int)
     all_notes_off
 }
 

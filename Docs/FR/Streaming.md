@@ -121,3 +121,5 @@ après libération, sans désigner une nouvelle lecture au même index.
 
 [Le contrat des événements](Timeline.md) décrit la capacité bornée et les
 erreurs de réservation ; [les groupes](Groups.md) décrivent le détachement.
+
+[Faire évoluer un son et alimenter un flux](Continuous.md).

@@ -62,7 +62,7 @@ nouvelle identité. Une vélocité zéro occupe une voix silencieuse ; l’instr
 n’applique pas la convention MIDI « note-on zéro = note-off ».
 
 `reset()` coupe immédiatement les voix et les fondus, remet pédale, bend et
-compteur à zéro, en gardant la configuration. `active_voices()` compte les
+compteur à zéro, ainsi que le gain global à 1, en gardant la configuration. `active_voices()` compte les
 places occupées, y compris releases et fondus. Aucun changement aléatoire ou
 humanisation n’est appliqué.
 
@@ -94,8 +94,8 @@ remplacée part exactement de son dernier sample émis, puis mélange ce niveau
 figé avec la nouvelle note pendant la durée choisie. Ce court raccord évite
 un saut au premier sample ; il ne conserve pas une voix supplémentaire. Zéro
 coupe directement. Un nouvel emprunt pendant le fondu repart du dernier sample
-mélangé. Le bend est immédiat ; les rampes continues de paramètres ne sont pas
-fournies par cet instrument.
+mélangé. Le `pitch_bend` simple est immédiat. Les [rampes continues](Continuous.md)
+ajoutent `pitch_bend_to` et `gain_to` sans redémarrer les voix.
 
 ## Placer les commandes sur l’horloge audio
 
@@ -153,5 +153,5 @@ création. Le rendu et les commandes valides de l’instrument intégré ne font
 pas grandir de collection. Le travail par frame dépend du nombre de voix
 occupées et de canaux ; cette qualification ne promet pas une charge maximale
 sur tous les appareils. Le parser MIDI, les banques utilisateur, les modèles
-d’instruments réalistes, les rampes et l’humanisation restent des capacités
+d’instruments réalistes et l’humanisation restent des capacités
 séparées à établir.
