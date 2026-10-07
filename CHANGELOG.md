@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composable modulated delay for chorus and flanger: causal interpolation, signed feedback, wet/bypass with advancing history, prepared capacity, impulse/tone oracles and a procedural chord without sound banks.
+
 - Stereo pan transfers the opposite channel with sine/cosine gains, preserving center and exact poles; wet mix/bypass, recoverable overflow and a block-based demonstration.
 
 - Composable soft saturation and hard clipping: drive, output gain, wet mix and bypass, stable float32 evaluation and asset-free examples.

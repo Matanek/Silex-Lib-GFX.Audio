@@ -1,0 +1,57 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func format() Processing.Format { return Processing.Format(sample_rate:48_000, channels:1) }
+func oscillator(frequency:float32, amplitude:float32, waveform:Synthesis.Waveform) Synthesis.Oscillator {
+    match Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:amplitude, waveform:waveform) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func play(audio:&Audio, samples:&float32[..], name:str) {
+    print(name)
+    var i = 0; while i < samples.count() { samples[i] *= 0.25; i++ }
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+}
+func example(audio:&Audio, delay:float32, depth:float32, rate:float32, feedback:float32, bypass:bool, name:str) {
+    var samples:float32[] = []; var i = 0; while i < 144_000 { samples.append(0.0); i++ }
+    let sources:Synthesis.Generator[] = [
+        oscillator(110.0, 0.18, Synthesis.Waveform.sawtooth),
+        oscillator(165.0, 0.12, Synthesis.Waveform.square),
+        oscillator(220.0, 0.1, Synthesis.Waveform.sawtooth),
+    ]
+    let gains:float32[] = [1.0 as float32, 1.0 as float32, 1.0 as float32]
+    match Synthesis.Mix.create(sources, gains) {
+        failure(error) => { panic(error.detail) }; success(var source) => { require(source.render(&samples[0:samples.count()])) }
+    }
+    match Synthesis.Envelope.create(format(), attack_frames:960, decay_frames:4_800, sustain:0.8, release_frames:9_600) {
+        failure(error) => { panic(error.detail) }
+        success(var envelope) => {
+            envelope.note_on(); require(envelope.process(&samples[0:110_400]))
+            envelope.note_off(); require(envelope.process(&samples[110_400:samples.count()]))
+        }
+    }
+    match Processing.ModulatedDelay.create(format(), max_delay_frames:1_200, delay_frames:delay, depth_frames:depth, rate_hz:rate, feedback:feedback, wet:0.5) {
+        failure(error) => { panic(error.detail) }
+        success(var effect) => {
+            effect.set_bypass(bypass)
+            // Preserve one effect across prepared blocks and render the silence tail.
+            var start = 0
+            while start < samples.count() {
+                var end = start + 512; if end > samples.count() { end = samples.count() }
+                require(effect.process(&samples[start:end])); start = end
+            }
+        }
+    }
+    play(audio, &samples[0:samples.count()], name)
+}
+func main() {
+    var audio = Audio()
+    example(audio, delay:720.0, depth:240.0, rate:0.8, feedback:0.0, bypass:true, name:"M1 - Dry chord")
+    example(audio, delay:720.0, depth:240.0, rate:0.8, feedback:0.0, bypass:false, name:"M2 - Chorus, 15 ms plus or minus 5 ms")
+    example(audio, delay:96.0, depth:72.0, rate:0.6, feedback:0.75, bypass:false, name:"M3 - Flanger, positive feedback")
+    example(audio, delay:96.0, depth:72.0, rate:0.6, feedback:-0.75, bypass:false, name:"M4 - Flanger, negative feedback")
+}

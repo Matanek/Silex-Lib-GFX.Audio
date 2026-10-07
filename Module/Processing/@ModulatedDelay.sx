@@ -1,0 +1,108 @@
+use STD.Error
+use STD.Math
+
+public class ModulatedDelay:Processor {
+    let format:Format
+    let max_delay_frames:int
+    private var delay_frames:float32
+    private var depth_frames:float32
+    private var phase_step:float32
+    private var phase:float32 = 0.0
+    private var feedback:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private var ring:float32[]
+    private var pending:float32[]
+    private var output:float32[]
+    private var cursor:int = 0
+    private init(format:Format, max_delay_frames:int, delay_frames:float32, depth_frames:float32, phase_step:float32, feedback:float32, wet:float32) {
+        self.format = format; self.max_delay_frames = max_delay_frames
+        self.delay_frames = delay_frames; self.depth_frames = depth_frames; self.phase_step = phase_step
+        self.feedback = feedback; self.wet = wet
+        self.ring = zeros((max_delay_frames + 1) * format.channels)
+        self.pending = zeros(format.channels); self.output = zeros(format.channels)
+    }
+    private static func valid_delay(delay:float32, depth:float32, maximum:int) bool {
+        return Math.is_finite(delay) && Math.is_finite(depth) && depth >= 0.0 && delay - depth >= 1.0 && delay + depth <= maximum as float32
+    }
+    private static func valid_rate(rate:float32, sample_rate:int) bool {
+        return Math.is_finite(rate) && rate >= 0.0 && rate < sample_rate as float32 / 2.0 && (rate == 0.0 || rate / sample_rate as float32 > 0.0)
+    }
+    private static func valid_feedback(value:float32) bool { return Math.is_finite(value) && Math.abs(value) < 1.0 }
+    private static func valid_wet(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }
+    static func create(format:Format, max_delay_frames:int, delay_frames:float32, depth_frames:float32 = 0.0, rate_hz:float32 = 0.5, feedback:float32 = 0.0, wet:float32 = 0.5) Result<ModulatedDelay, Error> {
+        if !valid_format(format) || format.sample_rate > 16_777_216 || max_delay_frames < 1 || max_delay_frames > 1_048_576 / format.channels - 1 {
+            return Result<ModulatedDelay, Error>.failure(invalid("invalid format or prepared modulated delay capacity"))
+        }
+        if !ModulatedDelay.valid_delay(delay_frames, depth_frames, max_delay_frames) || !ModulatedDelay.valid_rate(rate_hz, format.sample_rate) || !ModulatedDelay.valid_feedback(feedback) || !ModulatedDelay.valid_wet(wet) {
+            return Result<ModulatedDelay, Error>.failure(invalid("delay +/- depth must fit [1, maximum], rate below Nyquist, feedback magnitude below one and wet in [0, 1]"))
+        }
+        return Result<ModulatedDelay, Error>.success(ModulatedDelay(format, max_delay_frames, delay_frames, depth_frames, rate_hz / format.sample_rate as float32, feedback, wet))
+    }
+    func set_delay(delay_frames:float32, depth_frames:float32) Result<void, Error> {
+        if !ModulatedDelay.valid_delay(delay_frames, depth_frames, self.max_delay_frames) { return Result<void, Error>.failure(invalid("delay +/- depth must fit the prepared [1, maximum] range")) }
+        self.delay_frames = delay_frames; self.depth_frames = depth_frames; return Result<void, Error>.success()
+    }
+    func set_rate(rate_hz:float32) Result<void, Error> {
+        if !ModulatedDelay.valid_rate(rate_hz, self.format.sample_rate) { return Result<void, Error>.failure(invalid("rate must be finite, nonnegative and below Nyquist with a representable phase step")) }
+        self.phase_step = rate_hz / self.format.sample_rate as float32; return Result<void, Error>.success()
+    }
+    func set_feedback(feedback:float32) Result<void, Error> {
+        if !ModulatedDelay.valid_feedback(feedback) { return Result<void, Error>.failure(invalid("feedback magnitude must be below one")) }
+        self.feedback = feedback; return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !ModulatedDelay.valid_wet(wet) { return Result<void, Error>.failure(invalid("wet must be in [0, 1]")) }
+        self.wet = wet; return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        let channels = self.format.channels
+        let capacity = self.max_delay_frames + 1
+        let moving = self.depth_frames > 0.0 && self.phase_step > 0.0
+        var fixed_delay = self.delay_frames
+        if self.depth_frames > 0.0 && !moving { fixed_delay += self.depth_frames * Math.sin(self.phase * 2.0 * Math.pi<float32>()) }
+        var i = 0
+        while i < samples.count() {
+            var delay = fixed_delay
+            if moving { delay += self.depth_frames * Math.sin(self.phase * 2.0 * Math.pi<float32>()) }
+            // Bound rounding at the configured causal limits.
+            delay = Math.clamp(delay, 1.0, self.max_delay_frames as float32)
+            let age = Math.floor(delay) as int
+            let fraction = delay - age as float32
+            var recent = self.cursor - age
+            if recent < 0 { recent += capacity }
+            var older = recent - 1
+            if older < 0 { older += capacity }
+            var channel = 0
+            while channel < channels {
+                let dry = samples[i + channel]
+                var delayed = self.ring[recent * channels + channel]
+                if fraction > 0.0 { delayed = (1.0 - fraction) * delayed + fraction * self.ring[older * channels + channel] }
+                let retained = dry + self.feedback * delayed
+                var result = dry
+                if !self.bypass && self.wet > 0.0 {
+                    if self.wet == 1.0 { result = delayed }
+                    else { result = (1.0 - self.wet) * dry + self.wet * delayed }
+                }
+                if !Math.is_finite(retained) || !Math.is_finite(result) { return Result<void, Error>.failure(overflow()) }
+                self.pending[channel] = retained; self.output[channel] = result
+                channel++
+            }
+            channel = 0
+            while channel < channels {
+                self.ring[self.cursor * channels + channel] = self.pending[channel]
+                samples[i + channel] = self.output[channel]; channel++
+            }
+            self.cursor++; if self.cursor == capacity { self.cursor = 0 }
+            self.phase += self.phase_step; if self.phase >= 1.0 { self.phase -= 1.0 }
+            i += channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        var i = 0; while i < self.ring.count() { self.ring[i] = 0.0; i++ }
+        self.cursor = 0; self.phase = 0.0
+    }
+}

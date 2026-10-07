@@ -23,8 +23,8 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 52 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion` et `StereoPan` en Release.
+`ReleaseValidation.py` reprend les 62 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan` et `ModulatedDelay` en Release.
 Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
@@ -158,3 +158,5 @@ pôles, sin/cos à mi-course, dosage, bypass, changements/reset, découpage exac
 formats et blocs refusés avant écriture, frame fautive intacte sur overflow,
 puis ordre de composition avec un générateur et un effet du consumer.
 `StereoSounds.sx` propose gauche/centre/droite puis un déplacement par blocs.
+
+Les dix oracles du délai modulé vérifient retard fractionnaire causal, échos signés, modulation partagée entre canaux, annulation d’un ton, queue décroissante, découpage exact, réglages/bypass, invalides, dépassement et composition consommatrice.

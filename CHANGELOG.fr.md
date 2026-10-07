@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Délai modulé composable pour chorus et flanger : interpolation causale, feedback signé, dosage/bypass avec historique continu, capacité préparée, oracles d’impulsion/ton et accord procédural sans banque.
+
 - Panoramique stéréo par transfert sin/cos du canal opposé, centre neutre et pôles exacts ; dosage/bypass, dépassement récupérable et démonstration par blocs.
 
 - Saturation douce et distorsion dure composables : drive, gain de sortie, dosage et bypass, calcul float32 stabilisé et exemples sans asset.

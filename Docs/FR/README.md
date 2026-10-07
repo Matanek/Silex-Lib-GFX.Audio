@@ -231,3 +231,5 @@ appartient à Silex-Examples.
 [Saturer ou distordre un son](Distortion.md).
 
 [Déplacer un son entre gauche et droite](StereoPan.md).
+
+[Créer chorus et flanger avec un délai modulé](ChorusAndFlanger.md).

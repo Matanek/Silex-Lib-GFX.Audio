@@ -225,3 +225,5 @@ demonstration belongs to Silex-Examples.
 [Saturate or distort sound](Distortion.md).
 
 [Move sound between left and right](StereoPan.md).
+
+[Create chorus and flanger with a modulated delay](ChorusAndFlanger.md).
