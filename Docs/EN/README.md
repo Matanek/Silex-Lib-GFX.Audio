@@ -210,3 +210,5 @@ demonstration belongs to Silex-Examples.
 [Render a mix in memory](Offline.md).
 
 [Process samples and measure their levels](Processing.md).
+
+[Verify audio paths](Validation.md).

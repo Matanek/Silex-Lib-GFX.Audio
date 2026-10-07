@@ -50,7 +50,7 @@ native audio thread. The new flag is appended to the private track structure.
 
 Cached finite sounds also finalize their resampler at the known last frame.
 This prevents the last filter frames from being deferred to another mixer
-request. Looping sources preserve the filter state between repeats. Runtime
+request. Looping sources preserve the filter state between repeats.
 For small mixer requests, the callback fills enough converted output to cover
 the resampler lookahead. A stopped track is considered drained only when its
 prepared output is empty; explicit stop discards that output. PCM tests cover

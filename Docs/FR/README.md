@@ -216,3 +216,5 @@ appartient à Silex-Examples.
 [Rendre un mix en mémoire](Offline.md).
 
 [Traiter les échantillons et mesurer leurs niveaux](Processing.md).
+
+[Vérifier les parcours audio](Validation.md).
