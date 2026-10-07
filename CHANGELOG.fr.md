@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Compresseur et limiteur composables : seuil/ratio, attaque/relâchement, regain explicite, plafond de samples, crête liée entre canaux et comparaison des accents sans banque.
+
 - Réverbération algorithmique composable : taille préparée, décroissance et amortissement réglables, dosage/bypass, historiques par canal, oracles d’échos/queue/couleur et notes pincées sans banque.
 
 - Délai modulé composable pour chorus et flanger : interpolation causale, feedback signé, dosage/bypass avec historique continu, capacité préparée, oracles d’impulsion/ton et accord procédural sans banque.

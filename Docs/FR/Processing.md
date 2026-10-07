@@ -1,7 +1,7 @@
 # Traiter les échantillons avant leur sortie
 
 `GFX.Audio.Processing` propose `Format`, le protocole `Processor`, `LowPass`,
-`Delay`, `Equalizer`, `Bitcrusher`, `Distortion`, `DistortionMode`, `StereoPan`, `ModulatedDelay`, `Reverb` et `levels`.
+`Delay`, `Equalizer`, `Bitcrusher`, `Distortion`, `DistortionMode`, `StereoPan`, `ModulatedDelay`, `Reverb`, `Compressor`, `Limiter` et `levels`.
 Un effet conserve son état et modifie une tranche `&float32[..]` fournie par l'application. Il peut traiter les blocs d'un
 producteur, ceux d'un rendu hors ligne, ou ceux à écrire dans un flux.
 
@@ -84,3 +84,5 @@ pour les fixtures à niveau maîtrisé ; reset retire toute queue.
 [Créer chorus et flanger avec un délai modulé](ChorusAndFlanger.md).
 
 [Ajouter une réverbération algorithmique](Reverb.md).
+
+[Maîtriser la dynamique avec compresseur et limiteur](Dynamics.md).

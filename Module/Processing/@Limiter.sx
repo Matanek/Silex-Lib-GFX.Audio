@@ -1,0 +1,66 @@
+use STD.Error
+use STD.Math
+
+public class Limiter:Processor {
+    let format:Format
+    private var ceiling:float32
+    private var release:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private var envelope:float32 = 0.0
+    private var output:float32[]
+    private init(format:Format, ceiling_db:float32, release_seconds:float32, wet:float32) {
+        self.format = format; self.ceiling = dynamics_level(ceiling_db)
+        self.release = dynamics_step(format, release_seconds); self.wet = wet; self.output = zeros(format.channels)
+    }
+    static func create(format:Format, ceiling_db:float32 = -1.0, release_seconds:float32 = 0.1, wet:float32 = 1.0) Result<Limiter, Error> {
+        if !dynamics_format(format) || !dynamics_db(ceiling_db) || !dynamics_time(release_seconds) || !dynamics_unit(wet) {
+            return Result<Limiter, Error>.failure(invalid("limiter requires 1..384000 Hz, 1..8 channels, ceiling [-96,0] dBFS, release [0,10] seconds and wet [0,1]"))
+        }
+        return Result<Limiter, Error>.success(Limiter(format, ceiling_db, release_seconds, wet))
+    }
+    func set_ceiling(ceiling_db:float32) Result<void, Error> {
+        if !dynamics_db(ceiling_db) { return Result<void, Error>.failure(invalid("limiter ceiling must be finite in [-96,0] dBFS")) }
+        self.ceiling = dynamics_level(ceiling_db); return Result<void, Error>.success()
+    }
+    func set_release(release_seconds:float32) Result<void, Error> {
+        if !dynamics_time(release_seconds) { return Result<void, Error>.failure(invalid("limiter release must be finite in [0,10] seconds")) }
+        self.release = dynamics_step(self.format, release_seconds); return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !dynamics_unit(wet) { return Result<void, Error>.failure(invalid("limiter wet must be finite in [0,1]")) }
+        self.wet = wet; return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var frame = 0
+        while frame < samples.count() {
+            var peak:float32 = 0.0; var channel = 0
+            while channel < self.format.channels { peak = Math.max(peak, Math.abs(samples[frame + channel])); channel++ }
+            var envelope = peak
+            if peak < self.envelope { envelope = dynamics_follow(self.envelope, peak, self.release) }
+            if !Math.is_finite(envelope) { return Result<void, Error>.failure(overflow()) }
+            channel = 0
+            while channel < self.format.channels {
+                let dry = samples[frame + channel]; var result = dry
+                if !self.bypass && self.wet > 0.0 {
+                    var processed = dry
+                    if envelope > self.ceiling {
+                        // Normalize first: ceiling / envelope may underflow for a huge input.
+                        processed = Math.clamp((dry / envelope) * self.ceiling, -self.ceiling, self.ceiling)
+                    }
+                    if self.wet == 1.0 { result = processed }
+                    else { result = (1.0 - self.wet) * dry + self.wet * processed }
+                }
+                if !Math.is_finite(result) { return Result<void, Error>.failure(overflow()) }
+                self.output[channel] = result; channel++
+            }
+            self.envelope = envelope; channel = 0
+            while channel < self.format.channels { samples[frame + channel] = self.output[channel]; channel++ }
+            frame += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.envelope = 0.0 }
+}

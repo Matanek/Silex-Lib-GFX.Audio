@@ -1,0 +1,99 @@
+use STD.Error
+use STD.Math
+
+func dynamics_format(format:Format) bool { return valid_format(format) && format.sample_rate <= 384_000 }
+func dynamics_db(value:float32) bool { return Math.is_finite(value) && value >= -96.0 && value <= 0.0 }
+func dynamics_time(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 10.0 }
+func dynamics_unit(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }
+func dynamics_level(db:float32) float32 { return Math.exp(db * 0.11512925465) }
+func dynamics_step(format:Format, seconds:float32) float32 {
+    if seconds == 0.0 { return 1.0 }
+    return 1.0 - Math.exp(-1.0 / (format.sample_rate as float32 * seconds))
+}
+func dynamics_follow(previous:float32, peak:float32, step:float32) float32 {
+    if peak >= previous { return previous + step * (peak - previous) }
+    return peak + (1.0 - step) * (previous - peak)
+}
+
+public class Compressor:Processor {
+    let format:Format
+    private var threshold:float32
+    private var log_threshold:float32
+    private var exponent:float32
+    private var attack:float32
+    private var release:float32
+    private var makeup:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private var envelope:float32 = 0.0
+    private var output:float32[]
+    private init(format:Format, threshold_db:float32, ratio:float32, attack_seconds:float32, release_seconds:float32, makeup_db:float32, wet:float32) {
+        self.format = format; self.threshold = dynamics_level(threshold_db); self.log_threshold = Math.log(self.threshold)
+        self.exponent = 1.0 / ratio - 1.0; self.attack = dynamics_step(format, attack_seconds)
+        self.release = dynamics_step(format, release_seconds); self.makeup = dynamics_level(makeup_db)
+        self.wet = wet; self.output = zeros(format.channels)
+    }
+    private static func valid_ratio(ratio:float32) bool { return Math.is_finite(ratio) && ratio >= 1.0 && ratio <= 100.0 }
+    private static func valid_makeup(db:float32) bool { return Math.is_finite(db) && db >= -24.0 && db <= 24.0 }
+    static func create(format:Format, threshold_db:float32 = -18.0, ratio:float32 = 4.0, attack_seconds:float32 = 0.01, release_seconds:float32 = 0.1, makeup_db:float32 = 0.0, wet:float32 = 1.0) Result<Compressor, Error> {
+        if !dynamics_format(format) || !dynamics_db(threshold_db) || !Compressor.valid_ratio(ratio) || !dynamics_time(attack_seconds) || !dynamics_time(release_seconds) || !Compressor.valid_makeup(makeup_db) || !dynamics_unit(wet) {
+            return Result<Compressor, Error>.failure(invalid("compressor requires 1..384000 Hz, 1..8 channels, threshold [-96,0] dBFS, ratio [1,100], times [0,10] seconds, makeup [-24,24] dB and wet [0,1]"))
+        }
+        return Result<Compressor, Error>.success(Compressor(format, threshold_db, ratio, attack_seconds, release_seconds, makeup_db, wet))
+    }
+    func set_threshold(threshold_db:float32) Result<void, Error> {
+        if !dynamics_db(threshold_db) { return Result<void, Error>.failure(invalid("compressor threshold must be finite in [-96,0] dBFS")) }
+        self.threshold = dynamics_level(threshold_db); self.log_threshold = Math.log(self.threshold); return Result<void, Error>.success()
+    }
+    func set_ratio(ratio:float32) Result<void, Error> {
+        if !Compressor.valid_ratio(ratio) { return Result<void, Error>.failure(invalid("compressor ratio must be finite in [1,100]")) }
+        self.exponent = 1.0 / ratio - 1.0; return Result<void, Error>.success()
+    }
+    func set_times(attack_seconds:float32, release_seconds:float32) Result<void, Error> {
+        if !dynamics_time(attack_seconds) || !dynamics_time(release_seconds) { return Result<void, Error>.failure(invalid("compressor times must be finite in [0,10] seconds")) }
+        self.attack = dynamics_step(self.format, attack_seconds); self.release = dynamics_step(self.format, release_seconds)
+        return Result<void, Error>.success()
+    }
+    func set_makeup(makeup_db:float32) Result<void, Error> {
+        if !Compressor.valid_makeup(makeup_db) { return Result<void, Error>.failure(invalid("compressor makeup must be finite in [-24,24] dB")) }
+        self.makeup = dynamics_level(makeup_db); return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !dynamics_unit(wet) { return Result<void, Error>.failure(invalid("compressor wet must be finite in [0,1]")) }
+        self.wet = wet; return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var frame = 0
+        while frame < samples.count() {
+            var peak:float32 = 0.0; var channel = 0
+            while channel < self.format.channels { peak = Math.max(peak, Math.abs(samples[frame + channel])); channel++ }
+            var step = self.release; if peak > self.envelope { step = self.attack }
+            let envelope = dynamics_follow(self.envelope, peak, step)
+            if !Math.is_finite(envelope) { return Result<void, Error>.failure(overflow()) }
+            var gain:float32 = 1.0
+            if !self.bypass && self.wet > 0.0 && self.exponent != 0.0 && envelope > self.threshold {
+                // A difference of logs avoids overflowing envelope / threshold.
+                gain = Math.exp(self.exponent * (Math.log(envelope) - self.log_threshold))
+            }
+            channel = 0
+            while channel < self.format.channels {
+                let dry = samples[frame + channel]; var result = dry
+                if !self.bypass && self.wet > 0.0 {
+                    let processed = (dry * gain) * self.makeup
+                    if !Math.is_finite(processed) { return Result<void, Error>.failure(overflow()) }
+                    if self.wet == 1.0 { result = processed }
+                    else { result = (1.0 - self.wet) * dry + self.wet * processed }
+                }
+                if !Math.is_finite(result) { return Result<void, Error>.failure(overflow()) }
+                self.output[channel] = result; channel++
+            }
+            self.envelope = envelope; channel = 0
+            while channel < self.format.channels { samples[frame + channel] = self.output[channel]; channel++ }
+            frame += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.envelope = 0.0 }
+}

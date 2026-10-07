@@ -23,8 +23,8 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 74 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay` et `Reverb` en Release.
+`ReleaseValidation.py` reprend les 86 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay`, `Reverb` et `Dynamics` en Release.
 Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
@@ -162,3 +162,5 @@ puis ordre de composition avec un générateur et un effet du consumer.
 Les dix oracles du délai modulé vérifient retard fractionnaire causal, échos signés, modulation partagée entre canaux, annulation d’un ton, queue décroissante, découpage exact, réglages/bypass, invalides, dépassement et composition consommatrice.
 
 Les douze oracles de réverbération couvrent premiers échos analytiques, feedback filtré et décroissance, canaux indépendants, découpage exact, dosage/bypass, changements/reset, refus, overflow atomique de frame, énergie de queue et couleur, formats extrêmes et composition consommatrice.
+
+Les douze oracles de dynamique couvrent courbes en dB et regain explicite, références float64 d’attaque/relâchement, crête liée entre canaux, découpage/reset, wet/bypass, réglages/refus, overflow atomique de frame, limites float32 et composition avec générateur/effet externes.

@@ -229,3 +229,5 @@ demonstration belongs to Silex-Examples.
 [Create chorus and flanger with a modulated delay](ChorusAndFlanger.md).
 
 [Add algorithmic reverberation](Reverb.md).
+
+[Control dynamics with a compressor and limiter](Dynamics.md).

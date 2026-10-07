@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composable compressor and limiter: threshold/ratio, attack/release, explicit makeup, sample ceiling, linked channel peaks and an accent comparison without sound banks.
+
 - Composable algorithmic reverb: prepared room size, adjustable decay and damping, mix/bypass, per-channel history, echo/tail/color oracles and plucked notes without sound banks.
 
 - Composable modulated delay for chorus and flanger: causal interpolation, signed feedback, wet/bypass with advancing history, prepared capacity, impulse/tone oracles and a procedural chord without sound banks.

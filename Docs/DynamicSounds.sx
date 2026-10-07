@@ -1,0 +1,64 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func format() Processing.Format { return Processing.Format(sample_rate:48_000, channels:1) }
+func play(audio:&Audio, samples:&float32[..], name:str) {
+    print(name)
+    var i = 0; while i < samples.count() { samples[i] *= 0.2; i++ }
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+}
+func phrase() float32[] {
+    var samples:float32[] = []; var i = 0; while i < 144_000 { samples.append(0.0); i++ }
+    let amplitudes:float32[] = [0.2 as float32, 1.0 as float32, 0.4 as float32, 1.0 as float32, 0.2 as float32, 0.7 as float32]
+    match Synthesis.Oscillator.create(format(), frequency_hz:220.0, waveform:Synthesis.Waveform.triangle) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var note = 0
+            while note < amplitudes.count() {
+                let start = note * 24_000; source.reset()
+                require(source.render(&samples[start:start + 16_800]))
+                match Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800) {
+                    failure(error) => { panic(error.detail) }
+                    success(var envelope) => {
+                        envelope.note_on(); require(envelope.process(&samples[start:start + 12_000]))
+                        envelope.note_off(); require(envelope.process(&samples[start + 12_000:start + 16_800]))
+                    }
+                }
+                i = start; while i < start + 16_800 { samples[i] *= amplitudes[note]; i++ }
+                note++
+            }
+        }
+    }
+    return samples
+}
+func process(effect:Processing.Processor, samples:&float32[..]) {
+    var active = effect
+    var start = 0
+    while start < samples.count() {
+        var end = start + 512; if end > samples.count() { end = samples.count() }
+        require(active.process(&samples[start:end])); start = end
+    }
+}
+func main() {
+    var audio = Audio(); var samples = phrase(); play(audio, &samples[0:samples.count()], "D1 - Dry accents")
+    match Processing.Compressor.create(format(), threshold_db:-18.0, ratio:4.0, attack_seconds:0.008, release_seconds:0.12, makeup_db:9.0) {
+        failure(error) => { panic(error.detail) }
+        success(var comp) => {
+            var effect:Processing.Processor = comp; samples = phrase(); process(effect, &samples[0:samples.count()])
+            play(audio, &samples[0:samples.count()], "D2 - Compressed with explicit makeup")
+            comp.reset(); require(comp.set_wet(0.5)); samples = phrase(); process(effect, &samples[0:samples.count()])
+            play(audio, &samples[0:samples.count()], "D3 - Half dry half compressed")
+        }
+    }
+    match Processing.Limiter.create(format(), ceiling_db:-12.0, release_seconds:0.08) {
+        failure(error) => { panic(error.detail) }
+        success(var limit) => {
+            var effect:Processing.Processor = limit; samples = phrase(); process(effect, &samples[0:samples.count()])
+            play(audio, &samples[0:samples.count()], "D4 - Limited peaks")
+        }
+    }
+}

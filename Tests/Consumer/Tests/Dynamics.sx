@@ -1,0 +1,184 @@
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.process") }; success => { panic("invalid accepted") } } }
+func compressor(channels:int = 1, rate:int = 1_000, attack:float32 = 0.0, release:float32 = 0.0, wet:float32 = 1.0) Processing.Compressor {
+    match Processing.Compressor.create(Processing.Format(sample_rate:rate, channels:channels), threshold_db:-6.020599913, ratio:2.0, attack_seconds:attack, release_seconds:release, wet:wet) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func limiter(channels:int = 1, rate:int = 1_000, release:float32 = 0.0, wet:float32 = 1.0) Processing.Limiter {
+    match Processing.Limiter.create(Processing.Format(sample_rate:rate, channels:channels), ceiling_db:-6.020599913, release_seconds:release, wet:wet) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func near(actual:float32, expected:float64) { assert(Math.abs(actual as float64 - expected) < 0.000003) }
+func signal(channels:int) float32[] {
+    var values:float32[] = []; var i = 0
+    while i < 3_007 * channels { values.append(((i * 17) % 31 - 15) as float32 / 8.0); i++ }
+    return values
+}
+test "compressor hard knee matches an independent decibel curve and explicit makeup" {
+    var effect = compressor(); var values:float32[] = [0.0 as float32, 0.25 as float32, 0.5 as float32, 1.0 as float32, -1.0 as float32]
+    require(effect.process(&values[0:values.count()]))
+    near(values[0], 0.0); near(values[1], 0.25); near(values[2], 0.5)
+    near(values[3], Math.sqrt(0.5)); near(values[4], -Math.sqrt(0.5))
+    effect.reset(); require(effect.set_makeup(6.020599913)); values = [1.0 as float32]
+    require(effect.process(&values[0:1])); near(values[0], 2.0 * Math.sqrt(0.5))
+    require(effect.set_ratio(1.0)); require(effect.set_makeup(0.0)); values = signal(1)
+    let original = values; require(effect.process(&values[0:values.count()]))
+    var i = 0; while i < values.count() { assert(values[i] == original[i]); i++ }
+}
+test "compressor attack and release follow an independent float64 envelope" {
+    var effect = compressor(attack:0.01, release:0.05)
+    require(effect.set_threshold(-12.0)); require(effect.set_ratio(4.0))
+    var values:float32[] = []; var i = 0
+    while i < 200 { if i < 100 { values.append(1.0) } else { values.append(0.1) } i++ }
+    require(effect.process(&values[0:values.count()]))
+    let threshold = Math.pow(10.0 as float64, -12.0 / 20.0)
+    let attack = 1.0 - Math.exp(-1.0 / (1000.0 * (0.01 as float32 as float64)))
+    let release = 1.0 - Math.exp(-1.0 / (1000.0 * (0.05 as float32 as float64)))
+    var envelope:float64 = 0.0; i = 0
+    while i < values.count() {
+        var dry:float64 = 0.1 as float32 as float64; if i < 100 { dry = 1.0 }
+        var step = release; if dry > envelope { step = attack }
+        envelope += step * (dry - envelope)
+        var expected = dry; if envelope > threshold { expected *= Math.pow(threshold / envelope, 0.75) }
+        near(values[i], expected); i++
+    }
+    assert(values[0] == 1.0 as float32 && values[99] < 0.5 as float32 && values[199] > values[100])
+}
+test "limiter immediate ceiling and exponential release match a float64 reference" {
+    var effect = limiter(release:0.05)
+    var values:float32[] = [1.0 as float32]; var i = 0
+    while i < 100 { values.append(0.25); i++ }
+    require(effect.process(&values[0:values.count()])); near(values[0], 0.5)
+    let step = 1.0 - Math.exp(-1.0 / (1000.0 * (0.05 as float32 as float64)))
+    var envelope:float64 = 1.0; i = 1
+    while i < values.count() {
+        envelope += step * (0.25 - envelope)
+        var expected:float64 = 0.25; if envelope > 0.5 { expected = 0.25 / envelope * 0.5 }
+        near(values[i], expected); assert(Math.abs(values[i]) <= 0.5 as float32); i++
+    }
+    assert(values[1] < values[99]); effect.reset(); require(effect.set_release(0.0))
+    values = [2.0 as float32, -2.0 as float32, 0.25 as float32]
+    require(effect.process(&values[0:3])); near(values[0], 0.5); near(values[1], -0.5); near(values[2], 0.25)
+}
+test "linked channel detection preserves balance and silent channels" {
+    var comp = compressor(channels:2); var limit = limiter(channels:2)
+    var a:float32[] = [1.0 as float32, -0.25 as float32, 0.0 as float32, 1.0 as float32]
+    var b = a; require(comp.process(&a[0:4])); require(limit.process(&b[0:4]))
+    near(a[0], Math.sqrt(0.5)); near(a[1], -0.25 * Math.sqrt(0.5)); assert(a[2] == 0.0 as float32)
+    near(b[0], 0.5); near(b[1], -0.125); assert(b[2] == 0.0 as float32)
+}
+test "dynamics preserve exact chunking reset and empty blocks on one two and eight channels" {
+    for channels in [1, 2, 8] {
+        var effects:Processing.Processor[] = [compressor(channels, attack:0.01, release:0.1), limiter(channels, release:0.1)]
+        for var effect in effects {
+            var whole = signal(channels); var split = signal(channels)
+            require(effect.process(&whole[0:whole.count()])); effect.reset()
+            require(effect.process(&split[0:0])); require(effect.process(&split[0:channels]))
+            require(effect.process(&split[channels:19 * channels])); require(effect.process(&split[19 * channels:1_001 * channels]))
+            require(effect.process(&split[1_001 * channels:split.count()]))
+            var i = 0; while i < whole.count() { assert(whole[i] == split[i]); i++ }
+        }
+    }
+}
+test "compressor dry bypass and wet mixing retain the detection history" {
+    var effect = compressor(release:0.1, wet:0.0); var baseline = compressor(release:0.1)
+    var dry:float32[] = [1.0 as float32]; var reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == 1.0 as float32)
+    require(effect.set_wet(1.0)); dry = [0.25 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == reference[0])
+    effect.reset(); baseline.reset(); effect.set_bypass(true); dry = [1.0 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == 1.0 as float32)
+    effect.set_bypass(false); dry = [0.25 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == reference[0])
+    effect.reset(); require(effect.set_wet(0.5)); dry = [1.0 as float32]; require(effect.process(&dry[0:1]))
+    near(dry[0], 0.5 + 0.5 * Math.sqrt(0.5))
+}
+test "limiter dry bypass and wet mixing retain the detection history" {
+    var effect = limiter(release:0.1, wet:0.0); var baseline = limiter(release:0.1)
+    var dry:float32[] = [2.0 as float32]; var reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == 2.0 as float32)
+    require(effect.set_wet(1.0)); dry = [0.25 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == reference[0])
+    effect.reset(); baseline.reset(); effect.set_bypass(true); dry = [2.0 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == 2.0 as float32)
+    effect.set_bypass(false); dry = [0.25 as float32]; reference = dry
+    require(effect.process(&dry[0:1])); require(baseline.process(&reference[0:1])); assert(dry[0] == reference[0])
+    effect.reset(); require(effect.set_wet(0.5)); dry = [2.0 as float32]; require(effect.process(&dry[0:1])); near(dry[0], 1.25)
+}
+test "settings survive reset and rejected controls preserve settings" {
+    var comp = compressor(); require(comp.set_threshold(-12.0)); require(comp.set_ratio(4.0)); require(comp.set_times(0.0, 0.0)); require(comp.set_makeup(6.0))
+    invalid(comp.set_ratio(0.5)); invalid(comp.set_threshold(1.0)); invalid(comp.set_times(0.0, -0.1)); invalid(comp.set_makeup(25.0)); invalid(comp.set_wet(1.1)); invalid(comp.set_times(Math.sqrt(-1.0), 0.0)); invalid(comp.set_threshold(Math.exp(1000.0)))
+    comp.reset(); var a:float32[] = [1.0 as float32]; require(comp.process(&a[0:1])); near(a[0], Math.pow(10.0 as float64, -3.0 / 20.0))
+    var limit = limiter(); require(limit.set_ceiling(-12.0)); require(limit.set_release(0.0)); invalid(limit.set_ceiling(-97.0)); invalid(limit.set_release(-1.0)); invalid(limit.set_wet(-0.1)); invalid(limit.set_release(Math.sqrt(-1.0)))
+    limit.reset(); a = [1.0 as float32]; require(limit.process(&a[0:1])); near(a[0], Math.pow(10.0 as float64, -12.0 / 20.0))
+}
+test "dynamics reject invalid formats controls and whole blocks before writes" {
+    for rate in [0, 384_001] {
+        match Processing.Compressor.create(Processing.Format(sample_rate:rate, channels:1)) { failure(error) => {}; success(value) => { panic("bad rate accepted") } }
+        match Processing.Limiter.create(Processing.Format(sample_rate:rate, channels:1)) { failure(error) => {}; success(value) => { panic("bad rate accepted") } }
+    }
+    let format = Processing.Format(sample_rate:1_000, channels:2)
+    match Processing.Compressor.create(format, ratio:Math.sqrt(-1.0)) { failure(error) => {}; success(value) => { panic("nan accepted") } }
+    match Processing.Limiter.create(format, ceiling_db:Math.exp(1000.0)) { failure(error) => {}; success(value) => { panic("inf accepted") } }
+    var effects:Processing.Processor[] = [compressor(channels:2), limiter(channels:2)]
+    for var effect in effects {
+        var bad:float32[] = [1.0 as float32, 0.0 as float32, Math.sqrt(-1.0) as float32, 0.0 as float32]
+        invalid(effect.process(&bad[0:4])); assert(bad[0] == 1.0 as float32)
+        var incomplete:float32[] = [1.0 as float32, 0.0 as float32, 0.0 as float32]
+        invalid(effect.process(&incomplete[0:3])); assert(incomplete[0] == 1.0 as float32)
+    }
+}
+test "compressor overflow preserves the failing frame and detector state" {
+    var effect = compressor(channels:2, attack:0.01, release:0.1); var baseline = compressor(channels:2, attack:0.01, release:0.1)
+    require(effect.set_ratio(1.0)); require(baseline.set_ratio(1.0)); require(effect.set_makeup(24.0)); require(baseline.set_makeup(24.0))
+    var values:float32[] = [0.1 as float32, 0.1 as float32, 0.25 as float32, 3.402823466e38 as float32]
+    var prefix:float32[] = [0.1 as float32, 0.1 as float32]; require(baseline.process(&prefix[0:2]))
+    match effect.process(&values[0:4]) { failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") }; success => { panic("overflow accepted") } }
+    assert(values[0] == prefix[0] && values[1] == prefix[1] && values[2] == 0.25 as float32 && values[3] == 3.402823466e38 as float32)
+    require(effect.set_ratio(2.0)); require(baseline.set_ratio(2.0)); require(effect.set_makeup(0.0)); require(baseline.set_makeup(0.0))
+    values = signal(2); var expected = values; require(effect.process(&values[0:values.count()])); require(baseline.process(&expected[0:expected.count()]))
+    var i = 0; while i < values.count() { assert(values[i] == expected[i]); i++ }
+}
+test "limiter bounds extreme float32 inputs and both dynamics prepare extreme formats" {
+    var effect = limiter(); require(effect.set_ceiling(-96.0))
+    var values:float32[] = [3.402823466e38 as float32, -3.402823466e38 as float32, 1.0e-40 as float32, 0.0 as float32]
+    require(effect.process(&values[0:4])); let ceiling = Math.exp(-96.0 as float32 * 0.11512925465)
+    assert(values[0] == ceiling && values[1] == -ceiling && values[2] == 1.0e-40 as float32 && values[3] == 0.0 as float32)
+    for rate in [1, 384_000] {
+        match Processing.Compressor.create(Processing.Format(sample_rate:rate, channels:8), attack_seconds:10.0, release_seconds:10.0) {
+            failure(error) => { panic(error.detail) }; success(var comp) => { values = signal(8); require(comp.process(&values[0:values.count()])); for value in values { assert(Math.is_finite(value)) } }
+        }
+        match Processing.Limiter.create(Processing.Format(sample_rate:rate, channels:8), release_seconds:10.0) {
+            failure(error) => { panic(error.detail) }; success(var limit) => { values = signal(8); require(limit.process(&values[0:values.count()])); for value in values { assert(Math.is_finite(value) && Math.abs(value) <= 1.0) } }
+        }
+    }
+}
+class Constant:Synthesis.Generator {
+    let format:Processing.Format = Processing.Format(sample_rate:1_000, channels:1)
+    func render(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] = 1.0; i++ } return Result<void, Error>.success() }
+    func reset() {}
+}
+class Double:Processing.Processor {
+    let format:Processing.Format = Processing.Format(sample_rate:1_000, channels:1)
+    func process(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] *= 2.0; i++ } return Result<void, Error>.success() }
+    func reset() {}
+}
+test "custom generator and effect compose with explicit compressor limiter order" {
+    let effects:Processing.Processor[] = [Double(), compressor(), limiter()]
+    match Synthesis.Processed.create(Constant(), effects) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var values = signal(1); require(source.render(&values[0:values.count()])); for value in values { near(value, 0.5) }
+            source.reset(); var split = signal(1); require(source.render(&split[0:17])); require(source.render(&split[17:split.count()]))
+            var i = 0; while i < values.count() { assert(values[i] == split[i]); i++ }
+        }
+    }
+}

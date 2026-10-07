@@ -235,3 +235,5 @@ appartient à Silex-Examples.
 [Créer chorus et flanger avec un délai modulé](ChorusAndFlanger.md).
 
 [Ajouter une réverbération algorithmique](Reverb.md).
+
+[Maîtriser la dynamique avec compresseur et limiteur](Dynamics.md).
