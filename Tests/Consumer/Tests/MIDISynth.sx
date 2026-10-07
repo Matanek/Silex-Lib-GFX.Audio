@@ -154,3 +154,65 @@ test "player rejects a different sample rate and incomplete frames before side e
     match music.render(&sample[0:1]) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("partial frame accepted") } }
     assert(sample[0] == 0.75 as float32 && music.rendered_frames() == 0 && source.held_notes() == 0)
 }
+func smoothed(bindings:MIDI.Binding[], frames:int) MIDI.Synthesizer {
+    match MIDI.Synthesizer.create(bindings,gain:1.0,controller_ramp_frames:frames) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+test "MIDI expression ramp removes a step on sustained sound without moving note timing" {
+    var tone = Probe(); var source = smoothed([MIDI.Binding(channel:0,program:0,instrument:tone)],4)
+    send(source,0,MIDI.Message.note_on(69,127)); var samples = zeros(12)
+    require(source.render(&samples[0:2])); assert(samples[0] == 1.0 as float32)
+    send(source,0,MIDI.Message.control_change(11,0)); require(source.render(&samples[0:12]))
+    let expected:float32[] = [1.0,0.75,0.5,0.25,0.0,0.0]
+    var frame = 0; while frame < 6 { assert(samples[frame*2] == expected[frame] && samples[frame*2+1] == expected[frame]); frame++ }
+    assert(source.held_notes() == 1 && tone.last_id == 1 && source.controller_ramp_frames == 4)
+}
+test "MIDI controller retargeting preserves current stereo levels and rejects invalid commands" {
+    var tone = Probe(); var source = smoothed([MIDI.Binding(channel:0,program:0,instrument:tone)],4)
+    send(source,0,MIDI.Message.note_on(69,127)); send(source,0,MIDI.Message.control_change(11,64))
+    var samples = zeros(10); require(source.render(&samples[0:4]))
+    let q:float64 = 64.0/127.0; let current:float64 = (1.0+q)/2.0
+    reject(source,0,MIDI.Message.control_change(7,128))
+    send(source,0,MIDI.Message.control_change(10,127)); require(source.render(&samples[0:10]))
+    var frame = 0; while frame < 5 {
+        let t = frame as float64/4.0
+        assert(Math.abs(samples[frame*2] as float64-(1.0-t)*current)<0.000001)
+        assert(Math.abs(samples[frame*2+1] as float64-((1.0-t)*current+t*q))<0.000001)
+        frame++
+    }
+    source.reset(); send(source,0,MIDI.Message.note_on(69,127)); require(source.render(&samples[0:10]))
+    for value in samples { assert(value == 1.0 as float32) }
+}
+test "MIDI ramps advance once per channel across programs blocks and replay" {
+    var first = Probe(); var second = Probe()
+    var source = smoothed([MIDI.Binding(channel:0,program:0,instrument:first),MIDI.Binding(channel:0,program:1,instrument:second)],600)
+    send(source,0,MIDI.Message.note_on(69,127)); send(source,0,MIDI.Message.program_change(1)); send(source,0,MIDI.Message.note_on(72,127))
+    send(source,0,MIDI.Message.control_change(7,0)); var expected = zeros(1_204)
+    require(source.render(&expected[0:expected.count()]))
+    var frame = 0; while frame < 602 {
+        var gain:float64 = 0.0; if frame < 600 { gain = 2.0*(1.0-frame as float64/600.0) }
+        assert(Math.abs(expected[frame*2] as float64-gain)<0.000001 && expected[frame*2] == expected[frame*2+1]); frame++
+    }
+    source.reset(); send(source,0,MIDI.Message.note_on(69,127)); send(source,0,MIDI.Message.program_change(1)); send(source,0,MIDI.Message.note_on(72,127)); send(source,0,MIDI.Message.control_change(7,0))
+    var split = zeros(expected.count()); require(source.render(&split[0:0])); var start = 0
+    while start < split.count() { var end = start+14; if end > split.count() { end = split.count() }
+        require(source.render(&split[start:end])); start = end }
+    var i = 0; while i < split.count() { assert(split[i] == expected[i]); i++ }
+}
+test "MIDI controller smoothing is optional bounded and independent between channels" {
+    var first = Probe(); var second = Probe(); var source = smoothed([MIDI.Binding(channel:0,program:0,instrument:first),MIDI.Binding(channel:1,program:0,instrument:second)],4)
+    send(source,0,MIDI.Message.note_on(69,127)); send(source,1,MIDI.Message.note_on(72,127)); send(source,0,MIDI.Message.control_change(11,0))
+    var samples = zeros(10); require(source.render(&samples[0:10])); let expected:float32[] = [2.0,1.75,1.5,1.25,1.0]
+    var frame = 0; while frame < 5 { assert(samples[frame*2] == expected[frame] && samples[frame*2+1] == expected[frame]); frame++ }
+    var immediate = smoothed([MIDI.Binding(channel:0,program:0,instrument:Probe())],0)
+    send(immediate,0,MIDI.Message.note_on(69,127)); send(immediate,0,MIDI.Message.control_change(11,0)); require(immediate.render(&samples[0:10])); for value in samples { assert(value == 0.0 as float32) }
+    let durations:int[] = [-1,16_777_217]
+    for duration in durations {
+        match MIDI.Synthesizer.create([MIDI.Binding(channel:0,program:0,instrument:Probe())],controller_ramp_frames:duration) {
+            failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(value) => { panic("controller ramp limit accepted") }
+        }
+    }
+    var maximum = smoothed([MIDI.Binding(channel:0,program:0,instrument:Probe())],16_777_216)
+    send(maximum,0,MIDI.Message.note_on(69,127)); send(maximum,0,MIDI.Message.control_change(11,0)); require(maximum.render(&samples[0:2])); assert(samples[0] == 1.0 as float32)
+}

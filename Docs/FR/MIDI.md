@@ -3,7 +3,9 @@
 `GFX.Audio.MIDI` lit une partition et commande les instruments procéduraux de
 l’application. [MIDIMelody.sx](../MIDIMelody.sx) joue deux pistes à 120 puis
 150 BPM, avec changement de programme, balance stéréo, expression, sustain et
-queue d’écho. La fixture `.mid` contient des événements, aucune banque de sons.
+queue d’écho. Elle lisse les changements de volume, d’expression et de balance
+sur 240 frames (5 ms à 48 kHz) pour éviter les sauts de niveau. La fixture `.mid`
+contient des événements, aucune banque de sons.
 Depuis `SilexProject/` :
 
 ```sh
@@ -23,7 +25,7 @@ Fragment avec un `score:MIDI.Score` lu à 48 kHz et un
 ```sx
 match MIDI.Synthesizer.create([
     MIDI.Binding(channel:0, program:0, instrument:lead),
-], gain:0.25) {
+], gain:0.25, controller_ramp_frames:240) {
     failure(error) => { panic(error.detail) }
     success(var synth) => {
         match MIDI.Player.create(score, synth) {
@@ -44,7 +46,8 @@ Sélectionner un couple canal/programme absent, ou lui envoyer un note-on,
 provoque `unsupported`, sans son implicite.
 Aucun traitement spécial du canal de percussion ni correspondance General MIDI.
 
-`Synthesizer.create(bindings, note_capacity:256, bend_range:2, gain:0.2)` accepte
+`Synthesizer.create(bindings, note_capacity:256, bend_range:2, gain:0.2,
+controller_ramp_frames:0)` accepte
 1..128 bindings distincts, un pool de 1..4 096 notes tenues, ±0..24 demi-tons et
 un gain fini 0..1. Tous les instruments doivent avoir le même format stéréo,
 à fréquence entière 1..16 777 216 Hz. Utiliser une instance indépendante par
@@ -75,9 +78,19 @@ l’instrument, notamment pour sa capacité ou une fréquence hors plage.
 
 Volume, expression et balance sont appliqués après le rendu de chaque instrument
 et valent aussi pour les voix d’un ancien programme. Bend et sustain sont
-transmis à tous les bindings du canal. Ces contrôleurs changent immédiatement ;
-ils n’ajoutent ni rampes ni humanisation. Pour les valeurs MIDI de gain et de
-balance, les LSB haute résolution sont ignorés, comme CC0/32 bank select,
+transmis à tous les bindings du canal. Pour éviter un craquement lors d’un
+changement de niveau sur des voix encore audibles, choisir
+`controller_ramp_frames:240` (5 ms à 48 kHz). Cette durée, bornée à
+0..16 777 216 frames, lisse linéairement les gains stéréo résultant de CC7, CC11
+et CC10. Zéro conserve le changement immédiat, et reste la valeur par défaut.
+La première frame garde le niveau courant ; la cible est atteinte après la
+durée choisie. Une nouvelle cible repart du niveau courant, même pendant une
+rampe. Tous les programmes d’un canal partagent cette progression, avancée une
+fois par frame ; reset restaure les niveaux initiaux et annule les rampes.
+Les événements gardent leur date exacte : ce lissage n’ajoute ni humanisation
+ni retard aux notes, ni rampe au bend, au sustain ou à l’arrêt immédiat CC120.
+Pour les valeurs MIDI de gain et de balance, les LSB haute résolution sont ignorés,
+comme CC0/32 bank select,
 CC121 reset controllers, RPN/NRPN, modulation et les autres contrôleurs.
 `poly_pressure` et `channel_pressure` sont validés puis ignorés.
 

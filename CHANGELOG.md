@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Optional MIDI volume, expression and balance smoothing, configured in frames; the melody uses 5 ms to avoid the click caused by an expression drop on sustained voices. Note dates remain unchanged, with continuous targets across blocks and programs.
+
+- MIDI 1.0 control in GFX.Audio: bounded SMF 0/1 PPQN scores, tempo and stable merging without rounding drift, channel/program-selected instruments, FIFO identities, sustain/gain/balance/bend, explicit endings and tails; memory and stream rendering without banks or a system MIDI decoder.
+
+- Continuous gain/pitch controls and ramps: retarget from the current level, preserve phase and use frame commands. A bounded stream producer retains suffixes after partial writes, with distinct counters, chosen duration and explicit lifetime; engine/chord recipes avoid restarting short sounds.
+
+- Polyphonic sine instruments: identities, velocity, ADSR, sustain, bend and bounded voice reassignment with configurable transitions. A frame-clock command score provides stable ordering, recoverable lateness/capacity errors, composable user instruments and a melody without banks.
+
 - Composable compressor and limiter: threshold/ratio, attack/release, explicit makeup, sample ceiling, linked channel peaks and an accent comparison without sound banks.
 
 - Composable algorithmic reverb: prepared room size, adjustable decay and damping, mix/bypass, per-channel history, echo/tail/color oracles and plucked notes without sound banks.

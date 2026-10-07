@@ -20,7 +20,7 @@ func music() Result<Synthesis.Processed, Error> {
         MIDI.Binding(channel:0,program:0,instrument:bass),
         MIDI.Binding(channel:1,program:1,instrument:lead),
         MIDI.Binding(channel:1,program:2,instrument:bright),
-    ],gain:0.35)
+    ],gain:0.35,controller_ramp_frames:240)
     var player = try MIDI.Player.create(score,synth)
     var echo = try Processing.Delay.create(player.format,delay_frames:7_200,feedback:0.25,wet:0.25)
     return Synthesis.Processed.create(player,[echo])

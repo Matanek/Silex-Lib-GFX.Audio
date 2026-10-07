@@ -3,7 +3,9 @@
 `GFX.Audio.MIDI` reads a score and controls the application's procedural
 instruments. [MIDIMelody.sx](../MIDIMelody.sx) plays two tracks at 120 then
 150 BPM, with program change, stereo balance, expression, sustain and an echo
-tail. The `.mid` fixture contains events, no sound bank. From `SilexProject/`:
+tail. It smooths volume, expression and balance changes over 240 frames
+(5 ms at 48 kHz) to avoid level steps. The `.mid` fixture contains events, no sound
+bank. From `SilexProject/`:
 
 ```sh
 silex run Packages/GFX.Audio/Docs/MIDIMelody.sx --release
@@ -22,7 +24,7 @@ Fragment with a `score:MIDI.Score` read at 48 kHz and a prepared stereo
 ```sx
 match MIDI.Synthesizer.create([
     MIDI.Binding(channel:0, program:0, instrument:lead),
-], gain:0.25) {
+], gain:0.25, controller_ramp_frames:240) {
     failure(error) => { panic(error.detail) }
     success(var synth) => {
         match MIDI.Player.create(score, synth) {
@@ -42,7 +44,8 @@ their original instrument. Selecting a missing channel/program pair, or sending 
 `unsupported`, without an implicit sound. There is no special percussion-channel handling or
 General MIDI mapping.
 
-`Synthesizer.create(bindings, note_capacity:256, bend_range:2, gain:0.2)` accepts
+`Synthesizer.create(bindings, note_capacity:256, bend_range:2, gain:0.2,
+controller_ramp_frames:0)` accepts
 1..128 distinct bindings, a pool of 1..4,096 held notes, ±0..24 semitones and a
 finite gain in 0..1. All instruments must share the same stereo format with an
 integer rate in 1..16,777,216 Hz. Use an independent instance per binding;
@@ -73,8 +76,17 @@ including for capacity or an unsupported frequency.
 
 Volume, expression and balance apply after each instrument renders and also
 apply to voices from an earlier program. Bend and sustain reach all bindings
-on the channel. These controllers change immediately; they add no ramps or
-humanization. High-resolution gain/balance LSBs are ignored, along with CC0/32
+on the channel. To avoid a click when changing levels while voices remain
+audible, choose `controller_ramp_frames:240` (5 ms at 48 kHz). This duration,
+bounded to 0..16,777,216 frames, linearly smooths the stereo gains resulting from
+CC7, CC11 and CC10. Zero preserves immediate changes and remains the default.
+The first frame keeps the current level; the target is reached after the chosen
+duration. A new target starts from the current level, including during a ramp.
+All programs on a channel share this progression, advanced once per frame;
+reset restores initial levels and cancels ramps. Events keep their exact date:
+this smoothing adds no humanization or delay to notes, and no ramp to bend,
+sustain or the immediate CC120 cut.
+High-resolution gain/balance LSBs are ignored, along with CC0/32
 bank select, CC121 reset controllers, RPN/NRPN, modulation and other controllers.
 `poly_pressure` and `channel_pressure` are validated then ignored.
 
