@@ -210,3 +210,5 @@ La démonstration [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/
 appartient à Silex-Examples.
 
 [Commander des groupes de lectures](Groups.md).
+
+[Rendre un mix en mémoire](Offline.md).

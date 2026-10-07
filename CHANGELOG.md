@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Audio.offline and render produce owned PCM blocks without a device, normalization or hidden clipping.
+
 - Playback groups compose gains and independent pause reasons, with reassignment and destruction preserving individual settings.
 
 - Source format and explicit duration, start/seeking in frames and bounded end observation. Seeking discards converted frames from the previous position.

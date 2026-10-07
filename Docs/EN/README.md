@@ -204,3 +204,5 @@ The [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/main/Sources/S
 demonstration belongs to Silex-Examples.
 
 [Control playback groups](Groups.md).
+
+[Render a mix in memory](Offline.md).

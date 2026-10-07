@@ -1,0 +1,20 @@
+use GFX.Audio
+func main() {
+    match Audio.offline(sample_rate:48_000, channels:1) {
+        failure(error) => { panic(error.detail) }
+        success(var audio) => {
+            var samples:float32[] = [0.5 as float32, -0.5 as float32]
+            let sound = audio.create(@samples[0:2], sample_rate:48_000)
+            let group = audio.group(volume:0.5)
+            let playing = audio.play(sound, Audio.Playback(group:group))
+            match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+            match audio.render(frames:4) {
+                failure(error) => { panic(error.detail) }
+                success(output) => { assert(output.count() == 4); assert(output[0] == 0.25 as float32 && output[1] == -0.25 as float32); assert(output[2] == 0.0 as float32 && output[3] == 0.0 as float32) }
+            }
+            assert(audio.rendered_frames() == 4)
+            var ends = audio.drain_end_events()
+            assert(ends.count() == 1 && ends[0].reason == Audio.EndReason.finished())
+        }
+    }
+}

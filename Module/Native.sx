@@ -1,6 +1,8 @@
 use Interop.Boundary
 use Interop.C
 use STD.Math
+use STD.Error
+use STD.Error.Kind
 
 func initialize() {
     if sdl_init_subsystem(audio_flags()) == 0 {
@@ -12,9 +14,11 @@ func initialize() {
     }
 }
 
-func shutdown() {
+func initialize_offline() bool { return mix_init() != 0 }
+
+func shutdown(offline:bool = false) {
     mix_quit()
-    sdl_quit_subsystem(audio_flags())
+    if !offline { sdl_quit_subsystem(audio_flags()) }
 }
 
 func audio_flags() uint32 { return 0x0000_0010 as uint32 }
@@ -275,15 +279,13 @@ let sdl_free = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3, na
 let sdl_io_from_const_mem = C.function<func(C.Pointer<uint8>, C.Size) C.Pointer<uint8> >(library:Boundary.SDL3, name:"SDL_IOFromConstMem")
 let mix_load_audio_io = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, uint8, uint8) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"MIX_LoadAudio_IO")
 
-func create_offline_mixer(sample_rate:int, channels:int) uint {
+func try_create_offline_mixer(sample_rate:int, channels:int) uint {
     var spec:uint[2]
     let address = C.address_bits(C.mutable_pointer(spec))
     let f = C.store<uint32>(address, 0 as uint, 0x8120 as uint32)
     let c = C.store<int32>(address, 4 as uint, channels as int32)
     let hz = C.store<int32>(address, 8 as uint, sample_rate as int32)
-    let mixer = C.address_bits(mix_create_mixer(C.pointer_bits(address)))
-    if mixer == 0 as uint { panic("GFX.Audio could not create an offline mixer: " + error()) }
-    return mixer
+    return C.address_bits(mix_create_mixer(C.pointer_bits(address)))
 }
 
 func create_stream(sample_rate:int, channels:int) uint {
@@ -292,7 +294,12 @@ func create_stream(sample_rate:int, channels:int) uint {
     let f = C.store<uint32>(address, 0 as uint, 0x8120 as uint32)
     let c = C.store<int32>(address, 4 as uint, channels as int32)
     let hz = C.store<int32>(address, 8 as uint, sample_rate as int32)
-    return C.address_bits(sdl_create_audio_stream(C.pointer_bits(address), C.pointer_bits(address)))
+    let input = C.address_bits(sdl_create_audio_stream(C.pointer_bits(address), C.pointer_bits(address)))
+    if input != 0 as uint && sdl_set_boolean_property(sdl_get_audio_stream_properties(C.pointer_bits(input)), C.terminated_pointer("SDL.audiostream.auto_cleanup"), 0) == 0 {
+        sdl_destroy_audio_stream(C.pointer_bits(input))
+        return 0 as uint
+    }
+    return input
 }
 
 func create_stream_track(mixer:uint, stream:uint) uint {
@@ -368,3 +375,28 @@ let mix_set_track_playback_position = C.function<func(C.Pointer<uint8>, int) uin
 
 let mix_lock_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_LockMixer")
 let mix_unlock_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_UnlockMixer")
+
+func create_offline_mixer(sample_rate:int, channels:int) uint {
+    let mixer = try_create_offline_mixer(sample_rate, channels)
+    if mixer == 0 as uint { panic("GFX.Audio could not create an offline mixer: " + error()) }
+    return mixer
+}
+func render(mixer:uint, samples:int) Result<float32[], Error> {
+    let bytes = samples * 4
+    let data = C.address_bits(sdl_malloc(bytes as C.Size))
+    if data == 0 as uint { return Result<float32[], Error>.failure(Error(kind:Kind.resource_exhausted(), operation:"audio.render", subject:null, detail:error())) }
+    let mixed = mix_generate(C.pointer_bits(mixer), C.pointer_bits(data), bytes as int32)
+    if mixed < 0 {
+        let detail = error()
+        sdl_free(C.pointer_bits(data))
+        return Result<float32[], Error>.failure(Error(kind:Kind.other(), operation:"audio.render", subject:null, detail:detail))
+    }
+    var output:float32[] = []
+    var index = 0
+    while index < samples { output.append(C.load<float32>(data, (index * 4) as uint)); index++ }
+    sdl_free(C.pointer_bits(data))
+    return Result<float32[], Error>.success(output)
+}
+let mix_generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
+
+let sdl_get_audio_stream_properties = C.function<func(C.Pointer<uint8>) uint32>(library:Boundary.SDL3, name:"SDL_GetAudioStreamProperties")

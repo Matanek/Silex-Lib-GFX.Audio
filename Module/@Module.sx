@@ -260,6 +260,9 @@ class PlaybackEntry {
 
 public class Audio {
     private var owner:Owner
+    private let offline_mode:bool
+    private let output_channels:int
+    private var rendered:int
     private let mixer:uint
     private var sounds:SoundEntry[]
     private var playbacks:PlaybackEntry[]
@@ -268,6 +271,9 @@ public class Audio {
     private var reserved_ends:int
 
     init() {
+        self.offline_mode = false
+        self.output_channels = 0
+        self.rendered = 0
         self.owner = Owner()
         Native.initialize()
         self.mixer = Native.create_mixer()
@@ -278,7 +284,10 @@ public class Audio {
         self.reserved_ends = 0
     }
 
-    module init(native_mixer:uint) {
+    module init(native_mixer:uint, offline:bool = false, channels:int = 0) {
+        self.offline_mode = offline
+        self.output_channels = channels
+        self.rendered = 0
         self.owner = Owner()
         self.mixer = native_mixer
         self.sounds = []
@@ -302,7 +311,37 @@ public class Audio {
             sound_index++
         }
         Native.destroy_mixer(self.mixer)
-        Native.shutdown()
+        Native.shutdown(self.offline_mode)
+    }
+
+    static func offline(sample_rate:int, channels:int = 2) Result<Audio, Error> {
+        if sample_rate < 1 || sample_rate > 2_147_483_647 || channels < 1 || channels > 8 {
+            return Result<Audio, Error>.failure(stream_error(Kind.invalid_input(), "audio.offline", "invalid sample rate or channels"))
+        }
+        if !Native.initialize_offline() { return Result<Audio, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.offline", Native.error())) }
+        let mixer = Native.try_create_offline_mixer(sample_rate, channels)
+        if mixer == 0 as uint {
+            let detail = Native.error()
+            Native.shutdown(true)
+            return Result<Audio, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.offline", detail))
+        }
+        return Result<Audio, Error>.success(Audio(native_mixer:mixer, offline:true, channels:channels))
+    }
+    func rendered_frames() int { return self.rendered }
+    func render(frames:int) Result<float32[], Error> {
+        if !self.offline_mode { return Result<float32[], Error>.failure(stream_error(Kind.unsupported(), "audio.render", "render requires Audio.offline")) }
+        if frames < 0 || frames > 2_147_483_647 / (self.output_channels * 4) || self.rendered > 9_223_372_036_854_775_807 - frames {
+            return Result<float32[], Error>.failure(stream_error(Kind.invalid_input(), "audio.render", "frame count is outside the render range"))
+        }
+        if frames == 0 { return Result<float32[], Error>.success([]) }
+        match Native.render(self.mixer, frames * self.output_channels) {
+            failure(error) => { return Result<float32[], Error>.failure(error) }
+            success(samples) => {
+                self.rendered += frames
+                self.collect_finished()
+                return Result<float32[], Error>.success(samples)
+            }
+        }
     }
 
     func load(path:str) Sound {
@@ -462,7 +501,7 @@ public class Audio {
         if state.closed || state.stopped { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.wait_writable", "stream input is closed or stopped")) }
         var consumed = self.stream_consumed(stream.playback, state)
         while state.capacity - (state.written - consumed) < minimum_frames {
-            if !state.started || self.is_paused(stream.playback) { return Result<void, Error>.failure(stream_error(Kind.resource_busy(), "audio.wait_writable", "full stream cannot make progress before playback or while paused")) }
+            if self.offline_mode || !state.started || self.is_paused(stream.playback) { return Result<void, Error>.failure(stream_error(Kind.resource_busy(), "audio.wait_writable", "full stream requires rendering offline, playback to start, or a paused playback to resume")) }
             if !Native.is_playing(self.require_playback(stream.playback).handle) { return Result<void, Error>.failure(stream_error(Kind.other(), "audio.wait_writable", "stream playback ended unexpectedly")) }
             Native.wait()
             consumed = self.stream_consumed(stream.playback, state)
@@ -572,6 +611,7 @@ public class Audio {
     func wait(sound:PlayingSound) {
         var entry = self.require_playback(sound)
         while self.is_playing(sound) || self.is_paused(sound) {
+            if self.offline_mode { panic("GFX.Audio offline playback progresses through render, not wait") }
             Native.wait()
         }
         self.collect_finished()

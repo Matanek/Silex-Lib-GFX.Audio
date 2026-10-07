@@ -43,7 +43,7 @@ def main():
         if digest(path) != expected:
             parser.error(f"upstream checksum mismatch: {path}")
     package = Path(__file__).resolve().parents[1]
-    patch = package / "Boundary/SDL3_mixer-3.2.4-silex.5.patch"
+    patch = package / "Boundary/SDL3_mixer-3.2.4-silex.6.patch"
     metadata = package / "Boundary" / args.target / "Artifact.SDL3_mixer.json"
     # The artifact metadata pins the complete patch, including the existing spatial fix.
     if digest(patch) != json.loads(metadata.read_text())["patch_sha256"]:

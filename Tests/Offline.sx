@@ -1,0 +1,106 @@
+use GFX.Audio
+use STD.Error.Kind
+use STD.Math
+func offline(rate:int = 48_000, channels:int = 1) Audio {
+    match Audio.offline(sample_rate:rate, channels:channels) { failure(error) => { panic(error.detail) }; success(audio) => { return audio } }
+}
+func render(audio:&Audio, frames:int) float32[] {
+    match audio.render(frames) { failure(error) => { panic(error.detail) }; success(samples) => { return samples } }
+}
+test "offline mixes gains scheduling repeat and silence without hidden clipping" {
+    var audio = offline()
+    var samples:float32[] = [0.5 as float32, 0.25 as float32, -0.5 as float32, -0.25 as float32]
+    let sound = audio.create(@samples[0:4], sample_rate:48_000)
+    let group = audio.group(volume:0.5)
+    let a = audio.play(sound, Audio.Playback(group:group))
+    var first = render(audio, 2)
+    assert(first.count() == 2 && first[0] == 0.25 as float32 && first[1] == 0.125 as float32)
+    let b = audio.play(sound, Audio.Playback(volume:0.5))
+    var second = render(audio, 4)
+    assert(second[0] == 0.0 as float32 && second[1] == 0.0 as float32)
+    assert(second[2] == -0.25 as float32 && second[3] == -0.125 as float32)
+    assert(audio.rendered_frames() == 6)
+    var silence = render(audio, 2)
+    assert(silence[0] == 0.0 as float32 && silence[1] == 0.0 as float32)
+    let c = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), volume:4.0))
+    var loud = render(audio, 8)
+    assert(loud.count() == 8 && loud[0] == 2.0 as float32 && loud[4] == 2.0 as float32)
+    audio.stop(c)
+    let positive = audio.play(sound, Audio.Playback(volume:3.0))
+    let negative = audio.play(sound, Audio.Playback(volume:1.5, start_frame:2))
+    var cancellation = render(audio, 1)
+    assert(cancellation[0] == 0.75 as float32)
+    audio.stop(positive)
+    audio.stop(negative)
+    assert(render(audio, 0).is_empty())
+    match audio.render(-1) { success(value) => { panic("negative accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match audio.render(2_147_483_647) { success(value) => { panic("oversized accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+}
+test "resampled offline blocks equal whole render and own their storage" {
+    var result:float32[] = []
+    var expected:float32[] = []
+    {
+        var a = offline(channels:2)
+        var b = offline(channels:2)
+        var input:float32[] = []
+        var i = 0
+        while i < 64 { input.append(((i % 16) as float / 32.0) as float32); input.append((-((i % 16) as float) / 64.0) as float32); i++ }
+        let sa = a.create(@input[0:input.count()], sample_rate:24_000, channels:2)
+        let sb = b.create(@input[0:input.count()], sample_rate:24_000, channels:2)
+        let pa = a.play(sa)
+        let pb = b.play(sb)
+        expected = render(a, 160)
+        i = 0
+        while i < 160 { var block = render(b, 5); for sample in block { result.append(sample) }
+            i += 5 }
+    }
+    assert(result.count() == 320 && expected.count() == 320)
+    var i = 0
+    while i < 320 { assert(Math.abs(result[i] as float - expected[i] as float) < 0.000001); i++ }
+    assert(result[0] == expected[0])
+}
+test "offline rejects invalid formats device rendering and waits without progress" {
+    match Audio.offline(sample_rate:0) { success(audio) => { panic("invalid rate") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match Audio.offline(sample_rate:48_000, channels:9) { success(audio) => { panic("invalid channels") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    var device = Audio()
+    match device.render(1) { success(samples) => { panic("device render") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
+    var audio = offline()
+    match audio.stream(sample_rate:48_000, capacity_frames:1) {
+        failure(error) => { panic(error.detail) }
+        success(stream) => {
+            var samples:float32[] = [0.25 as float32]
+            match audio.write(stream, @samples[0:1]) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 1) } }
+            let playing = audio.play(stream)
+            match audio.wait_writable(stream) { success => { panic("offline wait blocked") }; failure(error) => { assert(error.kind == Kind.resource_busy()) } }
+            var out = render(audio, 1)
+            assert(out[0] == samples[0])
+            match audio.wait_writable(stream) { failure(error) => { panic(error.detail) }; success => {} }
+            assert(audio.release(stream))
+        }
+    }
+}
+test "offline owned stream survives device shutdown and retains its pending frame" {
+    var audio = offline()
+    match audio.stream(sample_rate:48_000, capacity_frames:2) {
+        failure(error) => { panic(error.detail) }
+        success(stream) => {
+            var samples:float32[] = [0.25 as float32, -0.25 as float32]
+            match audio.write(stream, @samples[0:2]) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 2) } }
+            let playing = audio.play(stream)
+            {
+                var device = Audio()
+                let sound = device.create(@samples[0:2], sample_rate:48_000)
+                let device_playing = device.play(sound)
+                device.wait(device_playing)
+                var first = render(audio, 1)
+                assert(first[0] == samples[0])
+            }
+            var second = render(audio, 1)
+            assert(second[0] == samples[1])
+            match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+            var silence = render(audio, 1)
+            assert(silence[0] == 0.0 as float32)
+            assert(audio.release(stream))
+        }
+    }
+}
