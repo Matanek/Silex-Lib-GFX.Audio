@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Adds a procedural recipe guide from beeps to MIDI scores, including units, level control and extension contracts.
+
 - Optional MIDI volume, expression and balance smoothing, configured in frames; the melody uses 5 ms to avoid the click caused by an expression drop on sustained voices. Note dates remain unchanged, with continuous targets across blocks and programs.
 
 - MIDI 1.0 control in GFX.Audio: bounded SMF 0/1 PPQN scores, tempo and stable merging without rounding drift, channel/program-selected instruments, FIFO identities, sustain/gain/balance/bend, explicit endings and tails; memory and stream rendering without banks or a system MIDI decoder.

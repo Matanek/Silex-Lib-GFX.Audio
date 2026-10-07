@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajoute un guide de choix des recettes procédurales, du bip aux partitions MIDI, avec unités, contrôle des niveaux et contrats d’extension.
+
 - Lissage MIDI optionnel du volume, de l’expression et de la balance, réglé en frames ; la mélodie utilise 5 ms pour éviter le craquement provoqué par une baisse d’expression sur des voix soutenues. Dates des notes conservées, cibles continues entre blocs et programmes.
 
 - Commande MIDI 1.0 dans GFX.Audio : partitions SMF 0/1 PPQN bornées, tempo et fusion stable sans dérive d’arrondi, instruments choisis par canal/programme, identités FIFO, sustain/gain/balance/bend, fin et queues explicites ; rendu mémoire et flux sans banque ni décodeur MIDI système.
