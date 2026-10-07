@@ -138,6 +138,11 @@ Un producteur peut alimenter une seule lecture continue avec une capacité
 explicite, sans calculer le son entier. Le [guide du flux](Streaming.md) décrit
 le préremplissage, les écritures partielles, les contrôles et la fermeture.
 
+## Inspecter et suivre une lecture
+
+Le [guide de chronologie](Timeline.md) décrit format, durée, navigation et
+notifications de fin conservées après collecte.
+
 ## Contrôler une lecture
 
 `Audio.play` retourne un `Audio.PlayingSound` qui identifie une instance

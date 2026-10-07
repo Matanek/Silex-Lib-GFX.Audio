@@ -1,0 +1,139 @@
+use GFX.Audio
+use GFX.Audio.Native
+use Interop.Boundary
+use Interop.C
+use STD.Error.Kind
+let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
+func watch(audio:&Audio, playing:Audio.PlayingSound) {
+    match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+}
+func seek(audio:&Audio, playing:Audio.PlayingSound, frame:int) {
+    match audio.seek_frames(playing, frame) { failure(error) => { panic(error.detail) }; success => {} }
+}
+test "known source format start frame seek pause and stable end identities" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.0 as float32, 0.1 as float32, 0.2 as float32, 0.3 as float32, 0.4 as float32, 0.5 as float32, 0.6 as float32, 0.7 as float32]
+    let sound = audio.create(@samples[0:8], sample_rate:48_000)
+    match audio.sound_info(sound) {
+        failure(error) => { panic(error.detail) }
+        success(info) => {
+            assert(info.sample_rate == 48_000 && info.channels == 1)
+            match info.duration { frames(count) => { assert(count == 8) }; unknown => { panic("duration unknown") }; infinite => { panic("duration infinite") } }
+            assert(info.duration_seconds() != null)
+        }
+    }
+    let playing = audio.play(sound, Audio.Playback(start_frame:2))
+    watch(audio, playing)
+    watch(audio, playing)
+    var buffer:uint[1]
+    let ptr = C.address_bits(C.mutable_pointer(buffer))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4) == 4)
+    assert(C.load<float32>(ptr, 0 as uint) == samples[2])
+    audio.pause(playing)
+    seek(audio, playing, 5)
+    match audio.playback_info(playing) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.paused && info.position_frames == 5) } }
+    audio.resume(playing)
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4) == 4)
+    assert(C.load<float32>(ptr, 0 as uint) == samples[5])
+    match audio.seek_frames(playing, 9) { success => { panic("past end accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    seek(audio, playing, 8)
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4) == 0)
+    audio.collect_finished()
+    let next = audio.play(sound)
+    watch(audio, next)
+    assert(audio.release(next))
+    var events = audio.drain_end_events()
+    assert(events.count() == 2)
+    assert(events[0].playback.matches(playing) && events[0].reason == Audio.EndReason.finished())
+    assert(!events[0].playback.matches(next))
+    assert(events[1].playback.matches(next) && events[1].reason == Audio.EndReason.released())
+    assert(audio.drain_end_events().is_empty())
+}
+test "seek discards prepared resampled output and matches a fresh start" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    Native.initialize()
+    let reference_mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var reference = Audio(native_mixer:reference_mixer)
+    var samples:float32[] = []
+    var i = 0
+    while i < 128 { samples.append(((i % 32) as float / 64.0) as float32); i++ }
+    let sound = audio.create(@samples[0:128], sample_rate:24_000)
+    let ref_sound = reference.create(@samples[0:128], sample_rate:24_000)
+    let playing = audio.play(sound)
+    var actual:uint[4]
+    var expected:uint[4]
+    let a = C.address_bits(C.mutable_pointer(actual))
+    let b = C.address_bits(C.mutable_pointer(expected))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(a), 32) == 32)
+    seek(audio, playing, 64)
+    let ref_playing = reference.play(ref_sound, Audio.Playback(start_frame:64))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(a), 32) == 32)
+    assert(generate(C.pointer_bits(reference_mixer), C.pointer_bits(b), 32) == 32)
+    i = 0
+    while i < 8 { assert(C.load<float32>(a, (i * 4) as uint) == C.load<float32>(b, (i * 4) as uint)); i++ }
+}
+test "watched stops and nonseekable streams report one reason without loss" {
+    var audio = Audio()
+    match audio.stream(sample_rate:48_000, capacity_frames:4) {
+        failure(error) => { panic(error.detail) }
+        success(source) => {
+            let playing = audio.play(source)
+            watch(audio, playing)
+            match audio.seek_frames(playing, 0) { success => { panic("stream seek accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
+            audio.stop(playing)
+            audio.wait(playing)
+            assert(audio.release(source))
+            var events = audio.drain_end_events()
+            assert(events.count() == 1 && events[0].reason == Audio.EndReason.stopped())
+            assert(events[0].playback.matches(playing))
+        }
+    }
+}
+
+test "event reservations stay bounded and draining permits another watcher" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.25 as float32]
+    let sound = audio.create(@samples[0:1], sample_rate:48_000)
+    var playing:Audio.PlayingSound[] = []
+    var i = 0
+    while i < 256 { let item = audio.play(sound); watch(audio, item); playing.append(item); i++ }
+    let extra = audio.play(sound)
+    match audio.watch_end(extra) { success => { panic("event capacity unbounded") }; failure(error) => { assert(error.kind == Kind.would_block()) } }
+    for item in playing { assert(audio.release(item)) }
+    var events = audio.drain_end_events()
+    assert(events.count() == 256)
+    watch(audio, extra)
+    audio.stop(extra)
+    assert(audio.drain_end_events().count() == 1)
+}
+
+test "repeat resets source chronology while speed preserves source duration" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.1 as float32, 0.2 as float32, 0.3 as float32, 0.4 as float32]
+    let sound = audio.create(@samples[0:4], sample_rate:48_000)
+    let playing = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.times(2), start_frame:1))
+    watch(audio, playing)
+    var output:uint[4]
+    let ptr = C.address_bits(C.mutable_pointer(output))
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 28) == 28)
+    var i = 0
+    while i < 7 {
+        var frame = i + 1
+        if i >= 3 { frame = i - 3 }
+        assert(C.load<float32>(ptr, (i * 4) as uint) == samples[frame])
+        i++
+    }
+    assert(audio.drain_end_events().count() == 1)
+    let fast = audio.play(sound, Audio.Playback(speed:2.0))
+    watch(audio, fast)
+    assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 8) == 8)
+    assert(audio.drain_end_events().count() == 1)
+}

@@ -88,7 +88,7 @@ func destroy_track(track:uint) {
     mix_destroy_track(C.pointer_bits(track))
 }
 
-func play(track:uint, loops:int, fade_in_seconds:float) {
+func play(track:uint, loops:int, fade_in_seconds:float, start_frame:int = 0) {
     let properties = sdl_create_properties()
     if properties == 0 { panic("GFX.Audio could not configure playback: " + error()) }
     if sdl_set_number_property(
@@ -107,6 +107,7 @@ func play(track:uint, loops:int, fade_in_seconds:float) {
         sdl_destroy_properties(properties)
         panic("GFX.Audio could not configure fade-in: " + error())
     }
+    if start_frame > 0 { require(sdl_set_number_property(properties, C.terminated_pointer("SDL_mixer.play.start_frame"), start_frame) != 0, "configure start frame") }
     let started = mix_play_track(C.pointer_bits(track), properties) != 0
     sdl_destroy_properties(properties)
     require(started, "start playback")
@@ -343,3 +344,16 @@ func clear_stream(stream:uint) { require(sdl_clear_audio_stream(C.pointer_bits(s
 let sdl_clear_audio_stream = C.function<func(C.Pointer<uint8>) uint8>(library:Boundary.SDL3, name:"SDL_ClearAudioStream")
 
 let mix_track_drained = C.function<func(C.Pointer<uint8>) uint8>(library:Boundary.SDL3_mixer, name:"Silex_MIX_TrackDrained")
+
+struct SourceFormat { let sample_rate:int; let channels:int }
+func sound_format(audio:uint) SourceFormat {
+    var spec:uint[2]
+    let ptr = C.address_bits(C.mutable_pointer(spec))
+    require(mix_get_audio_format(C.pointer_bits(audio), C.pointer_bits(ptr)) != 0, "query source format")
+    return SourceFormat(sample_rate:C.load<int32>(ptr, 8 as uint) as int, channels:C.load<int32>(ptr, 4 as uint) as int)
+}
+func sound_duration(audio:uint) int { return mix_get_audio_duration(C.pointer_bits(audio)) }
+func seek_frames(track:uint, frame:int) bool { return mix_set_track_playback_position(C.pointer_bits(track), frame) != 0 }
+let mix_get_audio_format = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) uint8>(library:Boundary.SDL3_mixer, name:"MIX_GetAudioFormat")
+let mix_get_audio_duration = C.function<func(C.Pointer<uint8>) int>(library:Boundary.SDL3_mixer, name:"MIX_GetAudioDuration")
+let mix_set_track_playback_position = C.function<func(C.Pointer<uint8>, int) uint8>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackPlaybackPosition")

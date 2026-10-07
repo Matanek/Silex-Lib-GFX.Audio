@@ -13,8 +13,8 @@ sdl_source="$(cd -- "$1" && pwd)"
 mixer_source="$(cd -- "$2" && pwd)"
 target="$3"
 output_dir="$4"
-patch_file="$audio_package_dir/Boundary/SDL3_mixer-3.2.4-silex.4.patch"
-expected_patch_sha256="7c78ca83071bf600f8704a946ed5f4912b13bdb152a30b235d3047312c58d335"
+patch_file="$audio_package_dir/Boundary/SDL3_mixer-3.2.4-silex.5.patch"
+expected_patch_sha256="3823c540c6d9df625e47625e7eb10113c145f1b00d7d86b2023af2fc20a91990"
 
 if command -v sha256sum >/dev/null 2>&1; then
     actual_patch_sha256="$(sha256sum "$patch_file" | cut -d ' ' -f 1)"

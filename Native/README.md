@@ -1,7 +1,7 @@
 # Build the private streaming provider
 
 `build-stream-provider.py` is the recorded portable build for the
-`SDL3_mixer-3.2.4-silex.4` candidate. It requires Python 3.12 or newer and
+`SDL3_mixer-3.2.4-silex.5` candidate. It requires Python 3.12 or newer and
 the official Zig **0.16.0** distribution used by the workflow. Its release
 checksum is verified there; a separately built Zig can produce different
 compiler-identification metadata. Download the upstream source archives from the official releases:
@@ -27,7 +27,7 @@ manifest record the resulting checksums.
 The manual `build-portability.yml` workflow rebuilds each target twice and
 checks byte equality, the recorded manifest hash and the private close and drain symbols.
 It uploads workflow artifacts; it does not publish a release. Candidate
-`silex.4` URLs are reserved for a subsequent authorized provider publication.
+`silex.5` URLs are reserved for a subsequent authorized provider publication.
 Local development requires the verified archives present at their manifest
 paths, or a local rebuild. Do not claim remote installability before that
 publication is complete.
@@ -56,3 +56,11 @@ the resampler lookahead. A stopped track is considered drained only when its
 prepared output is empty; explicit stop discards that output. PCM tests cover
 small and large requests, the final frame count and equivalence between a
 complete source and successive blocks.
+
+Seeking clears the converted output and its filter history while the track is
+locked. A prepared block from the previous source position cannot survive a
+seek. The regression compares a seek against a fresh playback at that frame.
+
+Once stopped output is flushed, its available converted frames determine
+drain completion. Raw filter history may retain an incomplete output frame
+after speed conversion; it must not delay an already empty output.

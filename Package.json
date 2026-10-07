@@ -71,43 +71,43 @@
     "macos-arm64": {
       "SDL3_mixer": {
         "path": "Boundary/macos-arm64/libSDL3_mixer.a",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-macos-arm64.a",
-        "sha256": "ecb6706ad622736766c07b0dee7047950816ff437b5a31588f8b04ee302bd9c5"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-macos-arm64.a",
+        "sha256": "969e00dca03622569a904cccde499b9e98356a020de4ce2b46c8100ecc6db7dc"
       }
     },
     "macos-x64": {
       "SDL3_mixer": {
         "path": "Boundary/macos-x64/libSDL3_mixer.a",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-macos-x64.a",
-        "sha256": "a5e4e6e22e54dc91f3b505e7da15bb69b8879f8f60dd3768fb5beb3d7d69b9c7"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-macos-x64.a",
+        "sha256": "a2b345c8bcb2bf66921a13bcb8552418aa4ce78fbc0ebd5c08f7fd6ccf7cbefb"
       }
     },
     "linux-x64": {
       "SDL3_mixer": {
         "path": "Boundary/linux-x64/libSDL3_mixer.a",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-linux-x64.a",
-        "sha256": "56948ba712aff6fb020f6fef1d5254910cea4fcf0f17a3206be11a36398aa448"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-linux-x64.a",
+        "sha256": "4f93c41ce91f9b4489b76769fea27ca024ac267d7d7a2dcf48630f681f002619"
       }
     },
     "linux-arm64": {
       "SDL3_mixer": {
         "path": "Boundary/linux-arm64/libSDL3_mixer.a",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-linux-arm64.a",
-        "sha256": "0f0e4700f13e2931031cd11da5859fe1e132d973a14cf3962c3e561aae89b248"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-linux-arm64.a",
+        "sha256": "2010fc30ea26fa074303cf7a48199e3196011fc1edab6c134abede363135ec80"
       }
     },
     "windows-x64": {
       "SDL3_mixer": {
         "path": "Boundary/windows-x64/SDL3_mixer.lib",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-windows-x64.lib",
-        "sha256": "dd56e67a5da8d9796ec4963e4b4b55b619597e54cb1f90a9fdfdd3f79210da3e"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-windows-x64.lib",
+        "sha256": "c75a1d816b6eee7a22d6376211a87f6cfad14dd69f6bd0be4c49f4c54cb1f4d2"
       }
     },
     "windows-arm64": {
       "SDL3_mixer": {
         "path": "Boundary/windows-arm64/SDL3_mixer.lib",
-        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.4/SDL3_mixer-3.2.4-windows-arm64.lib",
-        "sha256": "49dd377e95bef3913b79b07a9e3619aa83b56279d82d635a22f6086514791d35"
+        "url": "https://github.com/Matanek/Silex-Lib-GFX.Audio/releases/download/sdl3-mixer-3.2.4-silex.5/SDL3_mixer-3.2.4-windows-arm64.lib",
+        "sha256": "23b8ed489f8eea4ff7e4c011ce8f8d51dbe9cf2a645e91b8e21830025630e617"
       }
     }
   }

@@ -44,9 +44,41 @@ public struct PlayingSound {
         self.playback_generation = generation
     }
 
+    func matches(other:PlayingSound) bool {
+        if let owner = self.owner {
+            return owner.matches(other.owner) && self.playback_index == other.playback_index && self.playback_generation == other.playback_generation
+        }
+        return false
+    }
+
     func is_valid() bool {
         return self.playback_index >= 0 && self.playback_generation > 0
     }
+}
+
+public enum Duration { unknown; infinite; frames(int) }
+public struct SoundInfo {
+    let sample_rate:int
+    let channels:int
+    let duration:Duration
+    func duration_seconds() float? {
+        match self.duration {
+            frames(count) => { return count as float / self.sample_rate as float }
+            unknown => { return null }
+            infinite => { return null }
+        }
+    }
+}
+public struct PlaybackInfo {
+    let position_frames:int
+    let sample_rate:int
+    let playing:bool
+    let paused:bool
+}
+public enum EndReason { finished; stopped; released }
+public struct EndEvent {
+    var playback:PlayingSound
+    let reason:EndReason
 }
 
 public struct Stream {
@@ -120,6 +152,7 @@ public struct Playback {
     var speed:float
     var reverse_stereo:bool
     var fade_in_seconds:float
+    var start_frame:int
 
     init(
         volume:float = 1.0,
@@ -127,7 +160,8 @@ public struct Playback {
         position:Math.Vec3? = null,
         speed:float = 1.0,
         reverse_stereo:bool = false,
-        fade_in_seconds:float = 0.0
+        fade_in_seconds:float = 0.0,
+        start_frame:int = 0
     ) {
         self.volume = volume
         self.repeat = repeat
@@ -135,6 +169,7 @@ public struct Playback {
         self.speed = speed
         self.reverse_stereo = reverse_stereo
         self.fade_in_seconds = fade_in_seconds
+        self.start_frame = start_frame
     }
 }
 
@@ -147,11 +182,18 @@ class Owner {
 }
 
 class SoundEntry {
+    let sample_rate:int
+    let channels:int
+    let duration:int
     var handle:uint
     var generation:int
     var active:bool
 
     init(handle:uint) {
+        let format = Native.sound_format(handle)
+        self.sample_rate = format.sample_rate
+        self.channels = format.channels
+        self.duration = Native.sound_duration(handle)
         self.handle = handle
         self.generation = 1
         self.active = true
@@ -159,12 +201,22 @@ class SoundEntry {
 }
 
 class PlaybackEntry {
+    var sample_rate:int
+    var duration:int
+    var watched:bool
+    var end_emitted:bool
+    var ending:EndReason?
     var stream:StreamState?
     var handle:uint
     var generation:int
     var active:bool
 
-    init(handle:uint, stream:StreamState? = null) {
+    init(handle:uint, stream:StreamState? = null, sample_rate:int = 48_000, duration:int = -1) {
+        self.sample_rate = sample_rate
+        self.duration = duration
+        self.watched = false
+        self.end_emitted = false
+        self.ending = null
         self.stream = stream
         self.handle = handle
         self.generation = 1
@@ -186,6 +238,8 @@ public class Audio {
     private let mixer:uint
     private var sounds:SoundEntry[]
     private var playbacks:PlaybackEntry[]
+    private var ends:EndEvent[]
+    private var reserved_ends:int
 
     init() {
         self.owner = Owner()
@@ -193,6 +247,8 @@ public class Audio {
         self.mixer = Native.create_mixer()
         self.sounds = []
         self.playbacks = []
+        self.ends = []
+        self.reserved_ends = 0
     }
 
     module init(native_mixer:uint) {
@@ -200,6 +256,8 @@ public class Audio {
         self.mixer = native_mixer
         self.sounds = []
         self.playbacks = []
+        self.ends = []
+        self.reserved_ends = 0
     }
 
     drop {
@@ -280,7 +338,9 @@ public class Audio {
     }
 
     func play(sound:Sound, settings:Playback = Playback()) PlayingSound {
-        let audio = self.require_sound(sound).handle
+        var source = self.require_sound(sound)
+        let audio = source.handle
+        if settings.start_frame < 0 || (source.duration >= 0 && settings.start_frame > source.duration) { panic("GFX.Audio start frame is outside source duration") }
         validate_volume(settings.volume)
         validate_speed(settings.speed)
         validate_fade(settings.fade_in_seconds)
@@ -291,17 +351,22 @@ public class Audio {
         Native.set_speed(track, settings.speed)
         if settings.reverse_stereo { Native.set_reverse_stereo(track, true) }
         if let position = settings.position { Native.set_position(track, position) }
-        Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds)
+        Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds, settings.start_frame)
 
-        return self.add_playback(track)
+        return self.add_playback(track, sample_rate:source.sample_rate, duration:source.duration)
     }
 
-    private func add_playback(track:uint, stream:StreamState? = null) PlayingSound {
+    private func add_playback(track:uint, stream:StreamState? = null, sample_rate:int = 48_000, duration:int = -1) PlayingSound {
         var index = 0
         while index < self.playbacks.count() {
             var entry = self.playbacks[index]
             if !entry.active {
                 entry.stream = stream
+                entry.sample_rate = sample_rate
+                entry.duration = duration
+                entry.watched = false
+                entry.end_emitted = false
+                entry.ending = null
                 entry.handle = track
                 entry.active = true
                 return PlayingSound(self.owner, index, entry.generation)
@@ -310,7 +375,7 @@ public class Audio {
         }
 
         var playbacks = self.playbacks
-        playbacks.append(PlaybackEntry(track, stream))
+        playbacks.append(PlaybackEntry(track, stream, sample_rate, duration))
         self.playbacks = playbacks
         return PlayingSound(self.owner, playbacks.count() - 1, 1)
     }
@@ -329,7 +394,7 @@ public class Audio {
             return Result<Stream, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.stream", detail))
         }
         var state = StreamState(input, sample_rate, channels, capacity_frames)
-        return Result<Stream, Error>.success(Stream(self.add_playback(track, state)))
+        return Result<Stream, Error>.success(Stream(self.add_playback(track, state, sample_rate:sample_rate)))
     }
 
     func write(stream:Stream, samples:@float32[..]) Result<int, Error> {
@@ -375,6 +440,7 @@ public class Audio {
     func play(sound:Stream, settings:Playback = Playback()) PlayingSound {
         var stream = sound
         var state = self.require_stream(stream)
+        if settings.start_frame != 0 { panic("GFX.Audio streams do not support a start frame") }
         if state.started || state.stopped { panic("GFX.Audio stream playback cannot be restarted") }
         if settings.repeat.native_loops() != 0 { panic("GFX.Audio stream playback does not support repeat") }
         validate_fade(settings.fade_in_seconds)
@@ -483,12 +549,21 @@ public class Audio {
                 state.stopped = true
             }
         }
+        if entry.ending == null && !entry.end_emitted {
+            if !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) { entry.ending = EndReason.finished() }
+            else { entry.ending = EndReason.stopped() }
+        }
         Native.stop(entry.handle, fade_out_seconds)
     }
 
     func release(sound:PlayingSound) bool {
         if !self.contains_playback(sound) { return false }
         var entry = self.playbacks[sound.playback_index]
+        if entry.ending == null {
+            if !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) && (entry.stream == null || self.require_stream(Stream(sound)).started) { entry.ending = EndReason.finished() }
+            else { entry.ending = EndReason.released() }
+        }
+        self.emit_end(sound, entry)
         entry.dispose()
         return true
     }
@@ -527,11 +602,69 @@ public class Audio {
             if entry.active {
                 if var state = entry.stream {
                     let consumed = self.stream_consumed(PlayingSound(self.owner, index, entry.generation), state)
-                } else if !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) {
-                    entry.dispose()
+                }
+                if !Native.is_playing(entry.handle) && !Native.is_paused(entry.handle) {
+                    var eligible = true
+                    if var state = entry.stream { eligible = state.started }
+                    if eligible {
+                        if entry.ending == null { entry.ending = EndReason.finished() }
+                        self.emit_end(PlayingSound(self.owner, index, entry.generation), entry)
+                        if entry.stream == null { entry.dispose() }
+                    }
                 }
             }
             index++
+        }
+    }
+
+    func sound_info(sound:Sound) Result<SoundInfo, Error> {
+        if !self.contains(sound) { return Result<SoundInfo, Error>.failure(stream_error(Kind.invalid_input(), "audio.sound_info", "sound handle is stale, invalid or belongs to another Audio")) }
+        var entry = self.require_sound(sound)
+        var duration = Duration.unknown()
+        if entry.duration == -2 { duration = Duration.infinite() }
+        else if entry.duration >= 0 { duration = Duration.frames(entry.duration) }
+        return Result<SoundInfo, Error>.success(SoundInfo(sample_rate:entry.sample_rate, channels:entry.channels, duration:duration))
+    }
+    func playback_info(sound:PlayingSound) Result<PlaybackInfo, Error> {
+        if !self.contains_playback(sound) { return Result<PlaybackInfo, Error>.failure(stream_error(Kind.invalid_input(), "audio.playback_info", "playback handle is stale, invalid or belongs to another Audio")) }
+        var entry = self.require_playback(sound)
+        let frame = Native.playback_frames(entry.handle)
+        if frame < 0 { return Result<PlaybackInfo, Error>.failure(stream_error(Kind.other(), "audio.playback_info", Native.error())) }
+        return Result<PlaybackInfo, Error>.success(PlaybackInfo(position_frames:frame, sample_rate:entry.sample_rate, playing:self.is_playing(sound), paused:self.is_paused(sound)))
+    }
+    func seek_frames(sound:PlayingSound, frame:int) Result<void, Error> {
+        if !self.contains_playback(sound) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.seek_frames", "playback handle is stale, invalid or belongs to another Audio")) }
+        var entry = self.require_playback(sound)
+        if entry.stream != null { return Result<void, Error>.failure(stream_error(Kind.unsupported(), "audio.seek_frames", "continuous streams cannot seek")) }
+        if frame < 0 || (entry.duration >= 0 && frame > entry.duration) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.seek_frames", "frame is outside source duration")) }
+        if !Native.seek_frames(entry.handle, frame) { return Result<void, Error>.failure(stream_error(Kind.unsupported(), "audio.seek_frames", Native.error())) }
+        return Result<void, Error>.success()
+    }
+    func watch_end(sound:PlayingSound) Result<void, Error> {
+        if !self.contains_playback(sound) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.watch_end", "playback handle is stale, invalid or belongs to another Audio")) }
+        var entry = self.require_playback(sound)
+        if entry.watched { return Result<void, Error>.success() }
+        if entry.end_emitted { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.watch_end", "playback end was already observed")) }
+        if self.ends.count() + self.reserved_ends >= 256 { return Result<void, Error>.failure(stream_error(Kind.would_block(), "audio.watch_end", "drain end events before watching more playbacks")) }
+        entry.watched = true
+        self.reserved_ends++
+        return Result<void, Error>.success()
+    }
+    func drain_end_events() EndEvent[] {
+        self.collect_finished()
+        var events = self.ends
+        self.ends = []
+        return events
+    }
+    private func emit_end(playback:PlayingSound, entry:&PlaybackEntry) {
+        if entry.end_emitted { return }
+        entry.end_emitted = true
+        if !entry.watched { return }
+        if let reason = entry.ending {
+            var events = self.ends
+            events.append(EndEvent(playback:playback, reason:reason))
+            self.ends = events
+            self.reserved_ends--
         }
     }
 

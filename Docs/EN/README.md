@@ -133,6 +133,11 @@ A producer can feed one continuous playback with explicit capacity, without
 computing the entire sound. The [streaming guide](Streaming.md) describes
 prefilling, partial writes, controls and closing input.
 
+## Inspect and follow playback
+
+The [timeline guide](Timeline.md) covers format, duration, seeking and end
+notifications retained after collection.
+
 ## Control one playback
 
 `Audio.play` returns an `Audio.PlayingSound` that identifies one audible
