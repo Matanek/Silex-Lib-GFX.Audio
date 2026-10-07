@@ -223,3 +223,5 @@ demonstration belongs to Silex-Examples.
 [Give sound a retro texture with the bitcrusher](Bitcrusher.md).
 
 [Saturate or distort sound](Distortion.md).
+
+[Move sound between left and right](StereoPan.md).

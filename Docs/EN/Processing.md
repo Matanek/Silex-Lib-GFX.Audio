@@ -1,7 +1,7 @@
 # Process samples before output
 
 `GFX.Audio.Processing` provides `Format`, the `Processor` protocol, `LowPass`,
-`Delay`, `Equalizer`, `Bitcrusher`, `Distortion`, `DistortionMode` and `levels`.
+`Delay`, `Equalizer`, `Bitcrusher`, `Distortion`, `DistortionMode`, `StereoPan` and `levels`.
 An effect retains state and modifies an application-owned `&float32[..]` view. It can process producer blocks, offline
 rendered blocks, or blocks to feed a stream.
 
@@ -70,3 +70,5 @@ qualified within absolute 10⁻⁶ for controlled-level fixtures; reset removes 
 [Bitcrusher: resolution, sample hold, mixing and bypass](Bitcrusher.md).
 
 [Saturate or distort sound](Distortion.md).
+
+[Move sound between left and right](StereoPan.md).

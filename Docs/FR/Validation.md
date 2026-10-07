@@ -23,8 +23,8 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 46 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher` et `Distortion` en Release.
+`ReleaseValidation.py` reprend les 52 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion` et `StereoPan` en Release.
 Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
@@ -150,3 +150,11 @@ les grandes valeurs float32 et un drive subnormal, wet/bypass, réglages/reset,
 découpage 1/2/8 canaux, invalides avant écriture et ordre de composition avec
 un traitement personnalisé. Ils sont repris en Release. La démonstration
 `SaturatedSounds.sx` compare quatre timbres sans asset.
+
+## Panoramique stéréo
+
+Six oracles du consumer `StereoPan.sx` contrôlent les deux bases, centre et
+pôles, sin/cos à mi-course, dosage, bypass, changements/reset, découpage exact,
+formats et blocs refusés avant écriture, frame fautive intacte sur overflow,
+puis ordre de composition avec un générateur et un effet du consumer.
+`StereoSounds.sx` propose gauche/centre/droite puis un déplacement par blocs.

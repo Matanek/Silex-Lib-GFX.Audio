@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Stereo pan transfers the opposite channel with sine/cosine gains, preserving center and exact poles; wet mix/bypass, recoverable overflow and a block-based demonstration.
+
 - Composable soft saturation and hard clipping: drive, output gain, wet mix and bypass, stable float32 evaluation and asset-free examples.
 
 - Composable bitcrusher: 2–24-bit resolution, independent sample hold across blocks, wet mix and bypass; signed 256-level grid at 8 bits, reset and an asset-free retro recipe.

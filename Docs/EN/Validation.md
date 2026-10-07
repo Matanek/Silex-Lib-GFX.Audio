@@ -21,8 +21,8 @@ support mixing and processing guarantees. The dummy video driver also enables
 the SDL window coexistence test without desktop access. Rejection checks require a diagnostic
 and failure exit code, with timeouts to detect waits that cannot progress.
 
-`ReleaseValidation.py` runs the 46 public `Processing`, `Production`,
-`StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher` and `Distortion` oracles
+`ReleaseValidation.py` runs the 52 public `Processing`, `Production`,
+`StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion` and `StereoPan` oracles
 in Release. It selects a deliberately
 nonexistent driver:
 these oracles use offline rendering and require no device. They cover the
@@ -144,3 +144,11 @@ values and a subnormal drive, wet/bypass, settings/reset, chunking in 1/2/8
 channels, invalid input before writes, and composition order with a custom
 processor. They repeat in Release. `SaturatedSounds.sx` compares four timbres
 without assets.
+
+## Stereo pan
+
+Six `StereoPan.sx` consumer oracles cover both channel bases, center and poles,
+sine/cosine halfway gains, mixing, bypass, changes/reset, exact chunking,
+formats and blocks rejected before writes, the failing frame preserved on
+overflow, then composition order with a consumer-defined generator and effect.
+`StereoSounds.sx` plays left/center/right then movement across blocks.

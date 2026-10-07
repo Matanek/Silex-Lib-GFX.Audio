@@ -229,3 +229,5 @@ appartient à Silex-Examples.
 [Donner au son une texture rétro avec le bitcrusher](Bitcrusher.md).
 
 [Saturer ou distordre un son](Distortion.md).
+
+[Déplacer un son entre gauche et droite](StereoPan.md).

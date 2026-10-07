@@ -1,0 +1,58 @@
+use STD.Error
+use STD.Math
+
+public class StereoPan:Processor {
+    let format:Format
+    private var pan:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private var transfer:float32 = 0.0
+    private var retained:float32 = 1.0
+    private init(format:Format, pan:float32, wet:float32) {
+        self.format = format; self.pan = pan; self.wet = wet; self.update_coefficients()
+    }
+    private static func valid_pan(value:float32) bool { return Math.is_finite(value) && value >= -1.0 && value <= 1.0 }
+    private static func valid_wet(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }
+    private func update_coefficients() {
+        let magnitude = Math.abs(self.pan)
+        if magnitude == 0.0 { self.transfer = 0.0; self.retained = 1.0 }
+        else if magnitude == 1.0 { self.transfer = self.wet; self.retained = 1.0 - self.wet }
+        else {
+            let angle = magnitude * Math.pi<float32>() / 2.0
+            self.transfer = self.wet * Math.sin(angle)
+            self.retained = (1.0 - self.wet) + self.wet * Math.cos(angle)
+        }
+    }
+    static func create(format:Format, pan:float32 = 0.0, wet:float32 = 1.0) Result<StereoPan, Error> {
+        if !valid_format(format) || format.channels != 2 || !StereoPan.valid_pan(pan) || !StereoPan.valid_wet(wet) {
+            return Result<StereoPan, Error>.failure(invalid("stereo pan requires two channels, a valid rate, pan in [-1, 1] and wet in [0, 1]"))
+        }
+        return Result<StereoPan, Error>.success(StereoPan(format, pan, wet))
+    }
+    func set_pan(pan:float32) Result<void, Error> {
+        if !StereoPan.valid_pan(pan) { return Result<void, Error>.failure(invalid("stereo pan must be finite and in [-1, 1]")) }
+        self.pan = pan; self.update_coefficients(); return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !StereoPan.valid_wet(wet) { return Result<void, Error>.failure(invalid("stereo pan wet must be finite and in [0, 1]")) }
+        self.wet = wet; self.update_coefficients(); return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        if self.bypass || self.wet == 0.0 || self.pan == 0.0 { return Result<void, Error>.success() }
+        var i = 0
+        while i < samples.count() {
+            let dry_left = samples[i]
+            let dry_right = samples[i + 1]
+            var left:float32 = 0.0
+            var right:float32 = 0.0
+            if self.pan < 0.0 { left = dry_left + self.transfer * dry_right; right = self.retained * dry_right }
+            else { left = self.retained * dry_left; right = dry_right + self.transfer * dry_left }
+            if !Math.is_finite(left) || !Math.is_finite(right) { return Result<void, Error>.failure(overflow()) }
+            samples[i] = left; samples[i + 1] = right; i += 2
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {}
+}
