@@ -1,0 +1,20 @@
+use GFX.Audio
+func main() {
+    var audio = Audio()
+    let music = audio.group(volume:0.5)
+    let effects = audio.group(volume:0.8)
+    var samples:float32[] = [0.1 as float32, -0.1 as float32]
+    let sound = audio.create(@samples[0:2], sample_rate:48_000)
+    audio.pause(music)
+    let playing = audio.play(sound, Audio.Playback(volume:0.5, repeat:Audio.Repeat.forever(), group:music))
+    assert(audio.is_paused(playing))
+    audio.pause(playing)
+    audio.resume(music)
+    assert(audio.is_paused(playing))
+    match audio.assign_group(playing, effects) { failure(error) => { panic(error.detail) }; success => {} }
+    audio.resume(playing)
+    audio.stop(effects)
+    audio.wait(playing)
+    assert(audio.destroy_group(music))
+    assert(audio.destroy_group(effects))
+}

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Playback groups compose gains and independent pause reasons, with reassignment and destruction preserving individual settings.
+
 - Source format and explicit duration, start/seeking in frames and bounded end observation. Seeking discards converted frames from the previous position.
 
 - Bounded PCM streams: copied blocks, recoverable backpressure, pause/resume, closing with resampler drainage, consumption and discard counters. Private provider rebuilt for six targets; corrected 3D coordinates and multichannel stereo reversal.

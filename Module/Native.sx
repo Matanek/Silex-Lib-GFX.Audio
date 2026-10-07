@@ -88,7 +88,7 @@ func destroy_track(track:uint) {
     mix_destroy_track(C.pointer_bits(track))
 }
 
-func play(track:uint, loops:int, fade_in_seconds:float, start_frame:int = 0) {
+func play(track:uint, loops:int, fade_in_seconds:float, start_frame:int = 0, paused:bool = false) {
     let properties = sdl_create_properties()
     if properties == 0 { panic("GFX.Audio could not configure playback: " + error()) }
     if sdl_set_number_property(
@@ -108,7 +108,11 @@ func play(track:uint, loops:int, fade_in_seconds:float, start_frame:int = 0) {
         panic("GFX.Audio could not configure fade-in: " + error())
     }
     if start_frame > 0 { require(sdl_set_number_property(properties, C.terminated_pointer("SDL_mixer.play.start_frame"), start_frame) != 0, "configure start frame") }
-    let started = mix_play_track(C.pointer_bits(track), properties) != 0
+    let mixer = C.address_bits(mix_get_track_mixer(C.pointer_bits(track)))
+    mix_lock_mixer(C.pointer_bits(mixer))
+    var started = mix_play_track(C.pointer_bits(track), properties) != 0
+    if started && paused { started = mix_pause_track(C.pointer_bits(track)) != 0 }
+    mix_unlock_mixer(C.pointer_bits(mixer))
     sdl_destroy_properties(properties)
     require(started, "start playback")
 }
@@ -315,14 +319,18 @@ func put_samples(stream:uint, samples:@float32[..]) bool {
     return result
 }
 
-func play_stream(track:uint, fade_in_seconds:float) {
+func play_stream(track:uint, fade_in_seconds:float, paused:bool = false) {
     let props = sdl_create_properties()
     if props == 0 { panic("GFX.Audio could not configure stream playback: " + error()) }
     var configured = sdl_set_boolean_property(props, C.terminated_pointer("SDL_mixer.play.halt_when_exhausted"), 0) != 0
     if fade_in_seconds > 0.0 {
         configured = configured && sdl_set_number_property(props, C.terminated_pointer("SDL_mixer.play.fade_in_milliseconds"), seconds_to_milliseconds(fade_in_seconds)) != 0
     }
-    let started = configured && mix_play_track(C.pointer_bits(track), props) != 0
+    let mixer = C.address_bits(mix_get_track_mixer(C.pointer_bits(track)))
+    mix_lock_mixer(C.pointer_bits(mixer))
+    var started = configured && mix_play_track(C.pointer_bits(track), props) != 0
+    if started && paused { started = mix_pause_track(C.pointer_bits(track)) != 0 }
+    mix_unlock_mixer(C.pointer_bits(mixer))
     sdl_destroy_properties(props)
     require(started, "start stream playback")
 }
@@ -357,3 +365,6 @@ func seek_frames(track:uint, frame:int) bool { return mix_set_track_playback_pos
 let mix_get_audio_format = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>) uint8>(library:Boundary.SDL3_mixer, name:"MIX_GetAudioFormat")
 let mix_get_audio_duration = C.function<func(C.Pointer<uint8>) int>(library:Boundary.SDL3_mixer, name:"MIX_GetAudioDuration")
 let mix_set_track_playback_position = C.function<func(C.Pointer<uint8>, int) uint8>(library:Boundary.SDL3_mixer, name:"MIX_SetTrackPlaybackPosition")
+
+let mix_lock_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_LockMixer")
+let mix_unlock_mixer = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"MIX_UnlockMixer")

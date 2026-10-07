@@ -202,3 +202,5 @@ recognized experimental target in the Silex matrix.
 
 The [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/main/Sources/SpatialAudio.sx)
 demonstration belongs to Silex-Examples.
+
+[Control playback groups](Groups.md).

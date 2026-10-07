@@ -56,6 +56,22 @@ public struct PlayingSound {
     }
 }
 
+public struct Group {
+    module var owner:Owner?
+    module let index:int
+    module let generation:int
+    init() { self.owner = null; self.index = -1; self.generation = 0 }
+    module init(owner:Owner, index:int, generation:int) { self.owner = owner; self.index = index; self.generation = generation }
+    func is_valid() bool { return self.index >= 0 && self.generation > 0 }
+}
+class GroupEntry {
+    var volume:float
+    var paused:bool
+    var active:bool
+    var generation:int
+    init(volume:float) { self.volume = volume; self.paused = false; self.active = true; self.generation = 1 }
+}
+
 public enum Duration { unknown; infinite; frames(int) }
 public struct SoundInfo {
     let sample_rate:int
@@ -153,6 +169,7 @@ public struct Playback {
     var reverse_stereo:bool
     var fade_in_seconds:float
     var start_frame:int
+    var group:Group?
 
     init(
         volume:float = 1.0,
@@ -161,7 +178,8 @@ public struct Playback {
         speed:float = 1.0,
         reverse_stereo:bool = false,
         fade_in_seconds:float = 0.0,
-        start_frame:int = 0
+        start_frame:int = 0,
+        group:Group? = null
     ) {
         self.volume = volume
         self.repeat = repeat
@@ -170,6 +188,7 @@ public struct Playback {
         self.reverse_stereo = reverse_stereo
         self.fade_in_seconds = fade_in_seconds
         self.start_frame = start_frame
+        self.group = group
     }
 }
 
@@ -201,6 +220,9 @@ class SoundEntry {
 }
 
 class PlaybackEntry {
+    var volume:float
+    var group:Group?
+    var user_paused:bool
     var sample_rate:int
     var duration:int
     var watched:bool
@@ -212,6 +234,9 @@ class PlaybackEntry {
     var active:bool
 
     init(handle:uint, stream:StreamState? = null, sample_rate:int = 48_000, duration:int = -1) {
+        self.volume = 1.0
+        self.group = null
+        self.user_paused = false
         self.sample_rate = sample_rate
         self.duration = duration
         self.watched = false
@@ -238,6 +263,7 @@ public class Audio {
     private let mixer:uint
     private var sounds:SoundEntry[]
     private var playbacks:PlaybackEntry[]
+    private var groups:GroupEntry[]
     private var ends:EndEvent[]
     private var reserved_ends:int
 
@@ -247,6 +273,7 @@ public class Audio {
         self.mixer = Native.create_mixer()
         self.sounds = []
         self.playbacks = []
+        self.groups = []
         self.ends = []
         self.reserved_ends = 0
     }
@@ -256,6 +283,7 @@ public class Audio {
         self.mixer = native_mixer
         self.sounds = []
         self.playbacks = []
+        self.groups = []
         self.ends = []
         self.reserved_ends = 0
     }
@@ -347,13 +375,15 @@ public class Audio {
 
         self.collect_finished()
         let track = Native.create_track(self.mixer, audio)
-        Native.set_volume(track, settings.volume)
+        Native.set_volume(track, self.composed_volume(settings.volume, settings.group))
         Native.set_speed(track, settings.speed)
         if settings.reverse_stereo { Native.set_reverse_stereo(track, true) }
         if let position = settings.position { Native.set_position(track, position) }
-        Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds, settings.start_frame)
+        Native.play(track, settings.repeat.native_loops(), settings.fade_in_seconds, settings.start_frame, self.group_paused(settings.group))
 
-        return self.add_playback(track, sample_rate:source.sample_rate, duration:source.duration)
+        let playing = self.add_playback(track, sample_rate:source.sample_rate, duration:source.duration)
+        self.configure_group(playing, settings)
+        return playing
     }
 
     private func add_playback(track:uint, stream:StreamState? = null, sample_rate:int = 48_000, duration:int = -1) PlayingSound {
@@ -361,6 +391,9 @@ public class Audio {
         while index < self.playbacks.count() {
             var entry = self.playbacks[index]
             if !entry.active {
+                entry.volume = 1.0
+                entry.group = null
+                entry.user_paused = false
                 entry.stream = stream
                 entry.sample_rate = sample_rate
                 entry.duration = duration
@@ -447,12 +480,13 @@ public class Audio {
         validate_volume(settings.volume)
         validate_speed(settings.speed)
         let track = self.require_playback(stream.playback).handle
-        Native.set_volume(track, settings.volume)
+        Native.set_volume(track, self.composed_volume(settings.volume, settings.group))
         Native.set_speed(track, settings.speed)
         if settings.reverse_stereo { Native.set_reverse_stereo(track, true) }
         if let position = settings.position { Native.set_position(track, position) }
-        Native.play_stream(track, settings.fade_in_seconds)
+        Native.play_stream(track, settings.fade_in_seconds, self.group_paused(settings.group))
         state.started = true
+        self.configure_group(stream.playback, settings)
         return stream.playback
     }
 
@@ -524,11 +558,15 @@ public class Audio {
     }
 
     func pause(sound:PlayingSound) {
-        Native.pause(self.require_playback(sound).handle)
+        var entry = self.require_playback(sound)
+        entry.user_paused = true
+        self.apply_pause(entry)
     }
 
     func resume(sound:PlayingSound) {
-        Native.resume(self.require_playback(sound).handle)
+        var entry = self.require_playback(sound)
+        entry.user_paused = false
+        self.apply_pause(entry)
     }
 
     func wait(sound:PlayingSound) {
@@ -575,7 +613,139 @@ public class Audio {
 
     func set_volume(sound:PlayingSound, volume:float) {
         validate_volume(volume)
-        Native.set_volume(self.require_playback(sound).handle, volume)
+        var entry = self.require_playback(sound)
+        let composed = self.composed_volume(volume, entry.group)
+        entry.volume = volume
+        Native.set_volume(entry.handle, composed)
+    }
+
+    func group(volume:float = 1.0) Group {
+        validate_volume(volume)
+        var index = 0
+        while index < self.groups.count() {
+            var entry = self.groups[index]
+            if !entry.active {
+                entry.volume = volume; entry.paused = false; entry.active = true
+                return Group(self.owner, index, entry.generation)
+            }
+            index++
+        }
+        var groups = self.groups
+        groups.append(GroupEntry(volume))
+        self.groups = groups
+        return Group(self.owner, groups.count() - 1, 1)
+    }
+    func contains(sound:Group) bool {
+        if !self.owner.matches(sound.owner) || !sound.is_valid() || sound.index >= self.groups.count() { return false }
+        var entry = self.groups[sound.index]
+        return entry.active && entry.generation == sound.generation
+    }
+    private func require_group(group:Group) GroupEntry {
+        if !self.contains(group) { panic("GFX.Audio group is stale, invalid or belongs to another Audio") }
+        return self.groups[group.index]
+    }
+    private func in_group(entry:&PlaybackEntry, group:Group) bool {
+        if let member = entry.group { return member.index == group.index && member.generation == group.generation && self.owner.matches(member.owner) }
+        return false
+    }
+    private func group_paused(group:Group?) bool {
+        if let value = group { return self.require_group(value).paused }
+        return false
+    }
+    private func composed_volume(volume:float, group:Group?) float {
+        var result = volume
+        if let value = group { result *= self.require_group(value).volume }
+        validate_volume(result)
+        return result
+    }
+    private func configure_group(sound:PlayingSound, settings:Playback) {
+        var entry = self.require_playback(sound)
+        entry.volume = settings.volume
+        entry.group = settings.group
+        self.apply_pause(entry)
+    }
+    private func apply_pause(entry:&PlaybackEntry) {
+        var paused = copy entry.user_paused
+        if let group = entry.group { paused = paused || self.require_group(group).paused }
+        if paused {
+            if Native.is_playing(entry.handle) { Native.pause(entry.handle) }
+        } else if Native.is_paused(entry.handle) { Native.resume(entry.handle) }
+    }
+    func assign_group(sound:PlayingSound, group:Group?) Result<void, Error> {
+        if !self.contains_playback(sound) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.assign_group", "playback handle is stale, invalid or belongs to another Audio")) }
+        var entry = self.require_playback(sound)
+        var volume = copy entry.volume
+        if let value = group {
+            if !self.contains(value) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.assign_group", "group is stale, invalid or belongs to another Audio")) }
+            volume *= self.require_group(value).volume
+        }
+        if !Math.is_finite(volume) || !Math.is_finite(volume as float32) { return Result<void, Error>.failure(stream_error(Kind.invalid_input(), "audio.assign_group", "composed volume is not representable")) }
+        entry.group = group
+        Native.set_volume(entry.handle, volume)
+        self.apply_pause(entry)
+        return Result<void, Error>.success()
+    }
+    func destroy_group(group:Group) bool {
+        if !self.contains(group) { return false }
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, group) {
+                entry.group = null
+                Native.set_volume(entry.handle, entry.volume)
+                self.apply_pause(entry)
+            }
+            index++
+        }
+        var target = self.require_group(group)
+        target.active = false; target.generation++
+        return true
+    }
+    func set_volume(sound:Group, volume:float) {
+        validate_volume(volume)
+        var group = self.require_group(sound)
+        // Validate all products before changing any member.
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, sound) { validate_volume(entry.volume * volume) }
+            index++
+        }
+        group.volume = volume
+        index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, sound) { Native.set_volume(entry.handle, entry.volume * volume) }
+            index++
+        }
+    }
+    func pause(sound:Group) {
+        var group = self.require_group(sound); group.paused = true
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, sound) { self.apply_pause(entry) }
+            index++
+        }
+    }
+    func resume(sound:Group) {
+        var group = self.require_group(sound); group.paused = false
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, sound) { self.apply_pause(entry) }
+            index++
+        }
+    }
+    func stop(sound:Group, fade_out_seconds:float = 0.0) {
+        var group = self.require_group(sound)
+        validate_fade(fade_out_seconds)
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && self.in_group(entry, sound) { self.stop(PlayingSound(self.owner, index, entry.generation), fade_out_seconds) }
+            index++
+        }
     }
 
     func set_speed(sound:PlayingSound, speed:float) {

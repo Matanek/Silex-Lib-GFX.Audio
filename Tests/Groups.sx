@@ -1,0 +1,104 @@
+use GFX.Audio
+use GFX.Audio.Native
+use Interop.Boundary
+use Interop.C
+use STD.Math
+use STD.Error.Kind
+let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
+func frame(mixer:uint) float {
+    var buffer:uint[1]
+    let ptr = C.address_bits(C.mutable_pointer(buffer))
+    let count = generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4)
+    return C.load<float32>(ptr, 0 as uint) as float
+}
+func near(actual:float, expected:float) { assert(Math.abs(actual - expected) < 0.00001) }
+func assign(audio:&Audio, playing:Audio.PlayingSound, group:Audio.Group?) {
+    match audio.assign_group(playing, group) { failure(error) => { panic(error.detail) }; success => {} }
+}
+test "group master and individual gains compose and remain independent" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.5 as float32]
+    let sound = audio.create(@samples[0:1], sample_rate:48_000)
+    let music = audio.group(volume:0.5)
+    let effects = audio.group(volume:0.25)
+    let a = audio.play(sound, Audio.Playback(volume:0.5, repeat:Audio.Repeat.forever(), group:music))
+    let b = audio.play(sound, Audio.Playback(volume:0.5, repeat:Audio.Repeat.forever(), group:effects))
+    audio.set_master_volume(0.5)
+    near(frame(mixer), 0.09375)
+    audio.set_volume(music, 1.0)
+    near(frame(mixer), 0.15625)
+    audio.set_volume(a, 0.25)
+    near(frame(mixer), 0.09375)
+    assign(audio, a, effects)
+    near(frame(mixer), 0.046875)
+    assert(audio.destroy_group(effects))
+    near(frame(mixer), 0.1875)
+    assert(!audio.contains(effects))
+    let fresh = audio.group()
+    assert(audio.contains(fresh) && !audio.contains(effects))
+    match audio.assign_group(a, effects) { success => { panic("stale group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    var other = Audio()
+    match other.assign_group(a, fresh) { success => { panic("foreign playback accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match audio.assign_group(a, other.group()) { success => { panic("foreign group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    assert(!other.destroy_group(fresh))
+    audio.stop(music)
+    audio.stop(a)
+    audio.stop(b)
+}
+test "group pause is inherited and preserves an individual pause across reparenting" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.25 as float32]
+    let sound = audio.create(@samples[0:1], sample_rate:48_000)
+    let music = audio.group()
+    let effects = audio.group()
+    audio.pause(music)
+    let a = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:music))
+    let b = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:effects))
+    assert(audio.is_paused(a) && !audio.is_paused(b))
+    near(frame(mixer), 0.25)
+    audio.pause(a)
+    audio.resume(music)
+    assert(audio.is_paused(a))
+    audio.pause(music)
+    audio.resume(a)
+    assert(audio.is_paused(a))
+    assign(audio, a, effects)
+    assert(!audio.is_paused(a))
+    near(frame(mixer), 0.5)
+    audio.pause(effects)
+    audio.pause(a)
+    assert(audio.destroy_group(effects))
+    assert(audio.is_paused(a) && !audio.is_paused(b))
+    audio.resume(a)
+    near(frame(mixer), 0.5)
+    audio.stop(a)
+    audio.stop(b)
+}
+test "new group members inherit current gain and group stop reports each end" {
+    Native.initialize()
+    let mixer = Native.create_offline_mixer(48_000, 1)
+    var audio = Audio(native_mixer:mixer)
+    var samples:float32[] = [0.5 as float32]
+    let sound = audio.create(@samples[0:1], sample_rate:48_000)
+    let group = audio.group()
+    audio.set_volume(group, 0.25)
+    let a = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:group))
+    let b = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:group))
+    near(frame(mixer), 0.25)
+    match audio.watch_end(a) { failure(error) => { panic(error.detail) }; success => {} }
+    match audio.watch_end(b) { failure(error) => { panic(error.detail) }; success => {} }
+    audio.stop(group)
+    var events = audio.drain_end_events()
+    assert(events.count() == 2)
+    assert(events[0].reason == Audio.EndReason.stopped() && events[1].reason == Audio.EndReason.stopped())
+    let c = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:group))
+    assign(audio, c, null)
+    near(frame(mixer), 0.5)
+    audio.stop(group)
+    assert(audio.is_playing(c))
+    audio.stop(c)
+}

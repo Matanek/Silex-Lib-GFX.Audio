@@ -208,3 +208,5 @@ Silex.
 
 La démonstration [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/main/Sources/SpatialAudio.sx)
 appartient à Silex-Examples.
+
+[Commander des groupes de lectures](Groups.md).
