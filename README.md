@@ -19,3 +19,5 @@ The package requires Silex 0.47.1 or newer.
 [Create retro textures with bitcrushing and sample hold](Docs/EN/Bitcrusher.md).
 
 Play polyphonic notes with [instruments and a frame timeline](Docs/EN/Instruments.md): ADSR, sustain, pitch bend and a composable generator without sound banks.
+
+Play [MIDI scores with application-selected procedural instruments](Docs/EN/MIDI.md), without sound banks.

@@ -129,3 +129,5 @@ internes du provider SDL ni un temps réel dur. Les preuves couvrent les écritu
 partielles, l’identité avec le rendu mémoire, les pauses, le manque, l’arrêt,
 la fermeture, les queues et la durée de vie. L’écoute du programme complète
 ces preuves pour les transitions et la continuité de la sortie réelle.
+
+[Jouer une partition MIDI avec ses propres instruments](MIDI.md).

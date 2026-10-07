@@ -1,0 +1,43 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+
+// One audio clock owns events, then continues rendering the instrument's release.
+public class Player:Synthesis.Generator {
+    let format:Processing.Format
+    let end_frame:int
+    private var synthesizer:Synthesizer
+    private var score:Score
+    private var position:int = 0
+    private var next:int = 0
+    private var finished:bool = false
+    private var ignored:int = 0
+    private init(score:Score, synthesizer:Synthesizer) { self.score = score; self.synthesizer = synthesizer; self.format = synthesizer.format; self.end_frame = score.end_frame }
+    static func create(score:Score, synthesizer:Synthesizer) Result<Player, Error> {
+        if score.sample_rate != synthesizer.format.sample_rate { return Result<Player, Error>.failure(invalid("MIDI score and synthesizer sample rates must match")) }
+        return Result<Player, Error>.success(Player(score, synthesizer))
+    }
+    func rendered_frames() int { return self.position }
+    func ignored_messages() int { return self.ignored }
+    func render(samples:&float32[..]) Result<void, Error> {
+        if samples.count() % self.format.channels != 0 { return Result<void, Error>.failure(invalid("MIDI output requires complete frames")) }
+        let frames = samples.count() / self.format.channels
+        if self.position > 9_223_372_036_854_775_807 - frames { return Result<void, Error>.failure(limit("MIDI player frame clock exhausted")) }
+        let end = self.position + frames; var offset = 0
+        while self.position < end {
+            while self.next < self.score.events.count() && self.score.events[self.next].frame == self.position {
+                let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message)
+                if !handled { self.ignored++ }
+                self.next++
+            }
+            if !self.finished && self.position == self.end_frame { try self.synthesizer.finish(); self.finished = true }
+            var until = end
+            if self.next < self.score.events.count() && self.score.events[self.next].frame < until { until = self.score.events[self.next].frame }
+            if !self.finished && self.end_frame < until { until = self.end_frame }
+            let count = (until - self.position) * self.format.channels
+            try self.synthesizer.render(&samples[offset:offset + count]); self.position = until; offset += count
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.synthesizer.reset(); self.position = 0; self.next = 0; self.finished = false; self.ignored = 0 }
+}

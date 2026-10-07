@@ -1,0 +1,190 @@
+use STD.Error
+use STD.File as Files
+
+struct RawEvent {
+    let tick:int
+    let channel:int
+    let message:Message
+    let tempo:int
+    let ending:bool
+}
+func byte(data:@uint8[..], position:&int) Result<int, Error> {
+    if position >= data.count() { return Result<int, Error>.failure(invalid("truncated MIDI data")) }
+    let value = data[position] as int; position++
+    return Result<int, Error>.success(value)
+}
+func word(data:@uint8[..], position:&int, count:int) Result<int, Error> {
+    var value = 0; var i = 0
+    while i < count { value = value * 256 + try byte(data, position); i++ }
+    return Result<int, Error>.success(value)
+}
+func vlq(data:@uint8[..], position:&int) Result<int, Error> {
+    var value = 0; var i = 0
+    while i < 4 {
+        let next = try byte(data, position); value = value * 128 + next % 128
+        if next < 128 { return Result<int, Error>.success(value) }
+        i++
+    }
+    return Result<int, Error>.failure(invalid("MIDI variable-length quantity exceeds four bytes"))
+}
+func channel_byte(data:@uint8[..], position:&int) Result<int, Error> {
+    let value = try byte(data, position)
+    if value > 127 { return Result<int, Error>.failure(invalid("status byte encountered inside MIDI channel data")) }
+    return Result<int, Error>.success(value)
+}
+func read_track(data:@uint8[..], track:int, max_events:int, count:&int, ignored:&int, events:&RawEvent[]) Result<void, Error> {
+    var position = 0; var tick = 0; var running = 0; var ended = false
+    while position < data.count() {
+        if count == max_events { return Result<void, Error>.failure(limit("MIDI event capacity reached, including metadata and SysEx")) }
+        count++
+        let delta = try vlq(data, position)
+        if tick > 9_223_372_036_854_775_807 - delta { return Result<void, Error>.failure(limit("MIDI tick counter exhausted")) }
+        tick += delta
+        let first = try byte(data, position); var status = first
+        if first < 128 {
+            if running == 0 { return Result<void, Error>.failure(invalid("MIDI running status has no preceding channel status")) }
+            status = running; position--
+        }
+        if status >= 128 && status < 240 {
+            running = status
+            let a = try channel_byte(data, position); var b = 0
+            let kind = status / 16
+            if kind != 12 && kind != 13 { b = try channel_byte(data, position) }
+            var message = Message.note_on(a, b)
+            match kind {
+                8 => { message = Message.note_off(a, b) }
+                9 => { if b == 0 { message = Message.note_off(a, 0) } }
+                10 => { message = Message.poly_pressure(a, b) }
+                11 => { message = Message.control_change(a, b) }
+                12 => { message = Message.program_change(a) }
+                13 => { message = Message.channel_pressure(a) }
+                14 => { message = Message.pitch_bend(a + b * 128) }
+                else => {}
+            }
+            events.append(RawEvent(tick:tick, channel:status % 16, message:message, tempo:0, ending:false))
+        } else if status == 255 || status == 240 || status == 247 {
+            running = 0; var kind = -1
+            if status == 255 { kind = try channel_byte(data, position) }
+            let length = try vlq(data, position)
+            if length > data.count() - position { return Result<void, Error>.failure(invalid("MIDI metadata or SysEx length exceeds its track")) }
+            if kind == 81 {
+                if track != 0 { return Result<void, Error>.failure(invalid("format 1 tempo map must belong to the first track")) }
+                if length < 3 { return Result<void, Error>.failure(invalid("MIDI tempo requires at least three bytes")) }
+                var cursor = position; let tempo = try word(data, cursor, 3)
+                if tempo == 0 { return Result<void, Error>.failure(invalid("MIDI tempo must be positive")) }
+                events.append(RawEvent(tick:tick, channel:0, message:Message.channel_pressure(0), tempo:tempo, ending:false))
+            } else if kind == 47 {
+                events.append(RawEvent(tick:tick, channel:0, message:Message.channel_pressure(0), tempo:0, ending:true)); ended = true
+            } else { ignored++ }
+            position += length
+            if ended && position != data.count() { return Result<void, Error>.failure(invalid("end-of-track must be the last event in its chunk")) }
+        } else { return Result<void, Error>.failure(invalid("system status is not a channel, metadata or SysEx event in SMF")) }
+    }
+    if !ended { return Result<void, Error>.failure(invalid("MIDI track requires an end-of-track event")) }
+    return Result<void, Error>.success()
+}
+// Stable merge: source order is track index, then order within that track.
+func sort(events:&RawEvent[..]) {
+    var temporary:RawEvent[] = []; for event in events { temporary.append(event) }
+    var width = 1
+    while width < events.count() {
+        var start = 0
+        while start < events.count() {
+            var middle = start + width; if middle > events.count() { middle = events.count() }
+            var end = middle + width; if end > events.count() { end = events.count() }
+            var left = start; var right = middle; var out = start
+            while out < end {
+                if right == end || (left < middle && events[left].tick <= events[right].tick) { temporary[out] = events[left]; left++ }
+                else { temporary[out] = events[right]; right++ }
+                out++
+            }
+            start = end
+        }
+        var i = 0; while i < events.count() { events[i] = temporary[i]; i++ }
+        width *= 2
+    }
+}
+// Accumulate whole frames and a rational remainder. No event/block rounding drift.
+class Clock {
+    private let denominator:int
+    private let rate:int
+    private var whole:int = 0
+    private var remainder:int = 0
+    init(ppqn:int, rate:int) { self.denominator = ppqn * 1_000_000; self.rate = rate }
+    func advance(ticks:int, tempo:int) Result<void, Error> {
+        let factor = tempo * self.rate
+        var add_whole = factor / self.denominator; var add_remainder = factor % self.denominator; var remaining = ticks
+        while remaining > 0 {
+            if remaining % 2 == 1 {
+                let sum = self.remainder + add_remainder; let carry = sum / self.denominator
+                if self.whole > 9_223_372_036_854_775_807 - add_whole - carry { return Result<void, Error>.failure(limit("MIDI frame clock exhausted")) }
+                self.whole += add_whole + carry; self.remainder = sum % self.denominator
+            }
+            remaining /= 2
+            if remaining > 0 {
+                let twice = add_remainder * 2; let carry = twice / self.denominator
+                if add_whole > (9_223_372_036_854_775_807 - carry) / 2 { return Result<void, Error>.failure(limit("MIDI frame clock exhausted")) }
+                add_whole = add_whole * 2 + carry; add_remainder = twice % self.denominator
+            }
+        }
+        return Result<void, Error>.success()
+    }
+    func frame() Result<int, Error> {
+        let carry = self.remainder >= (self.denominator + 1) / 2
+        if carry && self.whole == 9_223_372_036_854_775_807 { return Result<int, Error>.failure(limit("rounded MIDI frame clock exhausted")) }
+        var value = self.whole; if carry { value++ }
+        return Result<int, Error>.success(value)
+    }
+}
+public class Score {
+    let sample_rate:int
+    let ppqn:int
+    let track_count:int
+    let end_frame:int
+    let ignored_events:int
+    let events:Event[]
+    private init(rate:int, ppqn:int, tracks:int, end:int, ignored:int, events:Event[]) {
+        self.sample_rate = rate; self.ppqn = ppqn; self.track_count = tracks
+        self.end_frame = end; self.ignored_events = ignored; self.events = events
+    }
+    static func parse(data:@uint8[..], sample_rate:int, maximum_bytes:int = 1_048_576, maximum_tracks:int = 64, maximum_events:int = 65_536) Result<Score, Error> {
+        if sample_rate < 1 || sample_rate > 16_777_216 || maximum_bytes < 14 || maximum_bytes > 16_777_216 || maximum_tracks < 1 || maximum_tracks > 256 || maximum_events < 1 || maximum_events > 65_536 { return Result<Score, Error>.failure(invalid("MIDI limits require rate1..16777216, bytes14..16777216, tracks1..256 and events1..65536")) }
+        if data.count() > maximum_bytes { return Result<Score, Error>.failure(limit("MIDI byte capacity reached")) }
+        var position = 0
+        if try word(data, position, 4) != 0x4D546864 { return Result<Score, Error>.failure(invalid("MIDI file must start with MThd")) }
+        let header = try word(data, position, 4)
+        if header < 6 || header > data.count() - position { return Result<Score, Error>.failure(invalid("invalid MIDI header length")) }
+        let format = try word(data, position, 2); let tracks = try word(data, position, 2); let division = try word(data, position, 2)
+        if format > 1 { return Result<Score, Error>.failure(unsupported("only MIDI formats 0 and 1 are supported")) }
+        if division >= 32_768 { return Result<Score, Error>.failure(unsupported("MIDI SMPTE division is not supported; use PPQN")) }
+        if division == 0 || tracks == 0 || (format == 0 && tracks != 1) { return Result<Score, Error>.failure(invalid("invalid PPQN division or track count")) }
+        if tracks > maximum_tracks { return Result<Score, Error>.failure(limit("MIDI track capacity reached")) }
+        position += header - 6
+        var raw:RawEvent[] = []; var count = 0; var ignored = 0; var track = 0
+        while position < data.count() {
+            let type = try word(data, position, 4); let length = try word(data, position, 4)
+            if length > data.count() - position { return Result<Score, Error>.failure(invalid("MIDI chunk length exceeds remaining bytes")) }
+            if type == 0x4D54726B {
+                if track == tracks { return Result<Score, Error>.failure(invalid("MIDI contains more tracks than its header declares")) }
+                try read_track(@data[position:position + length], track, maximum_events, count, ignored, raw); track++
+            } else if type == 0x4D546864 { return Result<Score, Error>.failure(invalid("duplicate MIDI header")) }
+            position += length
+        }
+        if track != tracks { return Result<Score, Error>.failure(invalid("MIDI contains fewer tracks than its header declares")) }
+        sort(&raw[0:raw.count()])
+        var clock = Clock(division, sample_rate); var tick = 0; var tempo = 500_000; var end = 0; var events:Event[] = []
+        for event in raw {
+            try clock.advance(event.tick - tick, tempo); tick = event.tick
+            let frame = try clock.frame()
+            if event.tempo > 0 { tempo = event.tempo }
+            else if event.ending { if frame > end { end = frame } }
+            else { events.append(Event(frame:frame, channel:event.channel, message:event.message)) }
+        }
+        return Result<Score, Error>.success(Score(sample_rate, division, tracks, end, ignored, events))
+    }
+    static func read(path:str, sample_rate:int, maximum_bytes:int = 1_048_576, maximum_tracks:int = 64, maximum_events:int = 65_536) Result<Score, Error> {
+        if maximum_bytes < 14 || maximum_bytes > 16_777_216 { return Result<Score, Error>.failure(invalid("MIDI byte limit must be in [14, 16777216]")) }
+        let data = try Files.read_all(path, maximum_bytes)
+        return Score.parse(@data[0:data.count()], sample_rate, maximum_bytes, maximum_tracks, maximum_events)
+    }
+}

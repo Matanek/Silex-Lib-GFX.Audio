@@ -1,0 +1,165 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public struct Binding {
+    let channel:int
+    let program:int
+    var instrument:Synthesis.Instrument
+}
+class Channel {
+    var program:int = 0
+    var volume:int = 127
+    var expression:int = 127
+    var pan:float32 = 0.0
+    var sustain:bool = false
+    var bend:float32 = 0.0
+    func reset() { self.program = 0; self.volume = 127; self.expression = 127; self.pan = 0.0; self.sustain = false; self.bend = 0.0 }
+}
+class Note {
+    var active:bool = false
+    var channel:int = 0
+    var number:int = 0
+    var binding:int = 0
+    var id:int = 0
+}
+// Each binding owns a distinct instrument state. Controllers belong to channels.
+public class Synthesizer:Synthesis.Generator {
+    let format:Processing.Format
+    let note_capacity:int
+    let bend_range:float32
+    let gain:float32
+    private var bindings:Binding[]
+    private var channels:Channel[]
+    private var notes:Note[]
+    private var samples:float32[]
+    private var serial:int = 0
+    private init(bindings:Binding[], channels:Channel[], notes:Note[], bend_range:float32, gain:float32) {
+        self.bindings = bindings; self.channels = channels; self.notes = notes; self.format = bindings[0].instrument.format
+        self.note_capacity = notes.count(); self.bend_range = bend_range; self.gain = gain; self.samples = []
+        var i = 0; while i < 1_024 { self.samples.append(0.0); i++ }
+    }
+    static func create(bindings:Binding[], note_capacity:int = 256, bend_range:float32 = 2.0, gain:float32 = 0.2) Result<Synthesizer, Error> {
+        if bindings.count() < 1 || bindings.count() > 128 || note_capacity < 1 || note_capacity > 4_096 || !Math.is_finite(bend_range) || bend_range < 0.0 || bend_range > 24.0 || !Math.is_finite(gain) || gain < 0.0 || gain > 1.0 { return Result<Synthesizer, Error>.failure(invalid("MIDI synthesis requires bindings1..128, notes1..4096, bend0..24 semitones and gain0..1")) }
+        let format = bindings[0].instrument.format
+        if format.channels != 2 || format.sample_rate < 1 || format.sample_rate > 16_777_216 { return Result<Synthesizer, Error>.failure(invalid("MIDI synthesizer requires a supported stereo format")) }
+        var i = 0
+        while i < bindings.count() {
+            var binding = bindings[i]
+            if binding.channel < 0 || binding.channel > 15 || !data_byte(binding.program) || binding.instrument.format != format { return Result<Synthesizer, Error>.failure(invalid("MIDI bindings require channels0..15, programs0..127 and identical stereo formats")) }
+            var j = 0; while j < i { if bindings[j].channel == binding.channel && bindings[j].program == binding.program { return Result<Synthesizer, Error>.failure(invalid("duplicate MIDI channel/program binding")) }
+                j++ }
+            i++
+        }
+        var channels:Channel[] = []; i = 0; while i < 16 { channels.append(Channel()); i++ }
+        var notes:Note[] = []; i = 0; while i < note_capacity { notes.append(Note()); i++ }
+        return Result<Synthesizer, Error>.success(Synthesizer(bindings, channels, notes, bend_range, gain))
+    }
+    private func selected(channel:int, program:int) Result<int, Error> {
+        var i = 0; while i < self.bindings.count() { if self.bindings[i].channel == channel && self.bindings[i].program == program { return Result<int, Error>.success(i) }
+            i++ }
+        return Result<int, Error>.failure(unsupported("MIDI channel/program has no application-selected instrument"))
+    }
+    private func broadcast(channel:int, command:Synthesis.Command) Result<void, Error> {
+        for var binding in self.bindings { if binding.channel == channel { try binding.instrument.send(command) } }
+        return Result<void, Error>.success()
+    }
+    private func release(channel:int, number:int) Result<void, Error> {
+        var oldest = -1; var i = 0
+        while i < self.notes.count() {
+            var note = self.notes[i]
+            if note.active && note.channel == channel && note.number == number && (oldest < 0 || note.id < self.notes[oldest].id) { oldest = i }
+            i++
+        }
+        if oldest >= 0 {
+            var note = self.notes[oldest]; var binding = self.bindings[note.binding]
+            try binding.instrument.send(Synthesis.Command.note_off(note.id)); note.active = false
+        }
+        return Result<void, Error>.success()
+    }
+    private func release_channel(channel:int) Result<void, Error> {
+        for var note in self.notes {
+            if note.active && note.channel == channel { var binding = self.bindings[note.binding]; try binding.instrument.send(Synthesis.Command.note_off(note.id)); note.active = false }
+        }
+        return Result<void, Error>.success()
+    }
+    // true: translated; false: documented unsupported controller/pressure, unchanged.
+    func send(channel:int, message:Message) Result<bool, Error> {
+        try validate(channel, message)
+        var state = self.channels[channel]
+        match message {
+            note_on(number, velocity) => {
+                if velocity == 0 { try self.release(channel, number); return Result<bool, Error>.success(true) }
+                let index = try self.selected(channel, state.program)
+                var slot = -1; var i = 0; while i < self.notes.count() { if !self.notes[i].active && slot < 0 { slot = i }
+            i++ }
+                if slot < 0 { return Result<bool, Error>.failure(limit("MIDI held-note capacity reached")) }
+                if self.serial == 9_223_372_036_854_775_807 { return Result<bool, Error>.failure(limit("MIDI note identity counter exhausted; reset")) }
+                let id = self.serial + 1; let hz = try frequency(number); var binding = self.bindings[index]
+                try binding.instrument.send(Synthesis.Command.note_on(id, hz, velocity as float32 / 127.0))
+                var note = self.notes[slot]; note.channel = channel; note.number = number; note.binding = index; note.id = id; note.active = true; self.serial = id
+            }
+            note_off(number, velocity) => { try self.release(channel, number) }
+            program_change(program) => { let index = try self.selected(channel, program); state.program = program }
+            pitch_bend(value) => {
+                let bend = (value - 8_192) as float32 / 8_192.0 * self.bend_range
+                try self.broadcast(channel, Synthesis.Command.pitch_bend(bend)); state.bend = bend
+            }
+            control_change(controller, value) => {
+                match controller {
+                    7 => { state.volume = value }
+                    11 => { state.expression = value }
+                    10 => {
+                        if value <= 64 { state.pan = (value - 64) as float32 / 64.0 }
+                        else { state.pan = (value - 64) as float32 / 63.0 }
+                    }
+                    64 => { try self.broadcast(channel, Synthesis.Command.sustain(value >= 64)); state.sustain = value >= 64 }
+                    123 => { try self.release_channel(channel) }
+                    120 => {
+                        for var binding in self.bindings {
+                            if binding.channel == channel { binding.instrument.reset(); try binding.instrument.send(Synthesis.Command.pitch_bend(state.bend)); try binding.instrument.send(Synthesis.Command.sustain(state.sustain)) }
+                        }
+                        for var note in self.notes { if note.channel == channel { note.active = false } }
+                    }
+                    else => { return Result<bool, Error>.success(false) }
+                }
+            }
+            else => { return Result<bool, Error>.success(false) }
+        }
+        return Result<bool, Error>.success(true)
+    }
+    func held_notes() int { var count = 0; for var note in self.notes { if note.active { count++ } }
+        return count }
+    func finish() Result<void, Error> {
+        var channel = 0
+        while channel < 16 { try self.broadcast(channel, Synthesis.Command.sustain(false)); self.channels[channel].sustain = false; try self.broadcast(channel, Synthesis.Command.all_notes_off); channel++ }
+        for var note in self.notes { note.active = false }
+        return Result<void, Error>.success()
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        if samples.count() % 2 != 0 { return Result<void, Error>.failure(invalid("MIDI output requires complete stereo frames")) }
+        var start = 0
+        while start < samples.count() {
+            var count = samples.count() - start; if count > 1_024 { count = 1_024 }
+            var i = start; while i < start + count { samples[i] = 0.0; i++ }
+            for var binding in self.bindings {
+                try binding.instrument.render(&self.samples[0:count])
+                var state = self.channels[binding.channel]
+                let gain = self.gain * (state.volume as float32 / 127.0) * (state.expression as float32 / 127.0)
+                var left = gain; var right = gain
+                if state.pan < 0.0 { right *= 1.0 + state.pan } else { left *= 1.0 - state.pan }
+                i = 0
+                while i < count { samples[start + i] += self.samples[i] * left; samples[start + i + 1] += self.samples[i + 1] * right; i += 2 }
+            }
+            start += count
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        for var binding in self.bindings { binding.instrument.reset() }
+        for var channel in self.channels { channel.reset() }
+        for var note in self.notes { note.active = false }
+        self.serial = 0
+    }
+}

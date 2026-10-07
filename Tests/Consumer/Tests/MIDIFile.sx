@@ -1,0 +1,132 @@
+use GFX.Audio.MIDI
+use STD.Error
+
+func score(data:@uint8[..], rate:int = 1_000) MIDI.Score { match MIDI.Score.parse(data, rate) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+test "format0 score normalizes running-status velocity zero and exact default tempo" {
+    let data:uint8[] = [77,84,104,100,0,0,0,6,0,0,0,1,0,96,77,84,114,107,0,0,0,11,0,144,69,127,96,69,0,0,255,47,0]
+    var value = score(@data[0:data.count()]); assert(value.ppqn == 96 && value.track_count == 1 && value.end_frame == 500 && value.events.count() == 2)
+    assert(value.events[0].frame == 0 && value.events[1].frame == 500)
+    match value.events[1].message { note_off(note, velocity) => { assert(note == 69 && velocity == 0) }; else => { panic("zero velocity was not normalized") } }
+}
+
+use STD.Error.Kind
+use STD.Math
+func file(track:uint8[], division:int = 96) uint8[] {
+    var data:uint8[] = [77,84,104,100,0,0,0,6,0,0,0,1,(division / 256) as uint8,(division % 256) as uint8,77,84,114,107,0,0,(track.count() / 256) as uint8,(track.count() % 256) as uint8]
+    for value in track { data.append(value) }
+    return data
+}
+func rejects(data:@uint8[..], kind:Kind = Kind.invalid_input(), rate:int = 1_000) { match MIDI.Score.parse(data,rate) { failure(error) => { assert(error.kind == kind && error.operation == "audio.midi") }; success(value) => { panic("invalid MIDI accepted") } } }
+test "format1 merges tempo map and simultaneous messages in stable track order" {
+    let data = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid"); var value = score(@data[0:data.count()])
+    assert(value.events.count() == 5 && value.track_count == 2 && value.end_frame == 2_000)
+    let frames:int[] = [0,0,500,500,1_250]; var i = 0
+    while i < frames.count() { assert(value.events[i].frame == frames[i]); i++ }
+    match value.events[0].message { program_change(program) => { assert(program == 0) }; else => { panic("unstable simultaneous order") } }
+}
+test "published format0 and format1 examples retain musical dates and four notes" {
+    let first = embed_bytes("../../Fixtures/MIDI/Standard0.mid"); let second = embed_bytes("../../Fixtures/MIDI/Standard1.mid")
+    var a = score(@first[0:first.count()]); var b = score(@second[0:second.count()]); assert(a.end_frame == 2_000 && b.end_frame == 2_000)
+    var scores:MIDI.Score[] = [a,b]
+    for var value in scores {
+        var on = 0; var off = 0
+        for event in value.events {
+            match event.message {
+                note_on(note, velocity) => {
+                    if note == 48 || note == 60 { assert(event.frame == 0 && event.channel == 2) }
+                    else if note == 67 { assert(event.frame == 500 && event.channel == 1) }
+                    else { assert(note == 76 && event.frame == 1_000 && event.channel == 0) }
+                    on++
+                }
+                note_off(note, velocity) => { assert(event.frame == 2_000); off++ }
+                else => {}
+            }
+        }
+        assert(on == 4 && off == 4 && value.ignored_events == 1)
+    }
+}
+test "rational frame clock rounds once without drift at nonintegral tick dates" {
+    var track:uint8[] = [0,144,69,100]; var i = 0
+    while i < 1_000 { track.append(1 as uint8); track.append(69 as uint8); track.append(100 as uint8); i++ }
+    for value in [0,255,47,0] { track.append(value as uint8) }
+    let data = file(track,97); var value = score(@data[0:data.count()],44_100)
+    i = 0; while i < value.events.count() {
+        let expected = (i * 22_050 * 2 + 97) / (97 * 2)
+        assert(value.events[i].frame == expected); i++
+    }
+    assert(value.end_frame == (1_000 * 22_050 * 2 + 97) / 194)
+    let half = file([1,144,69,1,0,255,47,0],1); value = score(@half[0:half.count()],1); assert(value.events[0].frame == 1)
+}
+test "extended headers metadata and alien chunks honor lengths and count ignored events" {
+    var track:uint8[] = [0,255,81,4,7,161,32,99,0,255,1,2,65,66,0,240,2,1,247,0,247,1,248,96,255,47,0]
+    var data = file(track); data[7] = 8; data.insert(14,0); data.insert(15,1)
+    let alien:uint8[] = [84,69,83,84,0,0,0,3,0,0,0]; var i = 0
+    while i < alien.count() { data.insert(16+i,alien[i]); i++ }
+    var value = score(@data[0:data.count()]); assert(value.events.count() == 0 && value.end_frame == 500 && value.ignored_events == 3)
+}
+test "running status is local to tracks and cancelled by metadata and SysEx" {
+    let invalid_tracks:uint8[][] = [[0 as uint8,69,127,0,255,47,0], [0 as uint8,144,69,127,0,255,1,0,0,69,0,0,255,47,0], [0 as uint8,144,69,127,0,240,0,0,69,0,0,255,47,0]]
+    for track in invalid_tracks {
+        let data = file(track); rejects(@data[0:data.count()])
+    }
+    let valid = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid"); var data = valid
+    // Second track must state its initial channel status explicitly.
+    var i = 0; while i < data.count() { if i > 35 && data[i] == 192 { data[i] = 64; break }
+        i++ }
+    rejects(@data[0:data.count()])
+}
+test "truncation lengths VLQ data statuses and end of track fail recoverably" {
+    let original = file([0 as uint8,144,69,127,96,69,0,0,255,47,0]); var i = 0
+    while i < original.count() { rejects(@original[0:i]); i++ }
+    let invalid_tracks:uint8[][] = [[0 as uint8,144,69,255,0,255,47,0], [128 as uint8,128,128,128,0,255,47,0], [0 as uint8,255,81,2,1,2,0,255,47,0], [0 as uint8,255,81,3,0,0,0,0,255,47,0], [0 as uint8,255,1,127], [0 as uint8,248], [0 as uint8,144,69,127], [0 as uint8,255,47,0,0,144,69,127]]
+    for track in invalid_tracks {
+        let data = file(track); rejects(@data[0:data.count()])
+    }
+    var data = original; data[21] = 127; rejects(@data[0:data.count()])
+    data = original; data[7] = 5; rejects(@data[0:data.count()])
+    data = original; data[11] = 2; rejects(@data[0:data.count()])
+    data = original; for b in original { data.append(b) }
+    rejects(@data[0:data.count()])
+}
+test "unsupported format and SMPTE differ from malformed PPQN and counts" {
+    let original = file([0 as uint8,255,47,0]); var data = original; data[9] = 2; rejects(@data[0:data.count()],Kind.unsupported())
+    data = original; data[12] = 231; rejects(@data[0:data.count()],Kind.unsupported())
+    data = original; data[13] = 0; rejects(@data[0:data.count()])
+    data = original; data[11] = 0; rejects(@data[0:data.count()])
+    let two = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid"); data = two; data[9] = 0; rejects(@data[0:data.count()])
+}
+test "MIDI capacities cover bytes tracks every metadata event and configuration" {
+    let data = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid")
+    match MIDI.Score.parse(@data[0:data.count()],1_000,maximum_bytes:14) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(value) => { panic("byte limit ignored") } }
+    match MIDI.Score.parse(@data[0:data.count()],1_000,maximum_tracks:1) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(value) => { panic("track limit ignored") } }
+    let empty = file([0 as uint8,255,1,0,0,255,47,0])
+    match MIDI.Score.parse(@empty[0:empty.count()],1_000,maximum_events:1) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(value) => { panic("metadata limit ignored") } }
+    for rate in [0,16_777_217] { match MIDI.Score.parse(@data[0:data.count()],rate) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(value) => { panic("rate accepted") } } }
+    match MIDI.Score.parse(@data[0:data.count()],1_000,maximum_events:0) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(value) => { panic("event config accepted") } }
+    match MIDI.Score.parse(@data[0:data.count()],1_000,maximum_tracks:257) { failure(error) => {}; success(value) => { panic("track config accepted") } }
+}
+test "large exact MIDI clock is distinct beyond float32 precision and detects overflow" {
+    let data = file([255 as uint8,255,255,127,255,81,3,255,255,255,255,255,255,127,144,69,1,1,69,0,0,255,47,0],1)
+    var value = score(@data[0:data.count()],16_777_216)
+    // Independent expected exact integer/rational values, computed outside the parser.
+    assert(value.events[0].frame == 77809658746136376 && value.events[1].frame == 77809659027611336)
+    var track:uint8[] = [0,255,81,3,255,255,255]; var i = 0
+    while i < 128 { for b in [255,255,255,127,144,69,1] { track.append(b as uint8) }
+        i++ }
+    for b in [0,255,47,0] { track.append(b as uint8) }
+    let overflow = file(track,1); rejects(@overflow[0:overflow.count()],Kind.limit_exceeded(),16_777_216)
+}
+test "running status cannot leak across tracks and format1 tempo must be in track0" {
+    let first = file([0 as uint8,144,69,100,0,255,47,0]); var data = first; data[9] = 1; data[11] = 2
+    let second = file([0 as uint8,69,0,0,255,47,0]); for b in second[14:second.count()] { data.append(b) }
+    rejects(@data[0:data.count()])
+    data = first; data[9] = 1; data[11] = 2
+    let tempo = file([0 as uint8,255,81,3,7,161,32,0,255,47,0]); for b in tempo[14:tempo.count()] { data.append(b) }
+    rejects(@data[0:data.count()])
+}
+test "file reading uses the same score parser and returns missing-file errors" {
+    match MIDI.Score.read("Packages/GFX.Audio/Tests/Fixtures/MIDI/TwoTracks.mid",1_000) {
+        failure(error) => { panic(error.detail) }; success(var value) => { assert(value.end_frame == 2_000 && value.events.count() == 5) }
+    }
+    match MIDI.Score.read("Packages/GFX.Audio/Tests/Fixtures/MIDI/absent.mid",1_000) { failure(error) => {}; success(value) => { panic("missing file succeeded") } }
+}

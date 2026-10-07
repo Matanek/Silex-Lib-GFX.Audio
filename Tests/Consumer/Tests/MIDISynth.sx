@@ -1,0 +1,156 @@
+use GFX.Audio.MIDI
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use GFX.Audio
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func send(source:MIDI.Synthesizer, channel:int, message:MIDI.Message) bool { match source.send(channel,message) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func zeros(count:int) float32[] { var values:float32[] = []; var i = 0; while i < count { values.append(0.0); i++ }
+    return values }
+func voice() Synthesis.SineInstrument { match Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000,channels:2),attack_frames:0,decay_frames:0,sustain:1.0,release_frames:4) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func synth(bindings:MIDI.Binding[], capacity:int = 256, gain:float32 = 1.0) MIDI.Synthesizer { match MIDI.Synthesizer.create(bindings,note_capacity:capacity,gain:gain) { failure(error) => { panic(error.detail) }; success(value) => { return value } } }
+func reject(source:MIDI.Synthesizer, channel:int, message:MIDI.Message, kind:Kind = Kind.invalid_input()) { match source.send(channel,message) { failure(error) => { assert(error.kind == kind) }; success(value) => { panic("MIDI input accepted") } } }
+func player(source:MIDI.Synthesizer) MIDI.Player {
+    let bytes = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid")
+    match MIDI.Score.parse(@bytes[0:bytes.count()],48_000) { failure(error) => { panic(error.detail) }; success(var score) => {
+        match MIDI.Player.create(score,source) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    } }
+}
+test "MIDI frequency velocity and sine PCM agree with independent references" {
+    for number in [0,60,69,127] { match MIDI.frequency(number) { failure(error) => { panic(error.detail) }; success(hz) => { assert(Math.abs(hz as float64 - 440.0 * Math.pow(2.0 as float64,(number-69) as float64/12.0)) < 0.02) } } }
+    var tone = voice(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:tone)])
+    assert(send(source,0,MIDI.Message.note_on(69,64))); var samples = zeros(32); require(source.render(&samples[0:32]))
+    var i = 0; while i < 16 { let expected = 64.0/127.0*Math.sin(i as float64*440.0/48_000.0*2.0*Math.pi<float64>()); assert(Math.abs(samples[i*2] as float64-expected)<0.00001 && samples[i*2] == samples[i*2+1]); i++ }
+    assert(source.held_notes() == 1); assert(send(source,0,MIDI.Message.note_on(69,0))); assert(source.held_notes() == 0)
+    require(source.render(&samples[0:32])); assert(tone.active_voices() == 0)
+}
+test "repeated notes use FIFO identities and release the original program" {
+    var first = voice(); var second = voice(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:first),MIDI.Binding(channel:0,program:1,instrument:second)])
+    send(source,0,MIDI.Message.note_on(69,100)); send(source,0,MIDI.Message.program_change(1)); send(source,0,MIDI.Message.note_on(69,100))
+    assert(source.held_notes() == 2 && first.active_voices() == 1 && second.active_voices() == 1)
+    send(source,0,MIDI.Message.note_off(69,127)); var samples = zeros(16); require(source.render(&samples[0:16])); assert(first.active_voices() == 0 && second.active_voices() == 1)
+    send(source,0,MIDI.Message.note_off(69,0)); require(source.render(&samples[0:16])); assert(second.active_voices() == 0 && source.held_notes() == 0)
+    send(source,0,MIDI.Message.note_off(69,0)); assert(source.held_notes() == 0)
+}
+test "sustain all notes off and all sound off keep channel semantics distinct" {
+    var tone = voice(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:tone)])
+    send(source,0,MIDI.Message.control_change(64,64)); send(source,0,MIDI.Message.note_on(69,100)); send(source,0,MIDI.Message.control_change(123,0))
+    var samples = zeros(32); require(source.render(&samples[0:32])); assert(tone.active_voices() == 1 && source.held_notes() == 0)
+    send(source,0,MIDI.Message.control_change(64,63)); require(source.render(&samples[0:32])); assert(tone.active_voices() == 0)
+    send(source,0,MIDI.Message.note_on(69,100)); send(source,0,MIDI.Message.control_change(120,0)); assert(tone.active_voices() == 0 && source.held_notes() == 0)
+    require(source.render(&samples[0:32])); for value in samples { assert(value == 0.0 as float32) }
+}
+test "channel volume expression pan and bend apply to old and future programs" {
+    var tone = voice(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:tone)])
+    send(source,0,MIDI.Message.note_on(69,127)); send(source,0,MIDI.Message.control_change(7,64)); send(source,0,MIDI.Message.control_change(11,32)); send(source,0,MIDI.Message.control_change(10,0)); send(source,0,MIDI.Message.pitch_bend(16_383))
+    var samples = zeros(4); require(source.render(&samples[0:4])); let expected = (64.0/127.0)*(32.0/127.0)*Math.sin(440.0*Math.pow(2.0 as float64,(8_191.0/8_192.0*2.0)/12.0)/48_000.0*2.0*Math.pi<float64>())
+    assert(samples[1] == 0.0 as float32 && samples[3] == 0.0 as float32 && Math.abs(samples[2] as float64-expected) < 0.00001)
+    source.reset(); send(source,0,MIDI.Message.control_change(10,127)); send(source,0,MIDI.Message.note_on(69,127)); require(source.render(&samples[0:4])); assert(samples[2] == 0.0 as float32 && samples[3] > 0.0 as float32)
+    source.reset(); send(source,0,MIDI.Message.pitch_bend(0)); send(source,0,MIDI.Message.note_on(69,127)); require(source.render(&samples[0:4])); assert(Math.abs(samples[2] as float64-Math.sin(440.0*Math.pow(2.0 as float64,-2.0/12.0)/48_000.0*2.0*Math.pi<float64>()))<0.00001)
+}
+test "ignored pressure and controllers are visible while missing programs are errors" {
+    var source = synth([MIDI.Binding(channel:0,program:0,instrument:voice())],capacity:1)
+    assert(!send(source,0,MIDI.Message.poly_pressure(69,127)) && !send(source,0,MIDI.Message.channel_pressure(127)) && !send(source,0,MIDI.Message.control_change(1,127)))
+    reject(source,0,MIDI.Message.program_change(1),Kind.unsupported()); reject(source,1,MIDI.Message.note_on(69,127),Kind.unsupported())
+    send(source,0,MIDI.Message.note_on(69,100)); reject(source,0,MIDI.Message.note_on(72,100),Kind.limit_exceeded()); assert(source.held_notes() == 1)
+    reject(source,16,MIDI.Message.note_on(69,100)); reject(source,-1,MIDI.Message.note_on(69,100)); reject(source,0,MIDI.Message.note_on(128,100)); reject(source,0,MIDI.Message.note_off(69,-1)); reject(source,0,MIDI.Message.pitch_bend(16_384)); reject(source,0,MIDI.Message.control_change(7,128)); reject(source,0,MIDI.Message.program_change(-1))
+    assert(source.held_notes() == 1); require(source.finish()); assert(source.held_notes() == 0)
+}
+test "synth preparation rejects conflicting bindings formats and capacities" {
+    var tone = voice(); var bindings:MIDI.Binding[] = [MIDI.Binding(channel:0,program:0,instrument:tone)]
+    for count in [0,4_097] { match MIDI.Synthesizer.create(bindings,note_capacity:count) { failure(error) => {}; success(value) => { panic("note config accepted") } } }
+    match MIDI.Synthesizer.create([]) { failure(error) => {}; success(value) => { panic("empty mapping accepted") } }
+    match MIDI.Synthesizer.create([bindings[0],bindings[0]]) { failure(error) => {}; success(value) => { panic("duplicate binding accepted") } }
+    match MIDI.Synthesizer.create(bindings,bend_range:25.0) { failure(error) => {}; success(value) => { panic("bend config accepted") } }
+    match MIDI.Synthesizer.create(bindings,gain:Math.sqrt(-1.0)) { failure(error) => {}; success(value) => { panic("gain config accepted") } }
+    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000,channels:1)) { failure(error) => { panic(error.detail) }; success(var mono) => {
+        match MIDI.Synthesizer.create([MIDI.Binding(channel:0,program:0,instrument:mono)]) { failure(error) => {}; success(value) => { panic("mono binding accepted") } }
+    } }
+}
+test "MIDI player is bit exact across blocks reset and partial stream writes" {
+    var source = player(synth([MIDI.Binding(channel:0,program:0,instrument:voice())],gain:0.25)); var expected = zeros(192_016)
+    require(source.render(&expected[0:expected.count()])); assert(source.rendered_frames() == 96_008 && source.end_frame == 96_000)
+    source.reset(); var split = zeros(expected.count()); var start = 0
+    while start < split.count() { var end = start + 1_026; if end > split.count() { end = split.count() }
+        require(source.render(&split[start:end])); start = end }
+    var i = 0; while i < split.count() { assert(split[i] == expected[i]); i++ }
+    source.reset()
+    match Audio.offline(sample_rate:48_000,channels:2) { failure(error) => { panic(error.detail) }; success(var audio) => {
+        match Synthesis.StreamProducer.create(audio,source,96_008,block_frames:512,capacity_frames:3) { failure(error) => { panic(error.detail) }; success(var producer) => {
+            match producer.pump() { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 3) } }
+            let playing = audio.play(producer.stream()); var frame = 0
+            while frame < 96_008 {
+                if !producer.input_closed() { match producer.pump() { failure(error) => { assert(error.kind == Kind.would_block()) }; success(count) => {} } }
+                var count = 0
+                match audio.stream_info(producer.stream()) { failure(error) => { panic(error.detail) }; success(info) => { count = info.queued_frames } }
+                assert(count > 0 && count <= 3)
+                match audio.render(count) { failure(error) => { panic(error.detail) }; success(samples) => {
+                    var j = 0; while j < samples.count() && frame*2+j < expected.count() { assert(samples[j] == expected[frame*2+j]); j++ }
+                    frame += count
+                } }
+            }
+            assert(producer.input_closed() && producer.produced_frames() == 96_008)
+        } }
+    } }
+}
+class Probe:Synthesis.Instrument {
+    let format:Processing.Format = Processing.Format(sample_rate:48_000,channels:2)
+    var last_id:int = 0
+    var released:int = 0
+    var bend:float32 = 0.0
+    var value:float32 = 0.0
+    func validate(command:Synthesis.Command) Result<void, Error> { return Result<void, Error>.success() }
+    func send(command:Synthesis.Command) Result<void, Error> {
+        match command { note_on(id,hz,velocity) => { self.last_id = id; self.value = velocity }; note_off(id) => { self.released = id; self.value = 0.0 }; pitch_bend(value) => { self.bend = value }; all_notes_off => { self.value = 0.0 }; else => {} }
+        return Result<void, Error>.success()
+    }
+    func render(samples:&float32[..]) Result<void, Error> { var i = 0; while i < samples.count() { samples[i] = self.value; i++ }
+        return Result<void, Error>.success() }
+    func reset() { self.last_id = 0; self.released = 0; self.value = 0.0; self.bend = 0.0 }
+}
+test "user instruments receive FIFO note identities and controller state across programs" {
+    var first = Probe(); var second = Probe(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:first),MIDI.Binding(channel:0,program:1,instrument:second)])
+    send(source,0,MIDI.Message.pitch_bend(0)); send(source,0,MIDI.Message.note_on(69,127)); send(source,0,MIDI.Message.program_change(1)); send(source,0,MIDI.Message.note_on(69,64))
+    assert(first.last_id == 1 && second.last_id == 2 && first.bend == -2.0 as float32 && second.bend == -2.0 as float32)
+    send(source,0,MIDI.Message.note_off(69,0)); assert(first.released == 1 && second.released == 0)
+    send(source,0,MIDI.Message.note_off(69,0)); assert(second.released == 2)
+    var samples = zeros(8); source.reset(); send(source,0,MIDI.Message.note_on(69,127)); require(source.render(&samples[0:8])); for value in samples { assert(value == 1.0 as float32) }
+}
+test "score end releases sustain and unfinished notes while an empty block has no side effects" {
+    let bytes:uint8[] = [77,84,104,100,0,0,0,6,0,0,0,1,0,1,77,84,114,107,0,0,0,12,0,176,64,127,0,144,69,100,0,255,47,0]
+    var tone = voice(); var source = synth([MIDI.Binding(channel:0,program:0,instrument:tone)])
+    match MIDI.Score.parse(@bytes[0:bytes.count()],48_000) { failure(error) => { panic(error.detail) }; success(var score) => {
+        match MIDI.Player.create(score,source) { failure(error) => { panic(error.detail) }; success(var music) => {
+            var samples = zeros(16); require(music.render(&samples[0:0])); assert(source.held_notes() == 0)
+            require(music.render(&samples[0:16])); assert(source.held_notes() == 0 && tone.active_voices() == 0 && music.rendered_frames() == 8)
+            music.reset(); require(music.render(&samples[0:16])); assert(tone.active_voices() == 0)
+        } }
+    } }
+}
+test "MIDI player preserves failure position and untouched output before an unmapped event" {
+    var music = player(synth([MIDI.Binding(channel:0,program:1,instrument:voice())])); var samples:float32[] = [0.75 as float32,0.75 as float32]
+    match music.render(&samples[0:2]) { failure(error) => { assert(error.kind == Kind.unsupported()) }; success => { panic("unmapped program succeeded") } }
+    assert(music.rendered_frames() == 0 && samples[0] == 0.75 as float32 && samples[1] == 0.75 as float32)
+    match music.render(&samples[0:2]) { failure(error) => {}; success => { panic("failed event was skipped") } }
+}
+test "ignored MIDI messages are counted by the player and reset for replay" {
+    let bytes:uint8[] = [77,84,104,100,0,0,0,6,0,0,0,1,0,1,77,84,114,107,0,0,0,11,0,208,100,0,176,1,127,0,255,47,0]
+    var source = synth([MIDI.Binding(channel:0,program:0,instrument:voice())])
+    match MIDI.Score.parse(@bytes[0:bytes.count()],48_000) { failure(error) => { panic(error.detail) }; success(var score) => {
+        match MIDI.Player.create(score,source) { failure(error) => { panic(error.detail) }; success(var music) => {
+            var samples = zeros(4); require(music.render(&samples[0:4])); assert(music.ignored_messages() == 2)
+            music.reset(); assert(music.ignored_messages() == 0); require(music.render(&samples[0:4])); assert(music.ignored_messages() == 2)
+        } }
+    } }
+}
+test "player rejects a different sample rate and incomplete frames before side effects" {
+    let bytes = embed_bytes("../../Fixtures/MIDI/TwoTracks.mid"); var source = synth([MIDI.Binding(channel:0,program:0,instrument:voice())])
+    match MIDI.Score.parse(@bytes[0:bytes.count()],1_000) { failure(error) => { panic(error.detail) }; success(var score) => {
+        match MIDI.Player.create(score,source) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(value) => { panic("rate mismatch accepted") } }
+    } }
+    var music = player(source); var sample:float32[] = [0.75 as float32]
+    match music.render(&sample[0:1]) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("partial frame accepted") } }
+    assert(sample[0] == 0.75 as float32 && music.rendered_frames() == 0 && source.held_notes() == 0)
+}

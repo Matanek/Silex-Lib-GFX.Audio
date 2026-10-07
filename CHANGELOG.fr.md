@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Commande MIDI 1.0 dans GFX.Audio : partitions SMF 0/1 PPQN bornées, tempo et fusion stable sans dérive d’arrondi, instruments choisis par canal/programme, identités FIFO, sustain/gain/balance/bend, fin et queues explicites ; rendu mémoire et flux sans banque ni décodeur MIDI système.
+
 - Contrôles continus et rampes de gain/hauteur : changement de cible depuis le niveau courant, phase conservée et commandes en frames. Producteur de flux borné avec suffixe conservé lors des écritures partielles, compteurs distincts, fermeture à durée choisie et durée de vie explicite ; recettes moteur/accord sans relance de petits sons.
 
 - Instruments polyphoniques sinusoïdaux : identités, vélocité, ADSR, sustain, bend et réattribution bornée avec raccord configurable. Partition de commandes sur l’horloge entière en frames, ordre stable, retards et capacités récupérables, instrument utilisateur composable et mélodie sans banque de sons.

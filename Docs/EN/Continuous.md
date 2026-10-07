@@ -127,3 +127,5 @@ provider allocations or hard real time. Proof covers partial writes,
 identity with memory rendering, pauses, starvation, stop, closure, tails and
 lifetime. Listening to the program complements this proof for transitions
 and continuity of actual output.
+
+[Play a MIDI score with your own instruments](MIDI.md).

@@ -147,6 +147,8 @@ render, its contract determines the affected prefix.
 The voice pool, envelopes and working buffer are prepared at creation.
 Rendering and valid commands of the built-in instrument do not grow collections.
 Work per frame depends on occupied voices and channel count; this qualification
-does not promise a maximum load on every device. The MIDI parser, user banks,
-realistic instrument models and humanization remain separate
-capabilities to establish.
+does not promise a maximum load on every device. The [MIDI reader](MIDI.md)
+controls these instruments. User banks, realistic instrument models and
+humanization remain separate capabilities to establish.
+
+[Play a MIDI score with your own instruments](MIDI.md).

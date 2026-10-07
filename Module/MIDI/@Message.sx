@@ -1,0 +1,42 @@
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+// Channel messages are independent of files, ports and sound banks.
+public enum Message {
+    note_on(int, int)
+    note_off(int, int)
+    control_change(int, int)
+    program_change(int)
+    pitch_bend(int)
+    poly_pressure(int, int)
+    channel_pressure(int)
+}
+public struct Event {
+    let frame:int
+    let channel:int
+    let message:Message
+}
+func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.midi", subject:null, detail:detail) }
+func limit(detail:str) Error { return Error(kind:Kind.limit_exceeded(), operation:"audio.midi", subject:null, detail:detail) }
+func unsupported(detail:str) Error { return Error(kind:Kind.unsupported(), operation:"audio.midi", subject:null, detail:detail) }
+func data_byte(value:int) bool { return value >= 0 && value <= 127 }
+func validate(channel:int, message:Message) Result<void, Error> {
+    if channel < 0 || channel > 15 { return Result<void, Error>.failure(invalid("MIDI channel must be in [0, 15]")) }
+    var valid = true
+    match message {
+        note_on(note, velocity) => { valid = data_byte(note) && data_byte(velocity) }
+        note_off(note, velocity) => { valid = data_byte(note) && data_byte(velocity) }
+        control_change(controller, value) => { valid = data_byte(controller) && data_byte(value) }
+        program_change(program) => { valid = data_byte(program) }
+        pitch_bend(value) => { valid = value >= 0 && value <= 16_383 }
+        poly_pressure(note, pressure) => { valid = data_byte(note) && data_byte(pressure) }
+        channel_pressure(pressure) => { valid = data_byte(pressure) }
+    }
+    if !valid { return Result<void, Error>.failure(invalid("MIDI data exceeds its 7-bit or 14-bit range")) }
+    return Result<void, Error>.success()
+}
+public func frequency(note:int) Result<float32, Error> {
+    if !data_byte(note) { return Result<float32, Error>.failure(invalid("MIDI note must be in [0, 127]")) }
+    return Result<float32, Error>.success(440.0 * Math.pow(2.0 as float32, (note - 69) as float32 / 12.0))
+}

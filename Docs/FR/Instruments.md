@@ -152,6 +152,8 @@ Le pool de voix, les enveloppes et le tampon de travail sont préparés à la
 création. Le rendu et les commandes valides de l’instrument intégré ne font
 pas grandir de collection. Le travail par frame dépend du nombre de voix
 occupées et de canaux ; cette qualification ne promet pas une charge maximale
-sur tous les appareils. Le parser MIDI, les banques utilisateur, les modèles
-d’instruments réalistes et l’humanisation restent des capacités
-séparées à établir.
+sur tous les appareils. Le [lecteur MIDI](MIDI.md) commande ces instruments.
+Les banques utilisateur, les modèles d’instruments réalistes et l’humanisation
+restent des capacités séparées à établir.
+
+[Jouer une partition MIDI avec ses propres instruments](MIDI.md).
