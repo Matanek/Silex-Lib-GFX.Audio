@@ -1,0 +1,50 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func format() Processing.Format { return Processing.Format(sample_rate:48_000, channels:1) }
+func play(audio:&Audio, samples:&float32[..], name:str) {
+    print(name)
+    var i = 0; while i < samples.count() { samples[i] *= 0.3; i++ }
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:48_000)
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+}
+func pluck(samples:&float32[..], frequency:float32) {
+    match Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:0.5, waveform:Synthesis.Waveform.triangle) {
+        failure(error) => { panic(error.detail) }; success(var source) => { require(source.render(samples)) }
+    }
+    match Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:4_800, sustain:0.15, release_frames:2_400) {
+        failure(error) => { panic(error.detail) }
+        success(var envelope) => {
+            envelope.note_on(); require(envelope.process(&samples[0:9_600]))
+            envelope.note_off(); require(envelope.process(&samples[9_600:samples.count()]))
+        }
+    }
+}
+func example(audio:&Audio, decay:float32, damping:float32, bypass:bool, name:str) {
+    var samples:float32[] = []; var i = 0; while i < 192_000 { samples.append(0.0); i++ }
+    pluck(&samples[0:14_400], 261.625)
+    pluck(&samples[14_400:28_800], 329.625)
+    pluck(&samples[28_800:43_200], 392.0)
+    match Processing.Reverb.create(format(), room_size:0.65, decay_seconds:decay, damping:damping, wet:0.45) {
+        failure(error) => { panic(error.detail) }
+        success(var effect) => {
+            effect.set_bypass(bypass)
+            var start = 0
+            while start < samples.count() {
+                var end = start + 512; if end > samples.count() { end = samples.count() }
+                require(effect.process(&samples[start:end])); start = end
+            }
+        }
+    }
+    play(audio, &samples[0:samples.count()], name)
+}
+func main() {
+    var audio = Audio()
+    example(audio, decay:0.4, damping:0.5, bypass:true, name:"R1 - Dry plucks")
+    example(audio, decay:0.4, damping:0.5, bypass:false, name:"R2 - Short room")
+    example(audio, decay:2.0, damping:0.05, bypass:false, name:"R3 - Long bright tail")
+    example(audio, decay:2.0, damping:1.0, bypass:false, name:"R4 - Long dark tail")
+}

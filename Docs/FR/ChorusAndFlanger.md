@@ -78,7 +78,9 @@ la phase courante ; après reset, le retard vaut donc le centre.
 `1_048_576/channels - 1` avec division entière. Le stockage du retard possède
 une frame supplémentaire pour l'interpolation. Tous les buffers sont préparés
 à la création ; leur contenu float32 occupe
-`4 * ((max_delay_frames+1)*channels + 2*channels)` octets, hors en-têtes.
+`4 * ((max_delay_frames+1)*channels + 2*channels)` octets logiques.
+L’allocation physique ajoute la réserve et les en-têtes ; les éléments float32
+occupent quatre octets sur ARM64 et des slots de huit octets sur X64.
 
 `set_delay(delay_frames, depth_frames)` modifie les deux durées ensemble dans
 la plage préparée. `set_rate(rate_hz)`, `set_feedback(feedback)` et

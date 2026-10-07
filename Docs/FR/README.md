@@ -233,3 +233,5 @@ appartient à Silex-Examples.
 [Déplacer un son entre gauche et droite](StereoPan.md).
 
 [Créer chorus et flanger avec un délai modulé](ChorusAndFlanger.md).
+
+[Ajouter une réverbération algorithmique](Reverb.md).

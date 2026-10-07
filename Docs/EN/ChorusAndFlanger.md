@@ -78,7 +78,9 @@ phase; after reset the delay therefore equals its center.
 `1_048_576/channels - 1` using integer division. Delay storage includes one
 extra frame for interpolation. All buffers are prepared at creation;
 their float32 contents occupy
-`4 * ((max_delay_frames+1)*channels + 2*channels)` bytes, excluding headers.
+`4 * ((max_delay_frames+1)*channels + 2*channels)` logical bytes.
+Physical allocation adds spare capacity and headers; float32 elements use
+four bytes on ARM64 and eight-byte slots on X64.
 
 `set_delay(delay_frames, depth_frames)` changes both durations together
 within the prepared range. `set_rate(rate_hz)`, `set_feedback(feedback)`

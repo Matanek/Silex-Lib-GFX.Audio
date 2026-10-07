@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Composable algorithmic reverb: prepared room size, adjustable decay and damping, mix/bypass, per-channel history, echo/tail/color oracles and plucked notes without sound banks.
+
 - Composable modulated delay for chorus and flanger: causal interpolation, signed feedback, wet/bypass with advancing history, prepared capacity, impulse/tone oracles and a procedural chord without sound banks.
 
 - Stereo pan transfers the opposite channel with sine/cosine gains, preserving center and exact poles; wet mix/bypass, recoverable overflow and a block-based demonstration.

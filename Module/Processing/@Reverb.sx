@@ -1,0 +1,124 @@
+use STD.Error
+use STD.Math
+
+public class Reverb:Processor {
+    let format:Format
+    let room_size:float32
+    private var decay_seconds:float32
+    private var damping:float32
+    private var wet:float32
+    private var bypass:bool = false
+    private var lengths:int[]
+    private var offsets:int[]
+    private var cursors:int[]
+    private var gains:float32[]
+    private var ring:float32[]
+    private var filtered:float32[]
+    private var pending:float32[]
+    private var pending_filtered:float32[]
+    private var output:float32[]
+    private init(format:Format, room_size:float32, decay_seconds:float32, damping:float32, wet:float32) {
+        self.format = format; self.room_size = room_size; self.decay_seconds = decay_seconds
+        self.damping = 0.95 * damping; self.wet = wet
+        self.lengths = []; self.offsets = []; self.cursors = []
+        let bases:int[] = [1_429, 1_783, 1_973, 2_099, 241, 83]
+        let scale = (0.5 + 1.5 * room_size) * format.sample_rate as float32 / 48_000.0
+        var total = 0
+        for base in bases {
+            var length = Math.round(base as float32 * scale) as int
+            if length < 1 { length = 1 }
+            self.lengths.append(length); self.offsets.append(total); self.cursors.append(0)
+            total += length * format.channels
+        }
+        self.ring = zeros(total); self.filtered = zeros(4 * format.channels)
+        self.pending = zeros(6 * format.channels); self.pending_filtered = zeros(4 * format.channels)
+        self.output = zeros(format.channels); self.gains = zeros(4); self.update_gains()
+    }
+    private static func unit(value:float32) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }
+    private static func valid_decay(value:float32) bool { return Math.is_finite(value) && value >= 0.05 && value <= 20.0 }
+    private func update_gains() {
+        let denominator = self.format.sample_rate as float32 * self.decay_seconds
+        var i = 0
+        while i < 4 {
+            self.gains[i] = Math.exp(-6.90775528 * self.lengths[i] as float32 / denominator)
+            i++
+        }
+    }
+    static func create(format:Format, room_size:float32 = 0.5, decay_seconds:float32 = 1.5, damping:float32 = 0.5, wet:float32 = 0.3) Result<Reverb, Error> {
+        if !valid_format(format) || format.sample_rate > 384_000 || !Reverb.unit(room_size) || !Reverb.valid_decay(decay_seconds) || !Reverb.unit(damping) || !Reverb.unit(wet) {
+            return Result<Reverb, Error>.failure(invalid("reverb requires 1..384000 Hz, 1..8 channels, room/damping/wet in [0, 1], decay in [0.05, 20] seconds"))
+        }
+        return Result<Reverb, Error>.success(Reverb(format, room_size, decay_seconds, damping, wet))
+    }
+    func set_decay(decay_seconds:float32) Result<void, Error> {
+        if !Reverb.valid_decay(decay_seconds) { return Result<void, Error>.failure(invalid("reverb decay must be finite and in [0.05, 20] seconds")) }
+        self.decay_seconds = decay_seconds; self.update_gains(); return Result<void, Error>.success()
+    }
+    func set_damping(damping:float32) Result<void, Error> {
+        if !Reverb.unit(damping) { return Result<void, Error>.failure(invalid("reverb damping must be finite and in [0, 1]")) }
+        self.damping = 0.95 * damping; return Result<void, Error>.success()
+    }
+    func set_wet(wet:float32) Result<void, Error> {
+        if !Reverb.unit(wet) { return Result<void, Error>.failure(invalid("reverb wet must be finite and in [0, 1]")) }
+        self.wet = wet; return Result<void, Error>.success()
+    }
+    func set_bypass(bypass:bool) { self.bypass = bypass }
+    func process(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        let channels = self.format.channels
+        var frame = 0
+        while frame < samples.count() {
+            var channel = 0
+            while channel < channels {
+                let dry = samples[frame + channel]
+                var diffuse:float32 = 0.0
+                var node = 0
+                while node < 4 {
+                    let state = node * channels + channel
+                    let delayed = self.ring[self.offsets[node] + self.cursors[node] * channels + channel]
+                    let filtered = (1.0 - self.damping) * delayed + self.damping * self.filtered[state]
+                    let retained = dry + self.gains[node] * filtered
+                    diffuse += 0.25 * delayed
+                    if !Math.is_finite(filtered) || !Math.is_finite(retained) || !Math.is_finite(diffuse) { return Result<void, Error>.failure(overflow()) }
+                    self.pending_filtered[state] = filtered; self.pending[state] = retained
+                    node++
+                }
+                while node < 6 {
+                    let delayed = self.ring[self.offsets[node] + self.cursors[node] * channels + channel]
+                    let result = delayed - 0.5 * diffuse
+                    let retained = diffuse + 0.5 * result
+                    if !Math.is_finite(result) || !Math.is_finite(retained) { return Result<void, Error>.failure(overflow()) }
+                    self.pending[node * channels + channel] = retained; diffuse = result; node++
+                }
+                var result = dry
+                if !self.bypass && self.wet > 0.0 {
+                    if self.wet == 1.0 { result = diffuse }
+                    else { result = (1.0 - self.wet) * dry + self.wet * diffuse }
+                }
+                if !Math.is_finite(result) { return Result<void, Error>.failure(overflow()) }
+                self.output[channel] = result; channel++
+            }
+            var node = 0
+            while node < 6 {
+                channel = 0
+                while channel < channels {
+                    let state = node * channels + channel
+                    self.ring[self.offsets[node] + self.cursors[node] * channels + channel] = self.pending[state]
+                    if node < 4 { self.filtered[state] = self.pending_filtered[state] }
+                    channel++
+                }
+                self.cursors[node]++; if self.cursors[node] == self.lengths[node] { self.cursors[node] = 0 }
+                node++
+            }
+            channel = 0
+            while channel < channels { samples[frame + channel] = self.output[channel]; channel++ }
+            frame += channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        var i = 0; while i < self.ring.count() { self.ring[i] = 0.0; i++ }
+        i = 0; while i < self.filtered.count() { self.filtered[i] = 0.0; i++ }
+        i = 0; while i < self.cursors.count() { self.cursors[i] = 0; i++ }
+    }
+}

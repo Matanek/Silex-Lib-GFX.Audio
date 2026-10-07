@@ -227,3 +227,5 @@ demonstration belongs to Silex-Examples.
 [Move sound between left and right](StereoPan.md).
 
 [Create chorus and flanger with a modulated delay](ChorusAndFlanger.md).
+
+[Add algorithmic reverberation](Reverb.md).
