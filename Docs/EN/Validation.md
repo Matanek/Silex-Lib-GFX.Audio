@@ -48,3 +48,51 @@ These proofs cover PCM and logical mixer state. Counters do not measure the
 exact speaker presentation time. Processing runs on the application thread;
 the provider never calls a Silex callback on its audio thread. Data and
 primitives remain independent of instruments, sequencing or MIDI.
+
+## Retained qualification from October 7, 2026
+
+The local audio production delivery was qualified on GFX.Audio
+`a821c4a8776151761eea8a062540271b987e1166` and Silex
+`4e1dfdbe339c3972f86684a5898030bbea404c72`. The latter provides the mutable
+method-view correction. Dependencies were GFX
+`46d14c329b6acae53a1fb70038fb8496e3b080bc` and STD
+`4112bb54390c55d39e85a5414991359abdff15dc`.
+
+The five deliveries below were integrated into the local `main` branches.
+This table retains the commits from the `gfx-audio-production` receipts after
+retirement of its capsule; it does not automatically qualify a future commit.
+
+| Delivered receipt | GFX.Audio | Silex |
+| --- | --- | --- |
+| `memory-stream-core` | `d5efc07170c11c59da5708f1f31889aabe78fd27` | — |
+| `timeline-groups` | `7405034b8a8f1cbbd96005c6c8abf2abfeeaeaf5` | — |
+| `offline-render` | `9c5a0d97567db074960d576b2cf35c723d99628d` | — |
+| `block-processing` | `78fcbe478706ac1e3a7e6459a3b5a0fad899bf7b` | `4e1dfdbe339c3972f86684a5898030bbea404c72` |
+| `production-final` | `a821c4a8776151761eea8a062540271b987e1166` | `4e1dfdbe339c3972f86684a5898030bbea404c72` |
+
+The audio suite passed **53 of 53 tests across 19 files**, including after
+integration from the workspace root. The **13 Release PCM oracles** ran on
+macOS ARM64 and X64 through Rosetta without an audio driver; they composed
+and linked for all six targets. Linux and Windows were not executed. The seven
+examples listed above passed in Release; the ten rejection cases in
+`GeneratedSamplesValidation.py` and the offline wait rejection in
+`OfflineValidation.py` produced the expected explicit failures.
+
+Compiler gates `zig build test` and `zig build check` passed: 244 language
+tests across 93 files, 84 optimizer admission tests and 28 programs.
+`Tests/ControlFlow/MutableViewCalls.sx` also ran through interpretation,
+ARM64 Debug/Release and X64 Release, returning `2.25`.
+
+All six `SDL3_mixer-3.2.4-silex.6` provider archives were rebuilt twice with
+identical results. Manifest, artifact metadata,
+[SHA256SUMS](../../Boundary/SHA256SUMS.txt) and
+[patch](../../Boundary/SDL3_mixer-3.2.4-silex.6.patch) hashes agreed at final
+delivery. Local archives are retained; their reserved URLs do not constitute
+publication.
+
+The user had authorized reintegration subject to passing tests and no known
+defect. They explicitly accepted closure on October 7, 2026: “on clos la spec,
+puisque tout est ok, et réintégré dans les branch main locale” (close the Spec,
+since everything is fine and integrated into the local main branches).
+Tests, scripts, examples and explanations remain in the repositories. This
+closure publishes no remote branch, tag or release.
