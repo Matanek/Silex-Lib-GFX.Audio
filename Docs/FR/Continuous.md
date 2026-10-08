@@ -124,9 +124,11 @@ avec une source réinitialisée. Les erreurs source/Audio sont propagées.
 Le rendu interne peut dépasser −1..1, mais la sortie vers Audio doit conserver
 une marge explicite ; les rampes ne normalisent pas les voix.
 
-Le tampon Silex reste borné après préparation. Cela ne certifie pas les allocations
-internes du provider SDL ni un temps réel dur. Les preuves couvrent les écritures
-partielles, l’identité avec le rendu mémoire, les pauses, le manque, l’arrêt,
+Le tampon Silex reste borné après préparation. `pump` inclut le transfert PCM
+allouant de `Audio.write` ; il ne convient pas comme callback sans allocation.
+La [qualification des ressources](Resources.md) sépare calcul et transfert.
+Cela ne certifie pas les allocations internes de SDL ni un temps réel dur.
+Les preuves couvrent les écritures partielles, l’identité avec le rendu mémoire, les pauses, le manque, l’arrêt,
 la fermeture, les queues et la durée de vie. L’écoute du programme complète
 ces preuves pour les transitions et la continuité de la sortie réelle.
 

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Qualifies synthesis resources: controlled Debug/Release ARM64 allocation gate including MIDI events; stereo 16/64-voice workload with five effects measured separately from PCM transfer, with documented limits and headroom.
+
 - Adds a procedural recipe guide from beeps to MIDI scores, including units, level control and extension contracts.
 
 - Optional MIDI volume, expression and balance smoothing, configured in frames; the melody uses 5 ms to avoid the click caused by an expression drop on sustained voices. Note dates remain unchanged, with continuous targets across blocks and programs.

@@ -84,6 +84,6 @@ before retrying. Component errors are propagated.
 Mix and modulation prepare their buffers at construction and process any block
 length in internal chunks of at most 512 frames. The processing chain directly
 uses the supplied view. Rendering explicitly creates no arrays, reads no files
-and waits for no device. This does not yet promise real-time latency: runtime
-costs and load will be measured during final qualification. User extensions
+and waits for no device. The [resource qualification](Resources.md) measures a specific workload
+on the available host; it does not guarantee real-time latency. User extensions
 remain responsible for their own costs, errors and block guarantees.

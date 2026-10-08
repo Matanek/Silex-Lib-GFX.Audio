@@ -8,6 +8,7 @@ under `Boundary/`; `Package.json` records paths and hashes. The
 ```sh
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
+python3 Packages/GFX.Audio/Tests/Resources/Validate.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
@@ -66,6 +67,20 @@ These proofs cover PCM and logical mixer state. Counters do not measure the
 exact speaker presentation time. Processing runs on the application thread;
 the provider never calls a Silex callback on its audio thread. Data and
 primitives remain independent of instruments, sequencing or MIDI.
+
+## Synthesis qualification of October 8, 2026
+
+The DSP in Audio `ada2c3570df1ffa3ac7065a11ab9892abff40af7` is unchanged.
+With Silex `60d90abf1d7a689eef421b54fb9bd58b09d2313e`, all 143 Release oracles
+for processing, synthesis, instruments, streams and MIDI pass on macOS ARM64
+and X64 under Rosetta. They also compose and link for Linux and Windows,
+in ARM64 and X64; none of those executables ran on those two systems during
+this qualification.
+
+The [resource gate](Resources.md) adds a positively controlled Debug/Release
+allocation counter on macOS ARM64 and a measured 16/64-voice workload with
+five effects. This gate requires Clang and does not cover other hosts. Link
+results are not performance or allocation measurements.
 
 ## Retained qualification from October 7, 2026
 

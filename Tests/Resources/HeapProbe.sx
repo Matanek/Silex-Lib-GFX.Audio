@@ -1,0 +1,155 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use Interop.C
+use Interop.Boundary
+use STD.Error
+use STD.Math
+use GFX.Audio
+use GFX.Audio.MIDI
+
+// Private test marker: the injected macOS counter brackets this system call.
+let phase = C.function<func() int32>(library:Boundary.System, name:"getppid")
+func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
+func zeros(count:int) float32[] {
+    var samples:float32[] = []
+    for i in 0...count { samples.append(0.0) }
+    return samples
+}
+func instrument(voices:int) Synthesis.SineInstrument {
+    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000,channels:2),max_voices:voices) {
+        failure(error) => { panic(error.detail) }; success(value) => { return value }
+    }
+}
+func chain(voice:Synthesis.SineInstrument) Result<Synthesis.Processed, Error> {
+    let format = voice.format
+    var low = try Processing.LowPass.create(format,cutoff_hz:8_000.0)
+    var chorus = try Processing.ModulatedDelay.create(format,max_delay_frames:2_400,delay_frames:960.0,depth_frames:240.0,rate_hz:0.7,feedback:0.1,wet:0.25)
+    var room = try Processing.Reverb.create(format,room_size:0.5,decay_seconds:1.5,damping:0.5,wet:0.3)
+    var compressor = try Processing.Compressor.create(format)
+    var limiter = try Processing.Limiter.create(format,ceiling_db:-3.0)
+    return Synthesis.Processed.create(voice,[low,chorus,room,compressor,limiter])
+}
+func start(voice:Synthesis.SineInstrument, count:int) {
+    for id in 0...count { require(voice.send(Synthesis.Command.note_on(id,110.0 + id as float32 * 13.0,0.25 / count as float32))) }
+    assert(voice.active_voices() == count)
+}
+func workload(voices:int, frames:int) {
+    print("voices=",voices," frames=",frames," preparation")
+    phase()
+    var voice = instrument(voices)
+    var result = chain(voice)
+    var samples = zeros(frames * 2)
+    phase()
+    match result {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            print("note commands")
+            phase(); start(voice,voices); phase()
+            print("first chain block")
+            phase(); require(source.render(&samples[0:samples.count()])); phase()
+            print("100 chain blocks")
+            phase()
+            for i in 0...100 { require(source.render(&samples[0:samples.count()])) }
+            phase()
+            for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 0.9) }
+            print("100 pitch and gain commands")
+            phase()
+            for i in 0...100 {
+                require(voice.send(Synthesis.Command.pitch_bend_to((i % 3) as float32,128)))
+                require(voice.send(Synthesis.Command.gain_to(0.75,128)))
+            }
+            phase()
+            print("reset")
+            phase(); source.reset(); phase()
+            require(source.render(&samples[0:samples.count()]))
+            for sample in samples { assert(sample == 0.0 as float32) }
+        }
+    }
+}
+func scheduled() Result<void, Error> {
+    print("sequence preparation")
+    phase()
+    var voice = instrument(16)
+    var events:Synthesis.Event[] = []
+    for id in 0...16 { events.append(Synthesis.Event(frame:id * 17,command:Synthesis.Command.note_on(id,110.0 + id as float32 * 13.0,0.015625))) }
+    events.append(Synthesis.Event(frame:1_000,command:Synthesis.Command.all_notes_off))
+    var sequence = try Synthesis.Sequence.create(voice,events,capacity:17)
+    var samples = zeros(1_024)
+    phase()
+    print("sequence event rendering")
+    phase()
+    for i in 0...100 { try sequence.render(&samples[0:1_024]) }
+    phase()
+    assert(sequence.rendered_frames() == 51_200 && voice.active_voices() == 0)
+    print("sequence reset")
+    phase(); sequence.reset(); phase()
+    print("MIDI preparation")
+    phase()
+    let bytes = embed_bytes("../Fixtures/MIDI/TwoTracks.mid")
+    var score = try MIDI.Score.parse(@bytes[0:bytes.count()],48_000)
+    var synth = try MIDI.Synthesizer.create([MIDI.Binding(channel:0,program:0,instrument:voice)],note_capacity:64,controller_ramp_frames:240)
+    var player = try MIDI.Player.create(score,synth)
+    phase()
+    print("MIDI event rendering including end and release")
+    phase()
+    for i in 0...200 { try player.render(&samples[0:1_024]) }
+    phase()
+    assert(player.rendered_frames() == 102_400 && player.end_frame == 96_000 && synth.held_notes() == 0)
+    for sample in samples { assert(sample == 0.0 as float32) }
+    print("MIDI reset")
+    phase(); player.reset(); phase()
+    return Result<void, Error>.success()
+}
+func transfer() Result<void, Error> {
+    var audio = try Audio.offline(sample_rate:48_000,channels:2)
+    var stream = try audio.stream(sample_rate:48_000,channels:2,capacity_frames:127)
+    var samples = zeros(1_024)
+    for i in 0...1_024 { samples[i] = 0.125 }
+    print("PCM first partial write")
+    phase()
+    let first = try audio.write(stream,@samples[0:1_024])
+    phase()
+    assert(first == 127)
+    let playing = audio.play(stream)
+    var output = try audio.render(127)
+    print("PCM 100 subsequent writes; draining outside measurement")
+    for i in 0...100 {
+        phase()
+        let written = try audio.write(stream,@samples[0:254])
+        phase()
+        assert(written == 127)
+        output = try audio.render(127)
+    }
+    let info = try audio.stream_info(stream)
+    assert(info.written_frames == 12_827 && info.consumed_frames == 12_827)
+    audio.release(stream)
+    return Result<void, Error>.success()
+}
+func main() {
+    print("empty")
+    phase(); phase()
+    print("positive allocation")
+    phase()
+    var positive:float32[] = []
+    for i in 0...1_024 { positive.append(i as float32) }
+    phase()
+    assert(positive[1023] == 1023.0 as float32)
+    let format = Processing.Format(sample_rate:48_000,channels:2)
+    match Synthesis.Oscillator.create(format,frequency_hz:440.0,amplitude:0.1) {
+        failure(error) => { panic(error.detail) }
+        success(var source) => {
+            var samples:float32[] = []
+            for i in 0...1_024 { samples.append(0.0) }
+            print("first oscillator block")
+            phase(); require(source.render(&samples[0:1_024])); phase()
+            print("100 oscillator blocks")
+            phase()
+            for i in 0...100 { require(source.render(&samples[0:1_024])) }
+            phase()
+            assert(samples[500] != 0.0 as float32)
+        }
+    }
+    for voices in [16,64] { for frames in [128,512] { workload(voices,frames) } }
+    require(scheduled())
+    require(transfer())
+}

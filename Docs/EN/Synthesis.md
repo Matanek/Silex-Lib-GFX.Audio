@@ -145,8 +145,8 @@ discontinuity: no smoothing is implicit.
 
 Whole and split renders preserve state within 10⁻⁶ absolute error on the
 qualified fixtures. Generation does not resize the buffer or create an output
-per frame; hidden runtime allocations and real-time load have not yet been
-measured for this capability. No Silex callback runs on the audio thread.
+per frame; the [resource qualification](Resources.md) states the checked allocations,
+measured workload and their limits. No Silex callback runs on the audio thread.
 
 Invalid creation or settings return `invalid_input`, with operation
 `audio.synthesis`. Failed settings preserve the previous state. Generators are

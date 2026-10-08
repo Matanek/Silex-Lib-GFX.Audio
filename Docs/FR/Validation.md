@@ -9,6 +9,7 @@ décrit leur reconstruction et leur publication séparée.
 ```sh
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
+python3 Packages/GFX.Audio/Tests/Resources/Validate.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
@@ -71,6 +72,21 @@ mesurent pas l’instant exact de présentation aux haut-parleurs. Les traitemen
 s’exécutent sur le thread applicatif ; le provider n’appelle pas de callback
 Silex sur son thread audio. Les données et les primitives restent indépendantes
 d’un instrument, d’un séquenceur ou de MIDI.
+
+## Qualification de la synthèse du 8 octobre 2026
+
+Le DSP d’Audio `ada2c3570df1ffa3ac7065a11ab9892abff40af7` reste inchangé.
+Avec Silex `60d90abf1d7a689eef421b54fb9bd58b09d2313e`, les 143 oracles Release
+de traitements, synthèse, instruments, flux et MIDI passent sur macOS ARM64
+et x64 sous Rosetta. Ils se composent et se lient aussi pour Linux et Windows,
+en ARM64 et x64 ; aucun de ces exécutables n’a été lancé sur ces deux systèmes
+lors de cette qualification.
+
+Le [contrôle des ressources](Resources.md) ajoute un compteur d’allocations
+avec témoins positifs en Debug/Release sur macOS ARM64 et une charge mesurée
+de 16/64 voix avec cinq effets. Ce contrôle requiert Clang ; il ne s’applique
+pas aux autres hôtes. Les résultats de liaison ne sont pas des mesures de
+performance ou d’allocations.
 
 ## Qualification conservée du 7 octobre 2026
 

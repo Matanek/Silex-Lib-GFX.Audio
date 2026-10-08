@@ -122,8 +122,10 @@ and rebuild with a reset source. Source/Audio errors propagate. Internal
 rendering can exceed −1..1, but Audio output needs explicit headroom;
 ramps do not normalize voices.
 
-The Silex buffer stays bounded after preparation. This does not certify SDL
-provider allocations or hard real time. Proof covers partial writes,
+The Silex buffer stays bounded after preparation. `pump` includes the allocating
+PCM transfer in `Audio.write`; it is not an allocation-free callback. The
+[resource qualification](Resources.md) separates computation and transfer.
+This does not certify SDL internals or hard real time. Proof covers partial writes,
 identity with memory rendering, pauses, starvation, stop, closure, tails and
 lifetime. Listening to the program complements this proof for transitions
 and continuity of actual output.

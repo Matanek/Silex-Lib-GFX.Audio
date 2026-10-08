@@ -87,7 +87,8 @@ une erreur d’un composant en succès.
 Mix et les modulations préparent leurs tampons à la construction et traitent les
 blocs de toute longueur par tranches internes d’au plus 512 frames. La chaîne
 traite directement la vue reçue. Le rendu ne crée explicitement aucun tableau,
-ne lit aucun fichier et n’attend aucun périphérique. Cela ne promet pas encore
-une latence temps réel : les coûts du runtime et la charge seront mesurés lors
-de la qualification finale. Les extensions utilisateur restent responsables de
-leurs propres coûts, erreurs et garanties de blocs.
+ne lit aucun fichier et n’attend aucun périphérique. La
+[qualification des ressources](Resources.md) mesure une charge précise sur
+l’hôte disponible ; elle ne garantit pas une latence temps réel. Les extensions
+utilisateur restent responsables de leurs propres coûts, erreurs et garanties
+de blocs.

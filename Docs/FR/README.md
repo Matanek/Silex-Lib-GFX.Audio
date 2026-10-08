@@ -207,9 +207,9 @@ devrait ajouter `GFX.Application.FramePacing`.
 
 Le package possède son provider SDL3_mixer privé, lequel exige `GFX.SDL3`.
 Les handles SDL ne traversent jamais l’API. Des artefacts épinglés et vérifiés
-par checksum existent pour macOS ARM64, Linux x64, Windows x64 et Windows
-ARM64 ; cette dernière cible reste reconnue et expérimentale dans la matrice
-Silex.
+par checksum existent pour macOS, Linux et Windows, en ARM64 et x64.
+Le [guide de validation](Validation.md) distingue liaison, exécution et
+mesures de ressources.
 
 La démonstration [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/main/Sources/SpatialAudio.sx)
 appartient à Silex-Examples.
@@ -248,3 +248,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Jouer une partition MIDI avec ses propres instruments](MIDI.md).
 
 [Choisir et adapter une recette procédurale](Recipes.md).
+
+[Choisir les capacités et le budget de production](Resources.md).

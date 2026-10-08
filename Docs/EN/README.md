@@ -201,9 +201,9 @@ collects completed playbacks, and closes remaining playbacks and sounds during
 `GFX.Application.FramePacing`.
 
 The package owns its private SDL3_mixer provider, which requires `GFX.SDL3`.
-SDL handles never cross the API. Pinned, checksummed artifacts exist for macOS
-ARM64, Linux x64, Windows x64, and Windows ARM64; the latter remains a
-recognized experimental target in the Silex matrix.
+SDL handles never cross the API. Pinned, checksummed artifacts exist for macOS,
+Linux and Windows, in ARM64 and X64. The [validation guide](Validation.md)
+distinguishes linking, execution and resource measurements.
 
 The [SpatialAudio](https://github.com/Matanek/Silex-Examples/blob/main/Sources/SpatialAudio.sx)
 demonstration belongs to Silex-Examples.
@@ -242,3 +242,5 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 [Play a MIDI score with your own instruments](MIDI.md).
 
 [Choose and adapt a procedural recipe](Recipes.md).
+
+[Choose capacities and a production budget](Resources.md).

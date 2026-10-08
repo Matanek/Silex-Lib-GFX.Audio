@@ -146,8 +146,8 @@ abrupts de réglage peuvent créer une discontinuité : aucun lissage n’est im
 
 Les rendus entier et découpé conservent l’état à 10⁻⁶ absolu sur les fixtures
 qualifiées. La génération ne redimensionne pas le tampon et ne crée pas de
-sortie par frame ; les allocations cachées du runtime et la charge temps réel
-ne sont pas encore mesurées pour cette capacité. Aucun callback Silex n’est
+sortie par frame ; la [qualification des ressources](Resources.md) précise les allocations
+contrôlées, la charge mesurée et leurs limites. Aucun callback Silex n’est
 appelé depuis le thread audio.
 
 Une création ou un réglage invalide retourne `invalid_input`, avec l’opération

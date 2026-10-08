@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Qualifie les ressources de la synthèse : compteur avec témoins en Debug/Release ARM64, événements MIDI compris ; charge stéréo 16/64 voix avec cinq effets mesurée séparément du transfert PCM, limites et marges documentées.
+
 - Ajoute un guide de choix des recettes procédurales, du bip aux partitions MIDI, avec unités, contrôle des niveaux et contrats d’extension.
 
 - Lissage MIDI optionnel du volume, de l’expression et de la balance, réglé en frames ; la mélodie utilise 5 ms pour éviter le craquement provoqué par une baisse d’expression sur des voix soutenues. Dates des notes conservées, cibles continues entre blocs et programmes.
