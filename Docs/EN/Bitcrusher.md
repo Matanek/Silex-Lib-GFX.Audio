@@ -5,13 +5,13 @@ several frames. Both settings are independent: 8 bits provide 256 levels;
 `hold_frames:6` at 48 kHz captures 8,000 values per second per channel. Output
 remains float32 PCM at 48 kHz, with the same frame and channel counts.
 
-The [executable demonstration](../RetroSounds.sx) compares the same dry sine,
+The [executable demonstration](../../Examples/RetroSounds.sx) compares the same dry sine,
 at 8 bits, at 4 bits, then at 24 bits with sample hold. It then plays a square
 arpeggio and a noise impact, without files or sound banks. From the
 `SilexProject/` root:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/RetroSounds.sx --release
+silex run Packages/GFX.Audio/Examples/RetroSounds.sx --release
 ```
 
 It prepares PCM in memory, quantizes before the envelope, and explicitly

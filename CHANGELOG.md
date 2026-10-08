@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Move the 21 runnable examples and their MIDI score to `Examples/`; `Docs/` contains no `.sx` files. Update bilingual links and commands without changing sound sources.
+
 - Qualifies musical-path costs: preparation and repeated playback, long scores and owned feeding; DSP counters separated from native/offline allocations, ARM64 and x64/Rosetta measurements, FR/EN guides and a reproducible protocol.
 
 - Add `Music.Player`: explicit timbre, instrument or MIDI routing; bounded PCM feeding owned by Audio, pause/resume/stop/replay controls, standalone wait, observable state and errors. The Audio plugin preserves a supplied resource and feeds playback on the application thread. Bilingual guide and interactive example without consumer pumping.

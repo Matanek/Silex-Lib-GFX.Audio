@@ -5,13 +5,13 @@ dur. `drive` pousse le signal dans la courbe ; `output_gain` règle ensuite
 son niveau et `wet` dose le résultat avec l'entrée sèche. Il traite tous les
 canaux indépendamment et rejoint une chaîne [Processed](Composition.md).
 
-La [démonstration exécutable](../SaturatedSounds.sx) compare le même sinus sec,
+La [démonstration exécutable](../../Examples/SaturatedSounds.sx) compare le même sinus sec,
 une saturation douce avec drive 2 puis 8, et un écrêtage dur avec drive 8.
 Elle applique ensuite une enveloppe et une atténuation explicites. Depuis
 `SilexProject/`, lancer :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/SaturatedSounds.sx --release
+silex run Packages/GFX.Audio/Examples/SaturatedSounds.sx --release
 ```
 
 Fragment pour un `format` et un buffer `samples` déjà préparés :

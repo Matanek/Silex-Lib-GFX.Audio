@@ -65,7 +65,7 @@ retrying. Before stream writing or sound creation, explicitly choose a level
 within ±1, for example with equalizer gains. Whole/chunked continuity is
 qualified within absolute 10⁻⁶ for controlled-level fixtures; reset removes tails.
 
-[Example: independent producer filtered during playback](../ProcessedTone.sx).
+[Example: independent producer filtered during playback](../../Examples/ProcessedTone.sx).
 
 [Bitcrusher: resolution, sample hold, mixing and bypass](Bitcrusher.md).
 

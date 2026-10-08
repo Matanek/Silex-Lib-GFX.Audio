@@ -5,13 +5,13 @@ gradually. It feeds pitch and gain modulation, as well as user generators.
 Instruments also receive ramps through `Command.pitch_bend_to` and
 `Command.gain_to`, directly or in a `Sequence`.
 
-[ContinuousSounds.sx](../ContinuousSounds.sx) plays two sources in bounded
+[ContinuousSounds.sx](../../Examples/ContinuousSounds.sx) plays two sources in bounded
 streams: a procedural engine whose regime rises and falls, then a chord with
 pitch glides, gain changes and an echo tail. Each pass uses a single playback.
 From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ContinuousSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ContinuousSounds.sx --release
 ```
 
 The engine combines two modulated sines and seeded pink noise; it illustrates

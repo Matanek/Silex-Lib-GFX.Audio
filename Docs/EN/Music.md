@@ -88,12 +88,12 @@ Retro timbres remain directly usable for short effects and music.
 
 ## Bring an instrument and effects
 
-[MusicalSounds.sx](../MusicalSounds.sx) plays the retro victory, a customized
+[MusicalSounds.sx](../../Examples/MusicalSounds.sx) plays the retro victory, a customized
 timbre, the integrated instrument and an application instrument conforming to the existing
 `Synthesis.Instrument` protocol. From SilexProject:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
+silex run Packages/GFX.Audio/Examples/MusicalSounds.sx --release
 ```
 
 The same `melody.prepare(audio, using:instrument, tail_seconds:0.1)` operation

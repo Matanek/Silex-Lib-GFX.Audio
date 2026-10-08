@@ -6,13 +6,13 @@
 par seconde et par canal. La sortie reste du PCM float32 à 48 kHz, avec le
 même nombre de frames et de canaux.
 
-La [démonstration exécutable](../RetroSounds.sx) compare le même sinus sec,
+La [démonstration exécutable](../../Examples/RetroSounds.sx) compare le même sinus sec,
 à 8 bits, à 4 bits, puis à 24 bits avec maintien. Elle joue ensuite un arpège
 carré et un impact bruité, sans fichier ni banque de sons. Depuis la racine
 `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/RetroSounds.sx --release
+silex run Packages/GFX.Audio/Examples/RetroSounds.sx --release
 ```
 
 Elle prépare le PCM en mémoire, quantifie avant l'enveloppe et atténue

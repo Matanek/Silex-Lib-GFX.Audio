@@ -5,13 +5,13 @@ il conserve gauche et droite. À l'extrême gauche, il additionne les deux
 canaux à gauche et émet zéro à droite ; à l'extrême droite, il fait l'inverse.
 Il transfère donc le canal opposé, au lieu de simplement le rendre silencieux.
 
-La [démonstration](../StereoSounds.sx) joue gauche, centre, droite, puis un
+La [démonstration](../../Examples/StereoSounds.sx) joue gauche, centre, droite, puis un
 déplacement par blocs préparés. Le générateur y fournit la même sinusoïde dans
 les deux canaux, suivie d'une enveloppe et d'une atténuation explicites. Depuis
 `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/StereoSounds.sx --release
+silex run Packages/GFX.Audio/Examples/StereoSounds.sx --release
 ```
 
 Fragment pour un `format` stéréo et un buffer `samples` préparés :

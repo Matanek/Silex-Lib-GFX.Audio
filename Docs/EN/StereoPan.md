@@ -5,12 +5,12 @@ it preserves left and right. At full left, it adds both channels on the left
 and outputs zero on the right; at full right, it does the reverse. It transfers
 the opposite channel rather than simply silencing it.
 
-The [demonstration](../StereoSounds.sx) plays left, center, right, then moves
+The [demonstration](../../Examples/StereoSounds.sx) plays left, center, right, then moves
 across prepared blocks. Its generator provides the same sine in both channels,
 followed by an explicit envelope and attenuation. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/StereoSounds.sx --release
+silex run Packages/GFX.Audio/Examples/StereoSounds.sx --release
 ```
 
 Fragment for a prepared stereo `format` and `samples` buffer:

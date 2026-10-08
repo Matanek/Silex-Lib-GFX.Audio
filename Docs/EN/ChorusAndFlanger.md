@@ -5,13 +5,13 @@ sine wave. A delay of a few tens of milliseconds produces chorus; a shorter
 delay with feedback gives flanging. These effects use the supplied samples,
 without a sound bank.
 
-The [complete demonstration](../ChorusAndFlanger.sx) plays the same procedural
+The [complete demonstration](../../Examples/ChorusAndFlanger.sx) plays the same procedural
 chord four times: dry, chorus, positive-feedback flanger, then negative feedback.
 An envelope precedes the delay, and rendering keeps half a second of silence
 for its tail. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ChorusAndFlanger.sx --release
+silex run Packages/GFX.Audio/Examples/ChorusAndFlanger.sx --release
 ```
 
 Fragment for a 48 kHz `format` and a prepared `samples` buffer:

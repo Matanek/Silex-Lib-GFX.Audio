@@ -5,13 +5,13 @@ varie suivant un sinus. Un retard de quelques dizaines de millisecondes produit
 un chorus ; un retard plus court et du feedback donnent un flanger. Ces effets
 utilisent les échantillons fournis, sans banque de sons.
 
-La [démonstration complète](../ChorusAndFlanger.sx) joue le même accord
+La [démonstration complète](../../Examples/ChorusAndFlanger.sx) joue le même accord
 procédural quatre fois : sec, chorus, flanger à feedback positif, puis négatif.
 Une enveloppe précède le délai, et le rendu conserve une demi-seconde de silence
 pour sa queue. Depuis `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ChorusAndFlanger.sx --release
+silex run Packages/GFX.Audio/Examples/ChorusAndFlanger.sx --release
 ```
 
 Fragment pour un `format` à 48 kHz et un buffer `samples` préparés :

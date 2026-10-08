@@ -63,11 +63,11 @@ synthèse pour ces cibles.
 
 Les exemples `GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`,
 `Groups`, `Offline`, `ProcessedTone`, `ProceduralSounds` et `WaveformPalette` sont des sources
-exécutables sous `Docs/`. Employer par exemple :
+exécutables sous `Examples/`. Employer par exemple :
 
 ```sh
-SDL_AUDIODRIVER=dummy silex run Packages/GFX.Audio/Docs/ProcessedTone.sx --release --nocache
-SDL_AUDIODRIVER=__silex_no_audio_driver__ silex run Packages/GFX.Audio/Docs/Offline.sx --release --nocache
+SDL_AUDIODRIVER=dummy silex run Packages/GFX.Audio/Examples/ProcessedTone.sx --release --nocache
+SDL_AUDIODRIVER=__silex_no_audio_driver__ silex run Packages/GFX.Audio/Examples/Offline.sx --release --nocache
 ```
 
 Ces preuves portent sur le PCM et l’état logique du mixer. Les compteurs ne

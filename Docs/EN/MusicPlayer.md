@@ -2,7 +2,7 @@
 
 `Music.Player` plays a MIDI score with a selected timbre, instrument, or routing.
 It owns audio production and feeding; the application writes no sample loop.
-This complete standalone program keeps [its score](../MusicScore.mid) beside
+This complete standalone program keeps [its score](../../Examples/MusicScore.mid) beside
 the `.sx` file:
 
 ```sx

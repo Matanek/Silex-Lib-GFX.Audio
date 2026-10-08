@@ -4,7 +4,7 @@
 sans ouvrir de périphérique ni initialiser un pilote audio. Utiliser le même
 Audio pour charger ou créer des sons, créer des groupes, jouer et modifier les
 lectures, puis appeler `render(frames:1024)`.
-[Exemple autonome](../Offline.sx).
+[Exemple autonome](../../Examples/Offline.sx).
 
 `render` retourne un `Result<float32[], Error>` contenant exactement le nombre
 demandé de frames, entrelacées selon les canaux du format choisi. Toutes les

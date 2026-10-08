@@ -5,12 +5,12 @@
 and `wet` blends the result with dry input. It processes channels independently
 and can join a [Processed](Composition.md) chain.
 
-The [executable demonstration](../SaturatedSounds.sx) compares the same dry
+The [executable demonstration](../../Examples/SaturatedSounds.sx) compares the same dry
 sine, soft saturation with drive 2 then 8, and hard clipping with drive 8.
 It then applies an explicit envelope and attenuation. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/SaturatedSounds.sx --release
+silex run Packages/GFX.Audio/Examples/SaturatedSounds.sx --release
 ```
 
 Fragment for an already prepared `format` and `samples` buffer:

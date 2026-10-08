@@ -3,7 +3,7 @@
 Combinez des sources avec `Synthesis.Mix`, puis appliquez des traitements dans
 leur ordre avec `Synthesis.Processed`. Les deux implémentent `Generator` : une
 composition se réutilise donc comme n’importe quelle source. Le programme
-[ModulatedSounds.sx](../ModulatedSounds.sx) fait entendre ces combinaisons.
+[ModulatedSounds.sx](../../Examples/ModulatedSounds.sx) fait entendre ces combinaisons.
 
 Un générateur écrit par votre application peut entrer dans le mélange ; un
 `Processing.Processor` personnalisé peut entrer dans la chaîne. Aucun Interop

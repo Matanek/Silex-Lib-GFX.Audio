@@ -2,9 +2,9 @@
 
 A producer supplies `float32` samples as playback progresses, without preparing
 the entire sound. It keeps its own timeline; `GFX.Audio` receives its blocks and
-plays them in one continuous playback. [StreamingTone.sx](../StreamingTone.sx)
+plays them in one continuous playback. [StreamingTone.sx](../../Examples/StreamingTone.sx)
 produces a 440 Hz tone in blocks. From `SilexProject/`, run
-`silex run Packages/GFX.Audio/Docs/StreamingTone.sx`.
+`silex run Packages/GFX.Audio/Examples/StreamingTone.sx`.
 
 ## Open, fill and play
 

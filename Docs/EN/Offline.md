@@ -3,7 +3,7 @@
 `Audio.offline(sample_rate:48_000, channels:2)` returns `Result<Audio, Error>`
 without opening a device or initializing an audio driver. Use the same Audio
 to load/create sounds, create groups, play and control sources, then call
-`render(frames:1024)`. [Standalone example](../Offline.sx).
+`render(frames:1024)`. [Standalone example](../../Examples/Offline.sx).
 
 `render` returns `Result<float32[], Error>` with exactly the requested number
 of frames, interleaved using the chosen channel count. Every frame is valid;

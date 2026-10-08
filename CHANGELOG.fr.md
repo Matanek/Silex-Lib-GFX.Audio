@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Déplace les 21 exemples exécutables et leur partition MIDI dans `Examples/` ; aucun fichier `.sx` dans `Docs/`. Corrige les liens et commandes FR/EN sans modifier les sources sonores.
+
 - Qualifie les coûts du parcours musical : préparation et lectures répétées, partition longue et alimentation possédée ; compteurs DSP séparés des allocations natives/offline, mesures ARM64 et x64/Rosetta, guides FR/EN et protocole reproductible.
 
 - Ajoute `Music.Player` : timbre, instrument ou routage MIDI explicite ; alimentation PCM bornée possédée par Audio, contrôles pause/reprise/arrêt/replay, attente autonome, état et erreurs observables. Le plugin Audio conserve une ressource fournie et alimente les lectures sur le thread applicatif. Guide FR/EN et exemple interactif sans pompage consommateur.

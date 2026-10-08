@@ -5,13 +5,13 @@ progressivement. Il alimente les modulations de hauteur et de gain, ainsi que
 les générateurs utilisateur. Les instruments reçoivent aussi des rampes par
 `Command.pitch_bend_to` et `Command.gain_to`, directement ou dans une `Sequence`.
 
-[ContinuousSounds.sx](../ContinuousSounds.sx) joue deux sources dans des flux
+[ContinuousSounds.sx](../../Examples/ContinuousSounds.sx) joue deux sources dans des flux
 bornés : un moteur procédural dont le régime monte et descend, puis un accord
 avec glissés de hauteur, variations de gain et queue d’écho. Chaque passage
 utilise une seule lecture. Depuis `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ContinuousSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ContinuousSounds.sx --release
 ```
 
 Le moteur combine deux sinus modulés et un bruit rose avec graine ; il illustre

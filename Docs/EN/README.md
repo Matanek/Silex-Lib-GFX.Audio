@@ -61,7 +61,7 @@ Support belongs to the artifact and is not inferred from a file extension.
 WAV. `Audio.try_load(path:str)` loads a file. Both operations return
 `Result<Sound, STD.Error.Error>`; `load(path)` retains its panic on failure.
 
-The [complete program](../MemorySound.sx) loads a WAV without a temporary file:
+The [complete program](../../Examples/MemorySound.sx) loads a WAV without a temporary file:
 
 ```sx
 use GFX.Audio
@@ -119,8 +119,8 @@ func main() {
 }
 ```
 
-The [runnable source](../GeneratedTone.sx) contains this program. From
-`SilexProject/`, run `silex run Packages/GFX.Audio/Docs/GeneratedTone.sx`.
+The [runnable source](../../Examples/GeneratedTone.sx) contains this program. From
+`SilexProject/`, run `silex run Packages/GFX.Audio/Examples/GeneratedTone.sx`.
 
 Each sample must be finite and between `-1.0` and `1.0`; zero represents
 silence. `sample_rate` is the number of audio frames per second and must be

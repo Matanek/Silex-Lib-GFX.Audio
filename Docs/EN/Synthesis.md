@@ -3,21 +3,21 @@
 `GFX.Audio.Synthesis` generates sine, triangle, square and sawtooth waves with
 `Oscillator`, reproducible noise with `WhiteNoise` and `PinkNoise`, and an ADSR
 envelope with `Envelope`.
-The [ProceduralSounds.sx program](../ProceduralSounds.sx) produces a beep,
+The [ProceduralSounds.sx program](../../Examples/ProceduralSounds.sx) produces a beep,
 then an impact combining a bass tone and filtered noise, without a sound bank
 or audio asset.
 
 From the workspace root, with Silex 0.47.1 or newer:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ProceduralSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ProceduralSounds.sx --release
 ```
 
-The [WaveformPalette.sx program](../WaveformPalette.sx) compares the four
+The [WaveformPalette.sx program](../../Examples/WaveformPalette.sx) compares the four
 waveforms, a 25% square wave, white noise and pink noise:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/WaveformPalette.sx --release
+silex run Packages/GFX.Audio/Examples/WaveformPalette.sx --release
 ```
 
 ARM64 Release pink noise also requires the local toolchain containing the

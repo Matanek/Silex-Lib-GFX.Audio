@@ -4,14 +4,14 @@
 d'impulsion ni banque de sons. Choisir une taille de pièce à la création,
 puis régler la décroissance, l'amortissement des aigus et le mélange sec/traité.
 
-La [démonstration](../ReverberantSounds.sx) joue trois notes pincées,
+La [démonstration](../../Examples/ReverberantSounds.sx) joue trois notes pincées,
 puis laisse résonner le silence. Elle compare le son sec, une pièce courte,
 une queue longue brillante et une queue longue sombre. L'enveloppe précède
 l'effet ; les derniers blocs de silence rendent sa queue. Depuis
 `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ReverberantSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ReverberantSounds.sx --release
 ```
 
 Fragment pour un `format` et un buffer `samples` préparés :

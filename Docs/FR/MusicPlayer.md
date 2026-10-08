@@ -3,7 +3,7 @@
 `Music.Player` lit une partition MIDI avec un timbre, un instrument ou un
 routage choisi. Il possède la production et l’alimentation audio ; le programme
 n’écrit aucune boucle de samples. Voici un programme autonome complet, avec
-[sa partition](../MusicScore.mid) placée à côté du fichier `.sx` :
+[sa partition](../../Examples/MusicScore.mid) placée à côté du fichier `.sx` :
 
 ```sx
 use GFX.Audio

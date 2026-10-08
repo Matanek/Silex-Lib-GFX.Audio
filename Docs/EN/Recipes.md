@@ -14,15 +14,15 @@ controls. The paths below expose primitives for detailed composition.
 
 | Intent | Sources and composition | Guide and executable source |
 | --- | --- | --- |
-| Beep, impact, laser | Oscillator, white noise, filter, ADSR or frequency curve. | [Synthesis](Synthesis.md), [ProceduralSounds.sx](../ProceduralSounds.sx) |
-| Explosion, ambience | Filtered noise, bass and envelope; mix multiple generators. | [Composition](Composition.md), [ModulatedSounds.sx](../ModulatedSounds.sx) |
-| Changing engine | FM, harmonic and pink noise; smoothed commands on the frame timeline. | [Continuous production](Continuous.md), [ContinuousSounds.sx](../ContinuousSounds.sx) |
-| Retro texture | Square wave, quantization and sample hold. | [Bitcrusher](Bitcrusher.md), [RetroSounds.sx](../RetroSounds.sx) |
-| Direct melody | Polyphonic instrument and sequence of frame-timed commands. | [Instruments](Instruments.md), [PolyphonicMelody.sx](../PolyphonicMelody.sx) |
-| MIDI score | Parse a score and supply instruments through explicit bindings. | [MIDI](MIDI.md), [MIDIMelody.sx](../MIDIMelody.sx) |
+| Beep, impact, laser | Oscillator, white noise, filter, ADSR or frequency curve. | [Synthesis](Synthesis.md), [ProceduralSounds.sx](../../Examples/ProceduralSounds.sx) |
+| Explosion, ambience | Filtered noise, bass and envelope; mix multiple generators. | [Composition](Composition.md), [ModulatedSounds.sx](../../Examples/ModulatedSounds.sx) |
+| Changing engine | FM, harmonic and pink noise; smoothed commands on the frame timeline. | [Continuous production](Continuous.md), [ContinuousSounds.sx](../../Examples/ContinuousSounds.sx) |
+| Retro texture | Square wave, quantization and sample hold. | [Bitcrusher](Bitcrusher.md), [RetroSounds.sx](../../Examples/RetroSounds.sx) |
+| Direct melody | Polyphonic instrument and sequence of frame-timed commands. | [Instruments](Instruments.md), [PolyphonicMelody.sx](../../Examples/PolyphonicMelody.sx) |
+| MIDI score | Parse a score and supply instruments through explicit bindings. | [MIDI](MIDI.md), [MIDIMelody.sx](../../Examples/MIDIMelody.sx) |
 
 Run executable sources from `SilexProject/`, for example
-`silex run Packages/GFX.Audio/Docs/MIDIMelody.sx --release`. The consolidated
+`silex run Packages/GFX.Audio/Examples/MIDIMelody.sx --release`. The consolidated
 demonstration belongs to `Silex-Examples/Sources/ProceduralAudio/Main.sx`; its
 compiled executable provides `--case beep|impact|laser|explosion|engine|retro|melody|midi`
 and `--check`. Its bilingual guide explains parameters and variations. These

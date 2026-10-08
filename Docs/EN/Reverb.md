@@ -4,13 +4,13 @@
 file or sound bank. Choose room size at creation, then adjust decay,
 high-frequency damping and the dry/wet mix.
 
-The [demonstration](../ReverberantSounds.sx) plays three plucked notes, then
+The [demonstration](../../Examples/ReverberantSounds.sx) plays three plucked notes, then
 lets silence resonate. It compares dry sound, a short room, a long bright tail
 and a long dark tail. The envelope precedes the effect; the final silent blocks
 render its tail. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ReverberantSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ReverberantSounds.sx --release
 ```
 
 Fragment for a prepared `format` and `samples` buffer:

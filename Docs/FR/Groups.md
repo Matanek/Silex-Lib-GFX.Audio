@@ -2,7 +2,7 @@
 
 Créer des catégories avec `audio.group(volume:0.5)` puis passer `group` dans
 `Audio.Playback`. `set_volume`, `pause`, `resume` et `stop` acceptent un groupe
-comme une lecture. [Exemple complet](../Groups.sx).
+comme une lecture. [Exemple complet](../../Examples/Groups.sx).
 
 Le gain audible est le produit du gain individuel, du groupe et du gain général.
 Changer un gain de groupe conserve les réglages individuels. Toute nouvelle

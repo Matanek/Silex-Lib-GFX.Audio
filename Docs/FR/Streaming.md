@@ -3,9 +3,9 @@
 Un producteur fournit des échantillons `float32` au fil de la lecture, sans
 préparer le son entier. Il conserve sa propre chronologie ; `GFX.Audio` reçoit
 ses blocs et les joue dans une seule lecture continue. Le programme
-[StreamingTone.sx](../StreamingTone.sx) produit un la de 440 Hz par blocs et peut
+[StreamingTone.sx](../../Examples/StreamingTone.sx) produit un la de 440 Hz par blocs et peut
 être exécuté depuis `SilexProject/` avec
-`silex run Packages/GFX.Audio/Docs/StreamingTone.sx`.
+`silex run Packages/GFX.Audio/Examples/StreamingTone.sx`.
 
 ## Ouvrir, remplir et jouer
 

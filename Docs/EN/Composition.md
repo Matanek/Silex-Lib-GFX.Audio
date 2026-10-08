@@ -2,7 +2,7 @@
 
 Combine sources with `Synthesis.Mix`, then apply treatments in order with
 `Synthesis.Processed`. Both implement `Generator`, so a composition can be used
-like any other source. [ModulatedSounds.sx](../ModulatedSounds.sx) lets you hear
+like any other source. [ModulatedSounds.sx](../../Examples/ModulatedSounds.sx) lets you hear
 these combinations.
 
 An application-defined generator can join the mix; a custom

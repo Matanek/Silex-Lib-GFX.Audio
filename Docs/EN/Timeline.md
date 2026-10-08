@@ -4,7 +4,7 @@
 channels and `Duration`: `frames(count)`, `unknown` or `infinite`.
 `duration_seconds()` provides optional seconds for a finite duration. Duration
 describes the source without repeats or speed; format is the initial decoded
-format. [Timeline.sx](../Timeline.sx) provides a complete example.
+format. [Timeline.sx](../../Examples/Timeline.sx) provides a complete example.
 
 `Playback(start_frame:...)` selects an initial source frame between zero and
 the known duration, including its end. Subsequent repeats restart at zero.

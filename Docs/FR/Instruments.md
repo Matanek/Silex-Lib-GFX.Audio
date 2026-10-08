@@ -9,14 +9,14 @@ Pour écrire quelques notes et préparer un son sans gérer les frames ou buffer
 utiliser [le parcours musical](Music.md). `Music.Instruments.sine` configure
 ce même instrument avec des durées en secondes.
 
-[PolyphonicMelody.sx](../PolyphonicMelody.sx) joue quatre mesures à 120 BPM :
+[PolyphonicMelody.sx](../../Examples/PolyphonicMelody.sx) joue quatre mesures à 120 BPM :
 accords, notes répétées avec identités distinctes, pédale dans la deuxième
 mesure et changement de hauteur dans la quatrième. Les accents sont écrits
 dans la partition. Un second passage limite le même morceau à deux voix
 pour entendre leur réattribution avec le raccord par défaut. Depuis `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/PolyphonicMelody.sx --release
+silex run Packages/GFX.Audio/Examples/PolyphonicMelody.sx --release
 ```
 
 Fragment avec un `format` mono à 48 kHz et un buffer `samples` de 48 000 samples

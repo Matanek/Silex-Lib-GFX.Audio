@@ -89,12 +89,12 @@ pour les effets courts et la musique.
 
 ## Apporter un instrument et des effets
 
-[MusicalSounds.sx](../MusicalSounds.sx) joue successivement la victoire rétro,
+[MusicalSounds.sx](../../Examples/MusicalSounds.sx) joue successivement la victoire rétro,
 un timbre modifié, l'instrument intégré et un instrument applicatif conforme au protocole existant
 `Synthesis.Instrument`. Depuis SilexProject :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
+silex run Packages/GFX.Audio/Examples/MusicalSounds.sx --release
 ```
 
 La même opération `melody.prepare(audio, using:instrument, tail_seconds:0.1)`

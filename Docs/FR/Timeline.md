@@ -4,7 +4,7 @@
 canaux et `Duration` : `frames(count)`, `unknown` ou `infinite`.
 `duration_seconds()` donne des secondes optionnelles pour une durée finie.
 La durée décrit la source sans répétition ni vitesse ; le format est celui
-initialement décodé. [Timeline.sx](../Timeline.sx) montre un parcours complet.
+initialement décodé. [Timeline.sx](../../Examples/Timeline.sx) montre un parcours complet.
 
 `Playback(start_frame:...)` choisit une frame initiale entre zéro et la durée
 connue, fin incluse. Les répétitions suivantes reviennent à zéro.

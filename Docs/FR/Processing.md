@@ -73,7 +73,7 @@ son, choisir explicitement un niveau compris entre ±1, par exemple avec les
 gains de l'égaliseur. La continuité entier/blocs est qualifiée à 10⁻⁶ absolu
 pour les fixtures à niveau maîtrisé ; reset retire toute queue.
 
-[Exemple : producteur indépendant filtré pendant la lecture](../ProcessedTone.sx).
+[Exemple : producteur indépendant filtré pendant la lecture](../../Examples/ProcessedTone.sx).
 
 [Bitcrusher : résolution, maintien, dosage et bypass](Bitcrusher.md).
 

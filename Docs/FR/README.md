@@ -64,7 +64,7 @@ un WAV embarqué. `Audio.try_load(path:str)` charge un fichier. Ces deux
 opérations retournent `Result<Sound, STD.Error.Error>` ; `load(path)` conserve
 son `panic` sur échec.
 
-Le [programme complet](../MemorySound.sx) charge un WAV sans fichier temporaire :
+Le [programme complet](../../Examples/MemorySound.sx) charge un WAV sans fichier temporaire :
 
 ```sx
 use GFX.Audio
@@ -123,8 +123,8 @@ func main() {
 }
 ```
 
-La [source exécutable](../GeneratedTone.sx) reprend ce programme. Depuis
-`SilexProject/`, lancez `silex run Packages/GFX.Audio/Docs/GeneratedTone.sx`.
+La [source exécutable](../../Examples/GeneratedTone.sx) reprend ce programme. Depuis
+`SilexProject/`, lancez `silex run Packages/GFX.Audio/Examples/GeneratedTone.sx`.
 
 Chaque échantillon doit être fini et compris entre `-1.0` et `1.0` ; zéro
 représente le silence. `sample_rate` indique le nombre de frames audio par

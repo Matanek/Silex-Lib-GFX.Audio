@@ -1,7 +1,7 @@
 # Jouer une partition MIDI avec ses propres instruments
 
 `GFX.Audio.MIDI` lit une partition et commande les instruments procéduraux de
-l’application. [MIDIMelody.sx](../MIDIMelody.sx) joue deux pistes à 120 puis
+l’application. [MIDIMelody.sx](../../Examples/MIDIMelody.sx) joue deux pistes à 120 puis
 150 BPM, avec changement de programme, balance stéréo, expression, sustain et
 queue d’écho. Elle lisse les changements de volume, d’expression et de balance
 sur 240 frames (5 ms à 48 kHz) pour éviter les sauts de niveau. La fixture `.mid`
@@ -9,7 +9,7 @@ contient des événements, aucune banque de sons.
 Depuis `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/MIDIMelody.sx --release
+silex run Packages/GFX.Audio/Examples/MIDIMelody.sx --release
 ```
 
 Le parcours principal est `Score.parse` ou `Score.read`, le choix explicite des

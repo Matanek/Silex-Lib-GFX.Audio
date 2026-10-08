@@ -58,12 +58,12 @@ The retained qualification below covers the 13 baseline oracles; it does not
 automatically qualify synthesis additions for those targets.
 
 `GeneratedTone`, `MemorySound`, `StreamingTone`, `Timeline`, `Groups`, `Offline`,
-`ProcessedTone`, `ProceduralSounds` and `WaveformPalette` are executable sources under `Docs/`.
+`ProcessedTone`, `ProceduralSounds` and `WaveformPalette` are executable sources under `Examples/`.
 For example:
 
 ```sh
-SDL_AUDIODRIVER=dummy silex run Packages/GFX.Audio/Docs/ProcessedTone.sx --release --nocache
-SDL_AUDIODRIVER=__silex_no_audio_driver__ silex run Packages/GFX.Audio/Docs/Offline.sx --release --nocache
+SDL_AUDIODRIVER=dummy silex run Packages/GFX.Audio/Examples/ProcessedTone.sx --release --nocache
+SDL_AUDIODRIVER=__silex_no_audio_driver__ silex run Packages/GFX.Audio/Examples/Offline.sx --release --nocache
 ```
 
 These proofs cover PCM and logical mixer state. Counters do not measure the

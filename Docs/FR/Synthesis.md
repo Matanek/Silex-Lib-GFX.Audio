@@ -3,20 +3,20 @@
 `GFX.Audio.Synthesis` génère sinus, triangle, carré et dent de scie avec
 `Oscillator`, des bruits reproductibles avec `WhiteNoise` et `PinkNoise`,
 et une enveloppe ADSR avec `Envelope`.
-Le [programme ProceduralSounds.sx](../ProceduralSounds.sx) produit un bip puis
+Le [programme ProceduralSounds.sx](../../Examples/ProceduralSounds.sx) produit un bip puis
 un impact associant un grave et du bruit filtré, sans banque ni asset sonore.
 
 Depuis la racine du workspace, avec Silex 0.47.1 ou une version plus récente :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/ProceduralSounds.sx --release
+silex run Packages/GFX.Audio/Examples/ProceduralSounds.sx --release
 ```
 
-Le [programme WaveformPalette.sx](../WaveformPalette.sx) permet de comparer les
+Le [programme WaveformPalette.sx](../../Examples/WaveformPalette.sx) permet de comparer les
 quatre formes, un carré à 25 %, le bruit blanc et le bruit rose :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/WaveformPalette.sx --release
+silex run Packages/GFX.Audio/Examples/WaveformPalette.sx --release
 ```
 
 Le bruit rose en Release ARM64 requiert également la toolchain locale intégrant

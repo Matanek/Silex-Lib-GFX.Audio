@@ -5,13 +5,13 @@ makeup gain. `Processing.Limiter` imposes a ceiling on processed samples.
 Both implement `Processor` and compose with application-defined effects.
 Neither is automatically added to sources or playback.
 
-[DynamicSounds.sx](../DynamicSounds.sx) compares a phrase with uneven accents:
+[DynamicSounds.sx](../../Examples/DynamicSounds.sx) compares a phrase with uneven accents:
 dry, compressed with makeup, half dry mix, then limited. Final attenuation
 is identical in all four passages; volume differences are intentional.
 From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/DynamicSounds.sx --release
+silex run Packages/GFX.Audio/Examples/DynamicSounds.sx --release
 ```
 
 Fragment for a prepared `format` and `samples` buffer:

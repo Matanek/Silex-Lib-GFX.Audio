@@ -9,14 +9,14 @@ To write a few notes and prepare a sound without handling frames or buffers,
 use [the musical path](Music.md). `Music.Instruments.sine` configures this same
 instrument with durations in seconds.
 
-[PolyphonicMelody.sx](../PolyphonicMelody.sx) plays four bars at 120 BPM:
+[PolyphonicMelody.sx](../../Examples/PolyphonicMelody.sx) plays four bars at 120 BPM:
 chords, repeated notes with distinct identities, a pedal in the second bar
 and a pitch change in the fourth. Accents are written into the score.
 A second pass limits the same piece to two voices to hear stealing with the
 default connection. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/PolyphonicMelody.sx --release
+silex run Packages/GFX.Audio/Examples/PolyphonicMelody.sx --release
 ```
 
 Fragment with a mono 48 kHz `format`, a prepared `samples` buffer of 48,000

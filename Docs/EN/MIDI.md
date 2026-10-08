@@ -1,14 +1,14 @@
 # Play a MIDI score with your own instruments
 
 `GFX.Audio.MIDI` reads a score and controls the application's procedural
-instruments. [MIDIMelody.sx](../MIDIMelody.sx) plays two tracks at 120 then
+instruments. [MIDIMelody.sx](../../Examples/MIDIMelody.sx) plays two tracks at 120 then
 150 BPM, with program change, stereo balance, expression, sustain and an echo
 tail. It smooths volume, expression and balance changes over 240 frames
 (5 ms at 48 kHz) to avoid level steps. The `.mid` fixture contains events, no sound
 bank. From `SilexProject/`:
 
 ```sh
-silex run Packages/GFX.Audio/Docs/MIDIMelody.sx --release
+silex run Packages/GFX.Audio/Examples/MIDIMelody.sx --release
 ```
 
 The main path is `Score.parse` or `Score.read`, explicit `Binding` choices,

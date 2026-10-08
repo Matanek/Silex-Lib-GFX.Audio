@@ -16,15 +16,15 @@ primitives pour une composition détaillée.
 
 | Intention | Sources et composition | Guide et source exécutable |
 | --- | --- | --- |
-| Bip, impact, laser | Oscillateur, bruit blanc, filtre, ADSR ou courbe de fréquence. | [Synthèse](Synthesis.md), [ProceduralSounds.sx](../ProceduralSounds.sx) |
-| Explosion, ambiance | Bruit filtré, grave et enveloppe ; mixer plusieurs générateurs. | [Composition](Composition.md), [ModulatedSounds.sx](../ModulatedSounds.sx) |
-| Moteur variable | FM, harmonique et bruit rose ; commandes lissées sur la chronologie en frames. | [Production continue](Continuous.md), [ContinuousSounds.sx](../ContinuousSounds.sx) |
-| Texture rétro | Onde carrée, quantification et maintien d’échantillons. | [Bitcrusher](Bitcrusher.md), [RetroSounds.sx](../RetroSounds.sx) |
-| Mélodie directe | Instrument polyphonique et séquence de commandes datées en frames. | [Instruments](Instruments.md), [PolyphonicMelody.sx](../PolyphonicMelody.sx) |
-| Partition MIDI | Parser la partition et fournir ses propres instruments par binding. | [MIDI](MIDI.md), [MIDIMelody.sx](../MIDIMelody.sx) |
+| Bip, impact, laser | Oscillateur, bruit blanc, filtre, ADSR ou courbe de fréquence. | [Synthèse](Synthesis.md), [ProceduralSounds.sx](../../Examples/ProceduralSounds.sx) |
+| Explosion, ambiance | Bruit filtré, grave et enveloppe ; mixer plusieurs générateurs. | [Composition](Composition.md), [ModulatedSounds.sx](../../Examples/ModulatedSounds.sx) |
+| Moteur variable | FM, harmonique et bruit rose ; commandes lissées sur la chronologie en frames. | [Production continue](Continuous.md), [ContinuousSounds.sx](../../Examples/ContinuousSounds.sx) |
+| Texture rétro | Onde carrée, quantification et maintien d’échantillons. | [Bitcrusher](Bitcrusher.md), [RetroSounds.sx](../../Examples/RetroSounds.sx) |
+| Mélodie directe | Instrument polyphonique et séquence de commandes datées en frames. | [Instruments](Instruments.md), [PolyphonicMelody.sx](../../Examples/PolyphonicMelody.sx) |
+| Partition MIDI | Parser la partition et fournir ses propres instruments par binding. | [MIDI](MIDI.md), [MIDIMelody.sx](../../Examples/MIDIMelody.sx) |
 
 Les sources exécutables s’utilisent depuis `SilexProject/`, par exemple
-`silex run Packages/GFX.Audio/Docs/MIDIMelody.sx --release`. La démonstration
+`silex run Packages/GFX.Audio/Examples/MIDIMelody.sx --release`. La démonstration
 consolidée appartient à `Silex-Examples/Sources/ProceduralAudio/Main.sx` ; elle
 propose `--case beep|impact|laser|explosion|engine|retro|melody|midi` et `--check`
 sur son exécutable compilé. Son guide bilingue explique paramètres et variantes.

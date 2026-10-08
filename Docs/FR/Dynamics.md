@@ -5,13 +5,13 @@ regain explicite. `Processing.Limiter` impose un plafond aux samples traités.
 Ils implémentent `Processor` et se composent avec les effets de l’application.
 Aucun des deux n’est ajouté automatiquement aux sources ou à la lecture.
 
-[DynamicSounds.sx](../DynamicSounds.sx) compare une phrase aux accents inégaux :
+[DynamicSounds.sx](../../Examples/DynamicSounds.sx) compare une phrase aux accents inégaux :
 sec, compressé avec regain, mélange moitié sec, puis limité. L’atténuation finale
 est identique dans les quatre passages ; les différences de volume sont voulues.
 Depuis `SilexProject/` :
 
 ```sh
-silex run Packages/GFX.Audio/Docs/DynamicSounds.sx --release
+silex run Packages/GFX.Audio/Examples/DynamicSounds.sx --release
 ```
 
 Fragment pour un `format` et un buffer `samples` préparés :
