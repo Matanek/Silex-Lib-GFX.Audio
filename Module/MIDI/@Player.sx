@@ -39,5 +39,17 @@ public class Player:Synthesis.Generator {
         }
         return Result<void, Error>.success()
     }
+    // The finite musical owner closes the final boundary even when no release PCM is requested.
+    package func complete() Result<void, Error> {
+        if self.position < self.end_frame { return Result<void, Error>.failure(invalid("MIDI playback has not reached its end")) }
+        if self.finished { return Result<void, Error>.success() }
+        while self.next < self.score.events.count() && self.score.events[self.next].frame == self.position {
+            let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message)
+            if !handled { self.ignored++ }
+            self.next++
+        }
+        try self.synthesizer.finish(); self.finished = true
+        return Result<void, Error>.success()
+    }
     func reset() { self.synthesizer.reset(); self.position = 0; self.next = 0; self.finished = false; self.ignored = 0 }
 }

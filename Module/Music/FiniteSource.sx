@@ -1,0 +1,20 @@
+use GFX.Audio.MIDI
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+
+class FiniteSource:Synthesis.Generator {
+    let format:Processing.Format
+    private var clock:MIDI.Player
+    private var processed:Synthesis.Processed
+    private let duration:int
+    init(clock:MIDI.Player, processed:Synthesis.Processed, duration:int) {
+        self.clock = clock; self.processed = processed; self.duration = duration; self.format = clock.format
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try self.processed.render(samples)
+        if self.clock.rendered_frames() == self.duration { try self.clock.complete() }
+        return Result<void, Error>.success()
+    }
+    func reset() { self.processed.reset() }
+}

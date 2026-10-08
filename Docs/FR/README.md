@@ -10,6 +10,8 @@ d’échantillons. Le package s’utilise directement ou avec son plugin
 
 [Préparer quelques notes avec un timbre modifiable](Music.md), puis les rejouer sans gérer le PCM.
 
+[Jouer une partition avec un player et des contrôles de lecture](MusicPlayer.md).
+
 ## Installer le package
 
 ```text

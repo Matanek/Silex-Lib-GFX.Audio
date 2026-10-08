@@ -1,0 +1,14 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.MIDI
+
+func main() {
+    var audio = Audio()
+    let bytes = embed_bytes("MusicScore.mid")
+    var score = try MIDI.Score.parse(@bytes[0:bytes.count()], 48_000) else error { panic(error.detail) }
+    var timbre = Music.Timbre.retro(); timbre.amplitude = 0.10
+    var player = try Music.Player.create(audio, score, using:timbre) else error { panic(error.detail) }
+    let playing = try player.play() else error { panic(error.detail) }
+    try player.wait() else error { panic(error.detail) }
+    print("Finished; ignored messages: ", player.ignored_messages())
+}

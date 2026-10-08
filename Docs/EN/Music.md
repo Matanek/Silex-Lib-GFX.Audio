@@ -146,3 +146,5 @@ belong to their Audio instance.
 
 [MIDI playback](MIDI.md) currently retains its advanced path. The self-contained
 musical player and its automatic feeding remain to be established.
+
+[Play a score with a player and playback controls](MusicPlayer.md).

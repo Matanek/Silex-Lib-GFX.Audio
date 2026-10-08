@@ -14,7 +14,8 @@ public struct Plugin:PluginProtocol {
 }
 
 func start_audio(application:Application) {
-    application.resources().insert(Audio())
+    var resources = application.resources()
+    if !resources.has<Audio>() { resources.insert(Audio()) }
 }
 
 func collect_finished_audio(audio:&Audio) {

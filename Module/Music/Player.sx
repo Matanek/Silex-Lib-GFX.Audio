@@ -1,0 +1,115 @@
+use GFX.Audio
+use GFX.Audio.Music.Timbre
+use GFX.Audio.Music.Recipe
+use GFX.Audio.Music.FiniteSource
+use GFX.Audio.MIDI
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+public enum State { ready; playing; paused; finished; stopped; failed }
+func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.music.player", subject:null, detail:detail) }
+
+public class Player {
+    private var audio:Audio
+    private var output:Audio.Stream
+    private var playback:Audio.PlayingSound = Audio.PlayingSound()
+    private var source:FiniteSource
+    private let frames:int
+    private let block_frames:int
+    private let capacity_frames:int
+    private var clock:MIDI.Player
+    private var stopped:bool = false
+    let duration_seconds:float64
+    private init(audio:Audio, output:Audio.Stream, clock:MIDI.Player, source:FiniteSource, duration:int, block_frames:int, capacity_frames:int) {
+        self.audio = audio; self.output = output; self.clock = clock; self.source = source
+        self.frames = duration; self.block_frames = block_frames; self.capacity_frames = capacity_frames
+        self.duration_seconds = duration as float64 / clock.format.sample_rate as float64
+    }
+    static func create(audio:Audio, score:MIDI.Score, using:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], block_frames:int = 512, capacity_frames:int = 4_800) Result<Player, Error> {
+        var instrument = try Recipe.create(using, score.sample_rate)
+        var tail = using.release_seconds; if let seconds = tail_seconds { tail = seconds }
+        return Player.create(audio, score, instrument, tail, effects, block_frames, capacity_frames)
+    }
+    static func create(audio:Audio, score:MIDI.Score, using:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], block_frames:int = 512, capacity_frames:int = 4_800) Result<Player, Error> {
+        var synth = try MIDI.Synthesizer.single(using)
+        return Player.create(audio, score, synth, tail_seconds, effects, block_frames, capacity_frames)
+    }
+    static func create(audio:Audio, score:MIDI.Score, using:MIDI.Synthesizer, tail_seconds:float64? = null, effects:Processing.Processor[] = [], block_frames:int = 512, capacity_frames:int = 4_800) Result<Player, Error> {
+        var tail:float64 = 0.2; if let seconds = tail_seconds { tail = seconds }
+        if !Math.is_finite(tail) || tail < 0.0 || tail > 60.0 { return Result<Player, Error>.failure(invalid("tail requires 0..60 seconds")) }
+        let frames = try Synthesis.frame_at(tail, score.sample_rate)
+        if score.end_frame < 0 || score.end_frame > 9_223_372_036_854_775_807 - frames { return Result<Player, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.music.player", subject:null, detail:"duration exceeds the audio clock")) }
+        let duration = score.end_frame + frames
+        if duration == 0 { return Result<Player, Error>.failure(invalid("playback must occupy at least one frame")) }
+        var clock = try MIDI.Player.create(score, using)
+        var processed = try Synthesis.Processed.create(clock, effects)
+        var source = FiniteSource(clock, processed, duration)
+        var output = try audio.managed_stream(source, duration, block_frames, capacity_frames)
+        source.reset()
+        return Result<Player, Error>.success(Player(audio, output, clock, source, duration, block_frames, capacity_frames))
+    }
+    private func validate_settings(settings:Audio.Playback) Result<void, Error> {
+        if settings.start_frame != 0 || settings.repeat != Audio.Repeat.once() || !Math.is_finite(settings.volume) || !Math.is_finite(settings.volume as float32) || settings.volume < 0.0 || !Math.is_finite(settings.fade_in_seconds) || settings.fade_in_seconds < 0.0 || !Math.is_finite(settings.speed) || settings.speed < 0.01 || settings.speed > 100.0 { return Result<void, Error>.failure(invalid("player requires one forward playback with valid level, speed and fade")) }
+        if let group = settings.group { if !self.audio.contains(group) { return Result<void, Error>.failure(invalid("group must belong to this Audio instance")) } }
+        return Result<void, Error>.success()
+    }
+    func play(settings:Audio.Playback = Audio.Playback()) Result<Audio.PlayingSound, Error> {
+        if self.stopped { return Result<Audio.PlayingSound, Error>.failure(invalid("stopped player cannot restart; create another playback")) }
+        try self.validate_settings(settings)
+        self.playback = try self.audio.start_managed(self.output, settings)
+        return Result<Audio.PlayingSound, Error>.success(self.playback)
+    }
+    func replay(settings:Audio.Playback = Audio.Playback()) Result<Audio.PlayingSound, Error> {
+        try self.validate_settings(settings)
+        // Allocate the new stream before releasing the previous one. The musical state is exclusively owned.
+        var output = try self.audio.managed_stream(self.source, self.frames, self.block_frames, self.capacity_frames)
+        self.audio.release(self.output)
+        self.output = output; self.playback = Audio.PlayingSound(); self.stopped = false
+        self.source.reset()
+        return self.play(settings)
+    }
+    func state() Result<State, Error> {
+        if self.stopped { return Result<State, Error>.success(State.stopped) }
+        let info = try self.audio.stream_info(self.output)
+        if self.audio.managed_error(self.output) != null { return Result<State, Error>.success(State.failed) }
+        if info.stopped { return Result<State, Error>.success(State.stopped) }
+        if !info.started { return Result<State, Error>.success(State.ready) }
+        if info.drained { return Result<State, Error>.success(State.finished) }
+        if self.audio.is_paused(self.playback) { return Result<State, Error>.success(State.paused) }
+        return Result<State, Error>.success(State.playing)
+    }
+    func error() Error? { if self.stopped { return null } return self.audio.managed_error(self.output) }
+    func ignored_messages() int { return self.clock.ignored_messages() }
+    func is_starved() Result<bool, Error> {
+        let info = try self.audio.stream_info(self.output)
+        return Result<bool, Error>.success(info.starved)
+    }
+    func position_seconds() Result<float64, Error> {
+        let info = try self.audio.stream_info(self.output)
+        return Result<float64, Error>.success(info.consumed_frames as float64 / info.sample_rate as float64)
+    }
+    func pause() Result<void, Error> {
+        let state = try self.state()
+        if state != State.playing { return Result<void, Error>.failure(invalid("player must be playing")) }
+        self.audio.pause(self.playback); return Result<void, Error>.success()
+    }
+    func resume() Result<void, Error> {
+        let state = try self.state()
+        if state != State.paused { return Result<void, Error>.failure(invalid("player must be paused")) }
+        self.audio.resume(self.playback); return Result<void, Error>.success()
+    }
+    func stop() {
+        if self.stopped { return }
+        self.stopped = true
+        if self.playback.is_valid() { self.audio.stop(self.playback) }
+    }
+    func wait() Result<void, Error> {
+        if self.stopped { return Result<void, Error>.success() }
+        if !self.playback.is_valid() { return Result<void, Error>.failure(invalid("start the player before waiting")) }
+        return self.audio.wait_managed(self.output)
+    }
+    drop { self.audio.release(self.output) }
+}

@@ -26,3 +26,5 @@ Play [MIDI scores with application-selected procedural instruments](Docs/EN/MIDI
 instrument](Docs/EN/Music.md), without handling PCM buffers. `Music.Instruments.sine`
 configures the polyphonic sine instrument with durations in seconds; application
 instruments keep their own musical settings and the existing extension protocol.
+
+[Play a MIDI score and pause, resume, stop or replay it](Docs/EN/MusicPlayer.md). The player owns bounded audio feeding in an application or a standalone program.

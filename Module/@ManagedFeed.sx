@@ -1,0 +1,21 @@
+use GFX.Audio.Synthesis
+use STD.Error
+
+// Owned by Audio's stream, never retaining Audio. One scratch block survives partial writes.
+class ManagedFeed {
+    var source:Synthesis.Generator
+    let duration:int
+    let block_frames:int
+    var samples:float32[]
+    var produced:int = 0
+    var written:int = 0
+    var pending:int = 0
+    var offset:int = 0
+    var speed:float = 1.0
+    var error:Error? = null
+    init(source:Synthesis.Generator, duration:int, block_frames:int) {
+        self.source = source; self.duration = duration; self.block_frames = block_frames
+        self.samples = []
+        var i = 0; while i < block_frames * source.format.channels { self.samples.append(0.0); i++ }
+    }
+}

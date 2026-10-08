@@ -47,17 +47,26 @@ public class Synthesizer:Synthesis.Generator {
     private var notes:Note[]
     private var samples:float32[]
     private var weights:float32[]
+    private let merged:bool
     private var serial:int = 0
-    private init(bindings:Binding[], channels:Channel[], notes:Note[], bend_range:float32, gain:float32, controller_ramp_frames:int) {
+    private init(bindings:Binding[], channels:Channel[], notes:Note[], bend_range:float32, gain:float32, controller_ramp_frames:int, merged:bool) {
+        self.merged = merged
         self.bindings = bindings; self.channels = channels; self.notes = notes; self.format = bindings[0].instrument.format
         self.note_capacity = notes.count(); self.bend_range = bend_range; self.gain = gain; self.samples = []; self.weights = []; self.controller_ramp_frames = controller_ramp_frames
         var i = 0; while i < 1_024 { self.samples.append(0.0); self.weights.append(0.0); i++ }
     }
     static func create(bindings:Binding[], note_capacity:int = 256, bend_range:float32 = 2.0, gain:float32 = 0.2, controller_ramp_frames:int = 0) Result<Synthesizer, Error> {
+        return Synthesizer.build(bindings, note_capacity, bend_range, gain, controller_ramp_frames, false)
+    }
+    package static func single(instrument:Synthesis.Instrument, note_capacity:int = 256) Result<Synthesizer, Error> {
+        var bindings:Binding[] = [Binding(channel:0, program:0, instrument:instrument)]
+        return Synthesizer.build(bindings, note_capacity, 2.0, 1.0, 0, true)
+    }
+    private static func build(bindings:Binding[], note_capacity:int, bend_range:float32, gain:float32, controller_ramp_frames:int, merged:bool) Result<Synthesizer, Error> {
         if controller_ramp_frames < 0 || controller_ramp_frames > 16_777_216 { return Result<Synthesizer, Error>.failure(invalid("MIDI controller ramp requires 0..16777216 frames")) }
         if bindings.count() < 1 || bindings.count() > 128 || note_capacity < 1 || note_capacity > 4_096 || !Math.is_finite(bend_range) || bend_range < 0.0 || bend_range > 24.0 || !Math.is_finite(gain) || gain < 0.0 || gain > 1.0 { return Result<Synthesizer, Error>.failure(invalid("MIDI synthesis requires bindings1..128, notes1..4096, bend0..24 semitones and gain0..1")) }
         let format = bindings[0].instrument.format
-        if format.channels != 2 || format.sample_rate < 1 || format.sample_rate > 16_777_216 { return Result<Synthesizer, Error>.failure(invalid("MIDI synthesizer requires a supported stereo format")) }
+        if ((!merged && format.channels != 2) || format.channels < 1 || format.channels > 8) || format.sample_rate < 1 || format.sample_rate > 16_777_216 { return Result<Synthesizer, Error>.failure(invalid("MIDI synthesizer requires a supported stereo format")) }
         var i = 0
         while i < bindings.count() {
             var binding = bindings[i]
@@ -74,9 +83,10 @@ public class Synthesizer:Synthesis.Generator {
         }
         for binding in bindings { var state = channels[binding.channel]; state.used = true }
         var notes:Note[] = []; i = 0; while i < note_capacity { notes.append(Note()); i++ }
-        return Result<Synthesizer, Error>.success(Synthesizer(bindings, channels, notes, bend_range, gain, controller_ramp_frames))
+        return Result<Synthesizer, Error>.success(Synthesizer(bindings, channels, notes, bend_range, gain, controller_ramp_frames, merged))
     }
     private func selected(channel:int, program:int) Result<int, Error> {
+        if self.merged { return Result<int, Error>.success(0) }
         var i = 0; while i < self.bindings.count() { if self.bindings[i].channel == channel && self.bindings[i].program == program { return Result<int, Error>.success(i) }
             i++ }
         return Result<int, Error>.failure(unsupported("MIDI channel/program has no application-selected instrument"))
@@ -108,6 +118,18 @@ public class Synthesizer:Synthesis.Generator {
     func send(channel:int, message:Message) Result<bool, Error> {
         try validate(channel, message)
         var state = self.channels[channel]
+        if self.merged {
+            // Per-note identities retain the original channel; channel-wide controls need explicit routing.
+            match message {
+                note_on(number, velocity) => {}
+                note_off(number, velocity) => {}
+                control_change(controller, value) => {
+                    if controller == 123 { try self.release_channel(channel); return Result<bool, Error>.success(true) }
+                    return Result<bool, Error>.success(false)
+                }
+                else => { return Result<bool, Error>.success(false) }
+            }
+        }
         match message {
             note_on(number, velocity) => {
                 if velocity == 0 { try self.release(channel, number); return Result<bool, Error>.success(true) }
@@ -153,12 +175,20 @@ public class Synthesizer:Synthesis.Generator {
     func held_notes() int { var count = 0; for var note in self.notes { if note.active { count++ } }
         return count }
     func finish() Result<void, Error> {
+        if self.merged {
+            var instrument = self.bindings[0].instrument
+            try instrument.send(Synthesis.Command.sustain(false))
+            try instrument.send(Synthesis.Command.all_notes_off)
+            for var note in self.notes { note.active = false }
+            return Result<void, Error>.success()
+        }
         var channel = 0
         while channel < 16 { try self.broadcast(channel, Synthesis.Command.sustain(false)); self.channels[channel].sustain = false; try self.broadcast(channel, Synthesis.Command.all_notes_off); channel++ }
         for var note in self.notes { note.active = false }
         return Result<void, Error>.success()
     }
     func render(samples:&float32[..]) Result<void, Error> {
+        if self.merged { var instrument = self.bindings[0].instrument; return instrument.render(samples) }
         if samples.count() % 2 != 0 { return Result<void, Error>.failure(invalid("MIDI output requires complete stereo frames")) }
         var start = 0
         while start < samples.count() {

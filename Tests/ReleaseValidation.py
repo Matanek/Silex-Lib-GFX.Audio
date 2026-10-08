@@ -14,7 +14,7 @@ options = parser.parse_args()
 owner = Path(__file__).resolve().parents[1]
 workspace = owner.parents[1]
 compiler = Path(os.environ.get("SILEX_EXECUTABLE", str(workspace / "Silex/Toolchain/zig-out/bin/silex")))
-sources = ["Tests/Processing.sx", "Tests/Consumer/Tests/Production.sx", "Tests/Consumer/Tests/StreamGroups.sx", "Tests/Consumer/Tests/Synthesis.sx", "Tests/Consumer/Tests/Waveforms.sx", "Tests/Consumer/Tests/Composition.sx", "Tests/Consumer/Tests/Bitcrusher.sx", "Tests/Consumer/Tests/Distortion.sx", "Tests/Consumer/Tests/StereoPan.sx", "Tests/Consumer/Tests/ModulatedDelay.sx", "Tests/Consumer/Tests/Reverb.sx", "Tests/Consumer/Tests/Dynamics.sx", "Tests/Consumer/Tests/Instruments.sx", "Tests/Consumer/Tests/Continuous.sx", "Tests/Consumer/Tests/MIDIFile.sx", "Tests/Consumer/Tests/MIDISynth.sx", "Tests/Consumer/Tests/Music.sx"]
+sources = ["Tests/Processing.sx", "Tests/Consumer/Tests/Production.sx", "Tests/Consumer/Tests/StreamGroups.sx", "Tests/Consumer/Tests/Synthesis.sx", "Tests/Consumer/Tests/Waveforms.sx", "Tests/Consumer/Tests/Composition.sx", "Tests/Consumer/Tests/Bitcrusher.sx", "Tests/Consumer/Tests/Distortion.sx", "Tests/Consumer/Tests/StereoPan.sx", "Tests/Consumer/Tests/ModulatedDelay.sx", "Tests/Consumer/Tests/Reverb.sx", "Tests/Consumer/Tests/Dynamics.sx", "Tests/Consumer/Tests/Instruments.sx", "Tests/Consumer/Tests/Continuous.sx", "Tests/Consumer/Tests/MIDIFile.sx", "Tests/Consumer/Tests/MIDISynth.sx", "Tests/Consumer/Tests/Music.sx", "Tests/Consumer/Tests/MusicPlayer.sx"]
 environment = dict(os.environ, SDL_AUDIODRIVER="__silex_no_audio_driver__")
 count = 0
 with tempfile.TemporaryDirectory(prefix="ReleaseValidation_", dir=owner / "Tests") as temporary:

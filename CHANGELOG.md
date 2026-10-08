@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add `Music.Player`: explicit timbre, instrument or MIDI routing; bounded PCM feeding owned by Audio, pause/resume/stop/replay controls, standalone wait, observable state and errors. The Audio plugin preserves a supplied resource and feeds playback on the application thread. Bilingual guide and interactive example without consumer pumping.
+
 - Distinguish sound recipes and instruments in `Music`: `prepare(audio, using:...)` accepts either, and `Music.Instruments.sine` creates the existing polyphonic instrument with durations in seconds and amplitude preserved by reset. The Music candidate's `instrument:` parameter becomes `using:`. Four executable variants and checks for voices, gain, units and errors.
 - Add `GFX.Audio.Music`: notes in beats and tempo, customizable retro/triangle/sine timbres, short-sound preparation with internal buffers and independent playbacks; user instruments and effects reuse existing protocols. Qualified limits and FR/EN examples.
 

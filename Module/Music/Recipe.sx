@@ -1,0 +1,120 @@
+use GFX.Audio.Music.Timbre
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+class Voice {
+    var id:int = -1
+    var order:int = 0
+    var tone:Synthesis.Oscillator
+    var envelope:Synthesis.Envelope
+    var crusher:Processing.Bitcrusher
+    var last:float32 = 0.0
+    var tail:float32 = 0.0
+    var fade:int = 0
+    let fade_frames:int
+    init(tone:Synthesis.Oscillator, envelope:Synthesis.Envelope, crusher:Processing.Bitcrusher, fade_frames:int) {
+        self.tone = tone; self.envelope = envelope; self.crusher = crusher; self.fade_frames = fade_frames
+    }
+    func start(id:int, frequency:float32, velocity:float32, amplitude:float32, order:int) Result<void, Error> {
+        try self.tone.set_frequency(frequency); try self.tone.set_amplitude(amplitude * velocity)
+        self.fade = 0; self.tail = 0.0
+        if self.envelope.is_active() && self.fade_frames > 0 { self.tail = self.last; self.fade = self.fade_frames }
+        self.tone.reset(); self.envelope.reset(); self.crusher.reset(); self.envelope.note_on()
+        self.id = id; self.order = order
+        return Result<void, Error>.success()
+    }
+    func reset() { self.tone.reset(); self.envelope.reset(); self.crusher.reset(); self.id = -1; self.order = 0; self.last = 0.0; self.tail = 0.0; self.fade = 0 }
+}
+
+// Realization of a recipe; the caller chooses the Timbre value, not this machinery.
+package class Recipe:Synthesis.Instrument {
+    let format:Processing.Format
+    private let amplitude:float32
+    private var voices:Voice[]
+    private var scratch:float32[]
+    private var serial:int = 0
+    private init(format:Processing.Format, amplitude:float32, voices:Voice[]) {
+        self.format = format; self.amplitude = amplitude; self.voices = voices; self.scratch = []
+        var i = 0; while i < 512 { self.scratch.append(0.0); i++ }
+    }
+    static func create(timbre:Timbre, sample_rate:int) Result<Recipe, Error> {
+        let mono = Processing.Format(sample_rate:sample_rate, channels:1)
+        let attack = try Synthesis.frame_at(timbre.attack_seconds, sample_rate)
+        let decay = try Synthesis.frame_at(timbre.decay_seconds, sample_rate)
+        let release = try Synthesis.frame_at(timbre.release_seconds, sample_rate)
+        var hold = try Synthesis.frame_at(timbre.hold_seconds, sample_rate)
+        if hold < 1 { hold = 1 }
+        let fade = try Synthesis.frame_at(0.001, sample_rate)
+        var voices:Voice[] = []; var i = 0
+        while i < 16 {
+            var tone = try Synthesis.Oscillator.create(mono, frequency_hz:0.0, amplitude:timbre.amplitude, waveform:timbre.waveform, duty_cycle:timbre.duty_cycle)
+            var envelope = try Synthesis.Envelope.create(mono, attack, decay, timbre.sustain, release)
+            var crusher = try Processing.Bitcrusher.create(mono, bits:timbre.bits, hold_frames:hold)
+            voices.append(Voice(tone, envelope, crusher, fade)); i++
+        }
+        return Result<Recipe, Error>.success(Recipe(Processing.Format(sample_rate:sample_rate, channels:2), timbre.amplitude, voices))
+    }
+    func validate(command:Synthesis.Command) Result<void, Error> {
+        match command {
+            note_on(id, frequency, velocity) => {
+                if id < 0 || !Math.is_finite(frequency) || frequency <= 0.0 || frequency >= self.format.sample_rate as float32 * 0.5 || !Math.is_finite(velocity) || velocity < 0.0 || velocity > 1.0 { return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.recipe", subject:null, detail:"invalid note identity, frequency or velocity")) }
+            }
+            note_off(id) => { if id < 0 { return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.recipe", subject:null, detail:"negative note identity")) } }
+            all_notes_off => {}
+            sustain(down) => { if down { return Result<void, Error>.failure(Error(kind:Kind.unsupported(), operation:"audio.music.recipe", subject:null, detail:"recipe playback does not apply channel sustain")) } }
+            else => { return Result<void, Error>.failure(Error(kind:Kind.unsupported(), operation:"audio.music.recipe", subject:null, detail:"recipe playback uses notes and release only")) }
+        }
+        return Result<void, Error>.success()
+    }
+    func send(command:Synthesis.Command) Result<void, Error> {
+        try self.validate(command)
+        match command {
+            note_on(id, frequency, velocity) => {
+
+                var slot = -1; var oldest = 0; var i = 0
+                while i < self.voices.count() {
+                    var voice = self.voices[i]
+                    if voice.envelope.is_active() && voice.id == id { return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.recipe", subject:null, detail:"note identity already active")) }
+                    if !voice.envelope.is_active() && slot < 0 { slot = i }
+                    if voice.order < self.voices[oldest].order { oldest = i }
+                    i++
+                }
+                if slot < 0 { slot = oldest }
+                if self.serial == 9_223_372_036_854_775_807 { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.music.recipe", subject:null, detail:"note counter exhausted")) }
+                self.serial++
+                try self.voices[slot].start(id, frequency, velocity, self.amplitude, self.serial)
+            }
+            note_off(id) => { for var voice in self.voices { if voice.id == id { voice.envelope.note_off() } } }
+            all_notes_off => { for var voice in self.voices { voice.envelope.note_off() } }
+            else => {}
+
+        }
+        return Result<void, Error>.success()
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        if samples.count() % 2 != 0 { return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.recipe", subject:null, detail:"incomplete stereo frame")) }
+        var start = 0
+        while start < samples.count() {
+            var frames = (samples.count() - start) / 2; if frames > 512 { frames = 512 }
+            var i = start; while i < start + frames * 2 { samples[i] = 0.0; i++ }
+            for var voice in self.voices {
+                if voice.envelope.is_active() || voice.fade > 0 {
+                    try voice.tone.render(&self.scratch[0:frames]); try voice.crusher.process(&self.scratch[0:frames]); try voice.envelope.process(&self.scratch[0:frames])
+                    var frame = 0
+                    while frame < frames {
+                        var value = self.scratch[frame]
+                        if voice.fade > 0 { let weight = voice.fade as float32 / voice.fade_frames as float32; value = weight * voice.tail + (1.0 - weight) * value; voice.fade-- }
+                        voice.last = value
+                        samples[start + frame * 2] += value; samples[start + frame * 2 + 1] += value; frame++
+                    }
+                }
+            }
+            start += frames * 2
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { for var voice in self.voices { voice.reset() } self.serial = 0 }
+}

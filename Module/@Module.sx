@@ -1,3 +1,4 @@
+use GFX.Audio.Synthesis
 use GFX.Audio.Native
 use STD.Math
 use STD.Error
@@ -130,6 +131,7 @@ class StreamState {
     var closed:bool
     var drained:bool
     var stopped:bool
+    var feed:ManagedFeed? = null
     init(input:uint, sample_rate:int, channels:int, capacity:int) {
         self.input = input
         self.sample_rate = sample_rate
@@ -262,6 +264,7 @@ public class Audio {
     private var owner:Owner
     private let offline_mode:bool
     private let output_channels:int
+    private let output_sample_rate:int
     private var rendered:int
     private let mixer:uint
     private var sounds:SoundEntry[]
@@ -273,6 +276,7 @@ public class Audio {
     init() {
         self.offline_mode = false
         self.output_channels = 0
+        self.output_sample_rate = 0
         self.rendered = 0
         self.owner = Owner()
         Native.initialize()
@@ -284,9 +288,10 @@ public class Audio {
         self.reserved_ends = 0
     }
 
-    module init(native_mixer:uint, offline:bool = false, channels:int = 0) {
+    module init(native_mixer:uint, offline:bool = false, channels:int = 0, sample_rate:int = 0) {
         self.offline_mode = offline
         self.output_channels = channels
+        self.output_sample_rate = sample_rate
         self.rendered = 0
         self.owner = Owner()
         self.mixer = native_mixer
@@ -325,7 +330,7 @@ public class Audio {
             Native.shutdown(true)
             return Result<Audio, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.offline", detail))
         }
-        return Result<Audio, Error>.success(Audio(native_mixer:mixer, offline:true, channels:channels))
+        return Result<Audio, Error>.success(Audio(native_mixer:mixer, offline:true, channels:channels, sample_rate:sample_rate))
     }
     func rendered_frames() int { return self.rendered }
     func render(frames:int) Result<float32[], Error> {
@@ -334,6 +339,21 @@ public class Audio {
             return Result<float32[], Error>.failure(stream_error(Kind.invalid_input(), "audio.render", "frame count is outside the render range"))
         }
         if frames == 0 { return Result<float32[], Error>.success([]) }
+        let quantum = self.managed_render_quantum(frames)
+        if quantum < frames {
+            var output:float32[] = []
+            var remaining = frames
+            while remaining > 0 {
+                self.collect_finished()
+                var count = remaining; if count > quantum { count = quantum }
+                var block = try Native.render(self.mixer, count * self.output_channels)
+                for sample in block { output.append(sample) }
+                self.rendered += count; remaining -= count
+            }
+            self.collect_finished()
+            return Result<float32[], Error>.success(output)
+        }
+        self.collect_finished()
         match Native.render(self.mixer, frames * self.output_channels) {
             failure(error) => { return Result<float32[], Error>.failure(error) }
             success(samples) => {
@@ -612,6 +632,7 @@ public class Audio {
         var entry = self.require_playback(sound)
         while self.is_playing(sound) || self.is_paused(sound) {
             if self.offline_mode { panic("GFX.Audio offline playback progresses through render, not wait") }
+            self.collect_finished()
             Native.wait()
         }
         self.collect_finished()
@@ -790,7 +811,9 @@ public class Audio {
 
     func set_speed(sound:PlayingSound, speed:float) {
         validate_speed(speed)
-        Native.set_speed(self.require_playback(sound).handle, speed)
+        var entry = self.require_playback(sound)
+        if let state = entry.stream { if var feed = state.feed { feed.speed = speed } }
+        Native.set_speed(entry.handle, speed)
     }
 
     func set_position(sound:PlayingSound, position:Math.Vec3) {
@@ -806,6 +829,7 @@ public class Audio {
     }
 
     module func collect_finished() {
+        self.feed_managed_streams()
         var index = 0
         while index < self.playbacks.count() {
             var entry = self.playbacks[index]
@@ -876,6 +900,104 @@ public class Audio {
             self.ends = events
             self.reserved_ends--
         }
+    }
+
+    package func managed_stream(source:Synthesis.Generator, duration_frames:int, block_frames:int, capacity_frames:int) Result<Stream, Error> {
+        if duration_frames < 0 || block_frames < 1 || block_frames > 65_536 { return Result<Stream, Error>.failure(stream_error(Kind.invalid_input(), "audio.music.player", "invalid duration or block size")) }
+        var output = try self.stream(source.format.sample_rate, source.format.channels, capacity_frames)
+        var state = self.require_stream(output)
+        state.feed = ManagedFeed(source, duration_frames, block_frames)
+        return Result<Stream, Error>.success(output)
+    }
+    package func managed_error(stream:Stream) Error? {
+        var state = self.require_stream(stream)
+        if let feed = state.feed { return feed.error }
+        return null
+    }
+    package func start_managed(stream:Stream, settings:Playback) Result<PlayingSound, Error> {
+        var state = self.require_stream(stream)
+        if state.started || state.stopped { return Result<PlayingSound, Error>.failure(stream_error(Kind.invalid_input(), "audio.music.play", "player is one-shot; create another playback")) }
+        if var feed = state.feed { feed.speed = settings.speed }
+        match self.fill_managed(stream) {
+            failure(error) => {
+                if var feed = state.feed { feed.error = error }
+                self.stop(stream.playback)
+                return Result<PlayingSound, Error>.failure(error)
+            }
+            success => {}
+        }
+        return Result<PlayingSound, Error>.success(self.play(stream, settings))
+    }
+    package func wait_managed(stream:Stream) Result<void, Error> {
+        if self.offline_mode || self.is_paused(stream.playback) { return Result<void, Error>.failure(stream_error(Kind.resource_busy(), "audio.music.wait", "offline playback requires rendering; paused playback must resume before waiting")) }
+        self.wait(stream.playback)
+        if let error = self.managed_error(stream) { return Result<void, Error>.failure(error) }
+        return Result<void, Error>.success()
+    }
+    private func fill_managed(stream:Stream) Result<void, Error> {
+        var state = self.require_stream(stream)
+        if state.closed || state.stopped { return Result<void, Error>.success() }
+        if var feed = state.feed {
+            if let error = feed.error { return Result<void, Error>.failure(error) }
+            let consumed = self.stream_consumed(stream.playback, state)
+            var allowance = state.capacity - (state.written - consumed)
+            // The allowance is sampled once. Device consumption cannot make this loop unbounded.
+            while allowance > 0 && feed.written < feed.duration {
+                if feed.offset == feed.pending {
+                    var frames = feed.duration - feed.produced
+                    if frames > feed.block_frames { frames = feed.block_frames }
+                    try feed.source.render(&feed.samples[0:frames * state.channels])
+                    feed.produced += frames; feed.pending = frames; feed.offset = 0
+                }
+                var frames = feed.pending - feed.offset
+                if frames > allowance { frames = allowance }
+                let accepted = try self.write(stream, @feed.samples[feed.offset * state.channels:(feed.offset + frames) * state.channels])
+                feed.offset += accepted; feed.written += accepted; allowance -= accepted
+            }
+            if feed.written == feed.duration { try self.close(stream) }
+        }
+        return Result<void, Error>.success()
+    }
+    private func feed_managed_streams() {
+        var index = 0
+        while index < self.playbacks.count() {
+            var entry = self.playbacks[index]
+            if entry.active && !entry.user_paused && !self.group_paused(entry.group) {
+                if var state = entry.stream {
+                    if state.started && state.feed != null && !state.closed && !state.stopped {
+                        let stream = Stream(PlayingSound(self.owner, index, entry.generation))
+                        match self.fill_managed(stream) {
+                            success => {}
+                            failure(error) => {
+                                if var feed = state.feed { feed.error = error }
+                                self.stop(stream.playback)
+                            }
+                        }
+                    }
+                }
+            }
+            index++
+        }
+    }
+    private func managed_render_quantum(maximum:int) int {
+        var quantum = maximum
+        for var entry in self.playbacks {
+            if entry.active {
+                if let state = entry.stream {
+                    if state.started && state.feed != null && !state.stopped && !state.closed {
+                        var speed:float = 1.0; if let feed = state.feed { speed = feed.speed }
+                        let window = state.capacity as float64 * self.output_sample_rate as float64 / state.sample_rate as float64 / speed
+                        // Clamp before conversion: a large ratio may exceed int64, but the request cannot.
+                        if window < quantum as float64 {
+                            var frames = Math.floor(window) as int
+                            if frames < 1 { frames = 1 }
+                            quantum = frames
+                        }
+                    }
+                }
+            }
+        }
+        return quantum
     }
 
     private func require_sound(sound:Sound) SoundEntry {

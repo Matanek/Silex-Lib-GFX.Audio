@@ -148,3 +148,5 @@ lecture. Tous ces handles appartiennent à leur instance Audio.
 
 La [lecture MIDI](MIDI.md) conserve actuellement son parcours avancé.
 Le player musical autonome et son alimentation automatique restent à établir.
+
+[Jouer une partition avec un player et des contrôles de lecture](MusicPlayer.md).

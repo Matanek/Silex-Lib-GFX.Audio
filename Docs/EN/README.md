@@ -9,6 +9,8 @@ package works directly or through its `GFX.Application` plugin.
 
 [Prepare a few notes with a customizable timbre](Music.md), then replay them without managing PCM.
 
+[Play a score with a player and playback controls](MusicPlayer.md).
+
 ## Install the package
 
 ```text

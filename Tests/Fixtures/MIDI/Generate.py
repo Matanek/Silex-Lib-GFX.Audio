@@ -58,3 +58,10 @@ for tick in [0,240,480,960,1440,1920,2160,2400,2880,3360,3840]:
     frame = (seconds*48000 + Fraction(1,2)).numerator // (seconds*48000 + Fraction(1,2)).denominator
     print(tick, frame)
 assert (root/'Tempo.mid').stat().st_size < 512
+
+# A tick is one frame at 8000 Hz. Releasing channel 1 before channel 0 distinguishes identities.
+write('ChannelIdentity.mid', [[(0,[192,99]),(0,[176,64,127]),(0,[224,0,80]),
+    (0,[208,45]),(0,[144,69,127]),(1,[145,69,100]),(2,[129,69,0]),
+    (3,[128,69,0]),(4,[255,47,0])]], format=0, ppqn=4000)
+# Three hours of metadata, two notes, no corresponding PCM materialization at startup.
+write('Long.mid', [[(0,[144,69,100]),(96,[128,69,0]),(2073600,[255,47,0])]], format=0, ppqn=96)
