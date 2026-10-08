@@ -94,3 +94,5 @@ avec ses instruments, effets, commandes et marge de transfert.
 
 [Faire évoluer un son et alimenter un flux](Continuous.md) ·
 [Vérifier les parcours audio](Validation.md)
+
+[Choisir le coût d’une lecture musicale](MusicResources.md).

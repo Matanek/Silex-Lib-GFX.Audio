@@ -9,6 +9,11 @@ recettes, ses graines et ses paramètres.
 
 ## Du bip à la musique
 
+Pour une mélodie courte, [choisir un timbre ou un instrument et préparer le son](Music.md).
+Pour une partition, [créer le player MIDI](MusicPlayer.md) : il possède
+l’alimentation et les contrôles. Les parcours ci-dessous donnent accès aux
+primitives pour une composition détaillée.
+
 | Intention | Sources et composition | Guide et source exécutable |
 | --- | --- | --- |
 | Bip, impact, laser | Oscillateur, bruit blanc, filtre, ADSR ou courbe de fréquence. | [Synthèse](Synthesis.md), [ProceduralSounds.sx](../ProceduralSounds.sx) |
@@ -23,7 +28,7 @@ Les sources exécutables s’utilisent depuis `SilexProject/`, par exemple
 consolidée appartient à `Silex-Examples/Sources/ProceduralAudio/Main.sx` ; elle
 propose `--case beep|impact|laser|explosion|engine|retro|melody|midi` et `--check`
 sur son exécutable compilé. Son guide bilingue explique paramètres et variantes.
-Ces parcours nécessitent les candidats locaux de la Spec jusqu’à leur livraison.
+Ces parcours sont disponibles dans les branches locales livrées.
 
 ## Contrôler durée, rythme et niveau
 
@@ -53,10 +58,13 @@ effets et instruments ; les compositions publiques les acceptent. Les
 [traitements](Processing.md) et la [composition](Composition.md) décrivent
 format, vues de blocs et état conservé entre appels.
 
-Pour un son court réutilisable, rendre les échantillons puis appeler
-`Audio.create`. Pour un rendu continu, préparer `Synthesis.StreamProducer`,
+Pour un son court décrit en notes, `Melody.prepare` possède le rendu et la
+création du son. Le parcours brut reste disponible : rendre les échantillons
+puis appeler `Audio.create`. Pour un flux avancé, préparer `Synthesis.StreamProducer`,
 préremplir et gérer ses écritures partielles avant de fermer l’entrée. Une
 [sortie en mémoire](Offline.md) permet de vérifier le même rendu sans device.
 L’écoute juge le timbre ; les comparaisons PCM vérifient la reproductibilité.
 Ces briques ne fournissent ni banque d’échantillons, ni hôte VST, ni humanisation
 automatique.
+
+[Choisir le coût d’une lecture musicale](MusicResources.md).

@@ -7,9 +7,12 @@ et empreintes sont déclarés dans `Package.json`. Le [guide du provider](../../
 décrit leur reconstruction et leur publication séparée.
 
 ```sh
+export ZIG_GLOBAL_CACHE_DIR="$PWD/.silex/zig-global"
+export ZIG_LOCAL_CACHE_DIR="$PWD/.silex/zig-local"
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
 python3 Packages/GFX.Audio/Tests/Resources/Validate.py
+python3 Packages/GFX.Audio/Tests/Resources/ValidateMusic.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
@@ -24,8 +27,8 @@ Le pilote vidéo factice permet aussi le test de coexistence SDL avec une fenêt
 sans accès au bureau. Les vérifications de rejet imposent un diagnostic et un code d’échec, avec une
 limite de durée pour détecter les attentes qui ne peuvent pas progresser.
 
-`ReleaseValidation.py` reprend les 86 oracles publics de `Processing`,
-`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay`, `Reverb` et `Dynamics` en Release.
+`ReleaseValidation.py` reprend les 168 oracles publics de `Processing`,
+`Production`, `StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay`, `Reverb`, `Dynamics`, `Instruments`, `Continuous`, `MIDIFile`, `MIDISynth`, `Music` et `MusicPlayer` en Release.
 Il utilise un pilote
 volontairement inexistant : les oracles s’appuient sur le rendu hors ligne et ne demandent
 aucun périphérique. Ils vérifient notamment la chaîne à état et le même
@@ -73,7 +76,23 @@ s’exécutent sur le thread applicatif ; le provider n’appelle pas de callbac
 Silex sur son thread audio. Les données et les primitives restent indépendantes
 d’un instrument, d’un séquenceur ou de MIDI.
 
-## Qualification de la synthèse du 8 octobre 2026
+## Qualification du parcours musical courant
+
+Les sources de production d’Audio `d1ce09a0b9887d58ce3a89ea584a34b3d0dc57c2`
+avec Silex `b8b81e996181b138283f6186360efe22d5845335` passent 208 tests
+Audio dans 34 fichiers et 168 oracles Release sur macOS ARM64 et x64/Rosetta.
+MIDIPlayer et le consumer de contexte des surcharges sont composés et liés
+sur les six cibles ; les deux exécutables macOS sont aussi exécutés. Cette
+liaison ne revendique pas l’exécution Linux/Windows des oracles.
+
+La qualification des [coûts musicaux](MusicResources.md) couvre préparation,
+lectures répétées, recouvrement, MIDI long et alimentation possédée. Les compteurs
+Debug/Release macOS ARM64 restent verts après ajout du replay et reset de la
+recette. Ces ajouts de tests et guides ne modifient pas les sources de production.
+Le transfert/offline alloue ; les mesures de durées sont distinctes de ces
+contrôles déterministes et ne promettent pas une marge universelle.
+
+## Qualification du socle conservée du 8 octobre 2026
 
 Le DSP d’Audio `ada2c3570df1ffa3ac7065a11ab9892abff40af7` reste inchangé.
 Avec Silex `60d90abf1d7a689eef421b54fb9bd58b09d2313e`, les 143 oracles Release

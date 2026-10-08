@@ -91,3 +91,5 @@ and transfer headroom.
 
 [Evolve a sound and feed a stream](Continuous.md) ·
 [Validate audio paths](Validation.md)
+
+[Choose musical playback costs](MusicResources.md).

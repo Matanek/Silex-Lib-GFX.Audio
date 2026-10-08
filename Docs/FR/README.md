@@ -254,3 +254,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Choisir et adapter une recette procédurale](Recipes.md).
 
 [Choisir les capacités et le budget de production](Resources.md).
+
+[Choisir le coût d’une lecture musicale](MusicResources.md).

@@ -1,0 +1,28 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.MIDI
+use STD.Math
+use Interop.C
+use Interop.Boundary
+let phase = C.function<func() int32>(library:Boundary.System,name:"getppid")
+func main() {
+    print("empty"); phase(); phase()
+    print("positive allocation"); phase(); var positive:float32[] = []; for i in 0...1_024 { positive.append(0.0) }
+    phase(); assert(positive.count() == 1_024)
+    var audio = try Audio.offline(48_000,2) else error { panic(error.detail) }
+    let bytes = embed_bytes("PolyphonicLong.mid")
+    var score = try MIDI.Score.parse(@bytes[0:bytes.count()],48_000) else error { panic(error.detail) }
+    var timbre = Music.Timbre.retro(); timbre.amplitude = 0.025
+    var player = try Music.Player.create(audio,score,using:timbre) else error { panic(error.detail) }
+    let playing = try player.play() else error { panic(error.detail) }
+    for i in 0...100 {
+        let samples = try audio.render(512) else error { panic(error.detail) }
+        for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 0.9) }
+    }
+    player.stop()
+    let repeated = try player.replay() else error { panic(error.detail) }
+    player.stop()
+    var melody = try Music.Melody.create([Music.Note(key:60,beats:0.25)]) else error { panic(error.detail) }
+    let short_sound = try melody.prepare(audio,using:timbre) else error { panic(error.detail) }
+    assert(audio.unload(short_sound))
+}

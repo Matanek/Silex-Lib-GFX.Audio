@@ -144,7 +144,9 @@ uses a 512-frame scratch buffer, while the full output remains in memory.
 may finish. `audio.release(playing)` releases a playback. All these handles
 belong to their Audio instance.
 
-[MIDI playback](MIDI.md) currently retains its advanced path. The self-contained
-musical player and its automatic feeding remain to be established.
+The [MIDI player](MusicPlayer.md) owns continuous feeding and playback controls.
+The [advanced path](MIDI.md) retains channel/program routing.
+[Musical resource costs](MusicResources.md) distinguish preparation, triggering
+and continuous production.
 
 [Play a score with a player and playback controls](MusicPlayer.md).

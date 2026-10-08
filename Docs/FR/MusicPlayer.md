@@ -113,3 +113,5 @@ déterministe. `wait()` refuse l’offline et la pause par `resource_busy` ; uti
 render pour le premier et resume pour la seconde. Les erreurs de partition,
 formats, capacité, réglages et sortie hors `[-1,1]` restent récupérables. Aucun
 écrêtage caché n’est ajouté : réduire l’amplitude ou choisir un limiteur.
+
+[Choisir le coût d’une lecture musicale](MusicResources.md).

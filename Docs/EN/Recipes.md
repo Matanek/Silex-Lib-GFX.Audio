@@ -8,6 +8,10 @@ provides building blocks; the application owns its recipes, seeds and parameters
 
 ## From beeps to music
 
+For a short melody, [choose a timbre or instrument and prepare the sound](Music.md).
+For a score, [create the MIDI player](MusicPlayer.md): it owns feeding and
+controls. The paths below expose primitives for detailed composition.
+
 | Intent | Sources and composition | Guide and executable source |
 | --- | --- | --- |
 | Beep, impact, laser | Oscillator, white noise, filter, ADSR or frequency curve. | [Synthesis](Synthesis.md), [ProceduralSounds.sx](../ProceduralSounds.sx) |
@@ -22,7 +26,7 @@ Run executable sources from `SilexProject/`, for example
 demonstration belongs to `Silex-Examples/Sources/ProceduralAudio/Main.sx`; its
 compiled executable provides `--case beep|impact|laser|explosion|engine|retro|melody|midi`
 and `--check`. Its bilingual guide explains parameters and variations. These
-paths require the Spec’s local candidates until they are delivered.
+paths are available in the delivered local branches.
 
 ## Control duration, rhythm and level
 
@@ -51,9 +55,12 @@ and instruments; public compositions accept them. [Processing](Processing.md)
 and [composition](Composition.md) describe formats, block views and state
 preserved between calls.
 
-For a short reusable sound, render samples and call `Audio.create`. For
-continuous output, prepare `Synthesis.StreamProducer`, prefill and handle
+For a short sound described in notes, `Melody.prepare` owns rendering and sound
+creation. The raw path remains available: render samples and call `Audio.create`.
+For an advanced stream, prepare `Synthesis.StreamProducer`, prefill and handle
 partial writes before closing input. [In-memory output](Offline.md) can verify
 the same render without a device. Listening judges timbre; PCM comparisons
 verify reproducibility. These building blocks provide neither sample banks,
 a VST host nor automatic humanization.
+
+[Choose musical playback costs](MusicResources.md).

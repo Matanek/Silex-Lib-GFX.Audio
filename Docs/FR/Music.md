@@ -146,7 +146,9 @@ reste en mémoire. `audio.unload(sound)` libère le son réutilisable ; les
 lectures déjà démarrées peuvent finir. `audio.release(playing)` libère une
 lecture. Tous ces handles appartiennent à leur instance Audio.
 
-La [lecture MIDI](MIDI.md) conserve actuellement son parcours avancé.
-Le player musical autonome et son alimentation automatique restent à établir.
+Le [player MIDI](MusicPlayer.md) possède l’alimentation continue et les contrôles
+de lecture. Le [parcours avancé](MIDI.md) conserve le routage par canal/programme.
+Les [coûts musicaux](MusicResources.md) distinguent préparation, déclenchement
+et production continue.
 
 [Jouer une partition avec un player et des contrôles de lecture](MusicPlayer.md).

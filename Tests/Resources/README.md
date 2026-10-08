@@ -34,3 +34,31 @@ macOS X64 uses direct mmap syscalls for Silex heap allocation; its growing-array
 control is invisible to libc interposition. The validator refuses that host rather
 than treating zero counts as evidence. Linux/Windows need their own valid counter.
 See the [resource qualification](../../Docs/EN/Resources.md) for measured scope.
+
+## Musical authoring and managed playback
+
+```sh
+python3 Packages/GFX.Audio/Tests/Resources/GenerateMusicFixture.py
+python3 Packages/GFX.Audio/Tests/Resources/ValidateMusic.py
+```
+
+The first command checks or generates the 157-byte, three-hour SMF fixture:
+16 held notes and 32 note commands. The second qualifies preparation, 100
+prepared play/stop pairs, eight overlapping plays, MIDI parsing, player creation,
+prefill, controls, stop/replay and 100 managed-feed/offline blocks in Debug and
+Release. A counted application instrument proves that replaying a prepared sound
+does not synthesize it again. Public-path allocations are reported separately
+from 100 allocation-free instrument DSP blocks.
+
+For the private retro recipe, the script creates a disposable package copy with
+mechanical markers around valid command application, block rendering and reset.
+A test-only System provider supplies the phase marker. No production source or
+provider is changed. The workspace Audio link temporarily points to this copy;
+do not run another Audio-dependent compilation concurrently. A `finally` restores
+the original owner even on failure; the script verifies restored links and source
+bytes. Each mode covers at least 100 recipe blocks and 16 valid commands.
+
+`music-resource-validation.json` retains phases, source and binary hashes.
+Controls, finite levels and the queue-plus-block production bound are assertions;
+no timing threshold is used. Allocation and copy controls have the same ARM64
+limits as the advanced gate above. See [musical resource costs](../../Docs/EN/MusicResources.md).

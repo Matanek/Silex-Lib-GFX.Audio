@@ -1,0 +1,96 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.MIDI
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+use Interop.C
+use Interop.Boundary
+
+let phase = C.function<func() int32>(library:Boundary.System, name:"getppid")
+func require(result:Result<void, Error>) { try result else error { panic(error.detail) } }
+func output(audio:Audio, count:int) { let samples = try audio.render(count) else error { panic(error.detail) }; for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.9) } }
+func zeros(count:int) float32[] { var samples:float32[] = []; for i in 0...count { samples.append(0.0) } return samples }
+func score() MIDI.Score {
+    let bytes = embed_bytes("PolyphonicLong.mid")
+    return try MIDI.Score.parse(@bytes[0:bytes.count()],48_000) else error { panic(error.detail) }
+}
+class Probe:Synthesis.Instrument {
+    let format:Processing.Format = Processing.Format(sample_rate:48_000,channels:2)
+    var voice:Synthesis.SineInstrument
+    var processed:Synthesis.Processed
+    var frames:int = 0
+    var capture:bool = false
+    init(voice:Synthesis.SineInstrument,processed:Synthesis.Processed) { self.voice = voice; self.processed = processed }
+    static func create() Result<Probe,Error> {
+        let format = Processing.Format(sample_rate:48_000,channels:2)
+        var voice = try Music.Instruments.sine(amplitude:0.025,format:format)
+        var low = try Processing.LowPass.create(format,cutoff_hz:8_000.0)
+        var chorus = try Processing.ModulatedDelay.create(format,max_delay_frames:2_400,delay_frames:960.0,depth_frames:240.0,rate_hz:0.7,feedback:0.1,wet:0.25)
+        var room = try Processing.Reverb.create(format,room_size:0.5,decay_seconds:1.5,damping:0.5,wet:0.3)
+        var compressor = try Processing.Compressor.create(format)
+        var limiter = try Processing.Limiter.create(format,ceiling_db:-3.0)
+        var processed = try Synthesis.Processed.create(voice,[low,chorus,room,compressor,limiter])
+        return Result<Probe,Error>.success(Probe(voice,processed))
+    }
+    func validate(command:Synthesis.Command) Result<void, Error> { return self.voice.validate(command) }
+    func send(command:Synthesis.Command) Result<void, Error> { return self.voice.send(command) }
+    func render(samples:&float32[..]) Result<void, Error> {
+        if self.capture { print("DSP block"); phase() }
+        var result = self.processed.render(samples)
+        if self.capture { phase() }
+        self.frames += samples.count() / 2
+        return result
+    }
+    func reset() { self.processed.reset(); self.frames = 0 }
+}
+func main() {
+    print("empty"); phase(); phase()
+    print("positive allocation"); phase(); var positive = zeros(1_024); phase(); assert(positive.count() == 1_024)
+    var audio = try Audio.offline(48_000,2) else error { panic(error.detail) }
+    print("short description"); phase()
+    var melody = try Music.Melody.create([Music.Note(key:60,beats:0.25),Music.Note(key:64,beats:0.25),Music.Note(key:67,beats:0.25),Music.Note(key:72,beats:0.25)]) else error { panic(error.detail) }
+    phase()
+    var timbre = Music.Timbre.retro(); timbre.amplitude = 0.10
+    print("short preparation"); phase()
+    var sound = try melody.prepare(audio,using:timbre,format:Processing.Format(sample_rate:48_000,channels:2)) else error { panic(error.detail) }
+    phase()
+    print("100 prepared plays"); phase()
+    for i in 0...100 { let playing = audio.play(sound); audio.stop(playing) }
+    phase()
+    var discarded = audio.drain_end_events()
+    print("8 overlapping plays"); phase()
+    var plays:Audio.PlayingSound[] = []; for i in 0...8 { plays.append(audio.play(sound,Audio.Playback(volume:0.1))) }
+    phase(); output(audio,128)
+    for playing in plays { assert(audio.is_playing(playing)); audio.stop(playing) }
+    var counted = try Probe.create() else error { panic(error.detail) }; var prepared = try melody.prepare(audio,using:counted,format:counted.format) else error { panic(error.detail) }
+    let before = counted.frames
+    for i in 0...100 { let playing = audio.play(prepared); audio.stop(playing) }
+    assert(counted.frames == before)
+    print("MIDI parsing"); phase(); var sheet = score(); phase()
+    assert(sheet.end_frame == 518_400_000 && sheet.events.count() == 32)
+    print("instrument player preparation"); phase()
+    var witness = try Probe.create() else error { panic(error.detail) }
+    var player = try Music.Player.create(audio,sheet,using:witness) else error { panic(error.detail) }
+    phase(); assert(witness.frames == 0)
+    print("player start and prefill"); phase(); let playing = try player.play() else error { panic(error.detail) }; phase()
+    assert(witness.frames <= 4_800 + 512)
+    print("player controls"); phase(); require(player.pause()); require(player.resume()); phase()
+    print("100 owned feed and offline outputs"); phase()
+    for i in 0...100 { output(audio,512) }
+    phase(); assert(witness.frames <= 51_200 + 4_800 + 512)
+    witness.capture = true
+    for i in 0...100 { output(audio,512) }
+    witness.capture = false
+    print("player stop"); phase(); player.stop(); phase()
+    let stopped = witness.frames; output(audio,512); assert(witness.frames == stopped)
+    print("player replay"); phase(); let repeated = try player.replay() else error { panic(error.detail) }; phase(); player.stop()
+    print("recipe player preparation"); phase()
+    timbre.amplitude = 0.025
+    var retro = try Music.Player.create(audio,sheet,using:timbre) else error { panic(error.detail) }
+    phase()
+    print("recipe start and prefill"); phase(); let retro_playing = try retro.play() else error { panic(error.detail) }; phase()
+    print("100 recipe feed and offline outputs"); phase(); for i in 0...100 { output(audio,512) } phase()
+    retro.stop(); audio.unload(sound); audio.unload(prepared)
+}

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Qualifies musical-path costs: preparation and repeated playback, long scores and owned feeding; DSP counters separated from native/offline allocations, ARM64 and x64/Rosetta measurements, FR/EN guides and a reproducible protocol.
+
 - Add `Music.Player`: explicit timbre, instrument or MIDI routing; bounded PCM feeding owned by Audio, pause/resume/stop/replay controls, standalone wait, observable state and errors. The Audio plugin preserves a supplied resource and feeds playback on the application thread. Bilingual guide and interactive example without consumer pumping.
 
 - Distinguish sound recipes and instruments in `Music`: `prepare(audio, using:...)` accepts either, and `Music.Instruments.sine` creates the existing polyphonic instrument with durations in seconds and amplitude preserved by reset. The Music candidate's `instrument:` parameter becomes `using:`. Four executable variants and checks for voices, gain, units and errors.

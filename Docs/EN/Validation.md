@@ -6,9 +6,12 @@ under `Boundary/`; `Package.json` records paths and hashes. The
 [provider guide](../../Native/README.md) covers rebuilding and separate publication.
 
 ```sh
+export ZIG_GLOBAL_CACHE_DIR="$PWD/.silex/zig-global"
+export ZIG_LOCAL_CACHE_DIR="$PWD/.silex/zig-local"
 SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy silex test Packages/GFX.Audio/Tests --nocache
 python3 Packages/GFX.Audio/Tests/ReleaseValidation.py
 python3 Packages/GFX.Audio/Tests/Resources/Validate.py
+python3 Packages/GFX.Audio/Tests/Resources/ValidateMusic.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py
 python3 Packages/GFX.Audio/Tests/SynthesisSpectrum.py --debug
 python3 Packages/GFX.Audio/Tests/GeneratedSamplesValidation.py
@@ -22,8 +25,8 @@ support mixing and processing guarantees. The dummy video driver also enables
 the SDL window coexistence test without desktop access. Rejection checks require a diagnostic
 and failure exit code, with timeouts to detect waits that cannot progress.
 
-`ReleaseValidation.py` runs the 86 public `Processing`, `Production`,
-`StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay`, `Reverb` and `Dynamics` oracles
+`ReleaseValidation.py` runs the 168 public `Processing`, `Production`,
+`StreamGroups`, `Synthesis`, `Waveforms`, `Composition`, `Bitcrusher`, `Distortion`, `StereoPan`, `ModulatedDelay`, `Reverb`, `Dynamics`, `Instruments`, `Continuous`, `MIDIFile`, `MIDISynth`, `Music` and `MusicPlayer` oracles
 in Release. It selects a deliberately
 nonexistent driver:
 these oracles use offline rendering and require no device. They cover the
@@ -68,7 +71,23 @@ exact speaker presentation time. Processing runs on the application thread;
 the provider never calls a Silex callback on its audio thread. Data and
 primitives remain independent of instruments, sequencing or MIDI.
 
-## Synthesis qualification of October 8, 2026
+## Current musical-path qualification
+
+Production sources from Audio `d1ce09a0b9887d58ce3a89ea584a34b3d0dc57c2`
+with Silex `b8b81e996181b138283f6186360efe22d5845335` pass 208 Audio tests
+in 34 files and 168 Release oracles on macOS ARM64 and x64/Rosetta.
+MIDIPlayer and the overload-context consumer compose and link on all six
+targets; both macOS executables also run. This linking does not claim
+Linux/Windows execution of the oracles.
+
+[Musical resource costs](MusicResources.md) cover preparation, repeated plays,
+overlap, long MIDI and owned feeding. Debug/Release macOS ARM64 counters remain
+green after adding recipe replay and reset. These test and guide additions do
+not change production sources. Native transfer/offline allocates; timing
+observations are separate from deterministic checks and promise no universal
+headroom.
+
+## Preserved foundation qualification from 8 October 2026
 
 The DSP in Audio `ada2c3570df1ffa3ac7065a11ab9892abff40af7` is unchanged.
 With Silex `60d90abf1d7a689eef421b54fb9bd58b09d2313e`, all 143 Release oracles

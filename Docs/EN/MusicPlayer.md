@@ -111,3 +111,5 @@ ensure uninterrupted playback if the game stalls longer.
 for the former and resume for the latter. Score, format, capacity, configuration,
 and output outside `[-1,1]` errors remain recoverable. No hidden clipping is
 added: reduce amplitude or choose a limiter.
+
+[Choose musical playback costs](MusicResources.md).
