@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- Distinguish sound recipes and instruments in `Music`: `prepare(audio, using:...)` accepts either, and `Music.Instruments.sine` creates the existing polyphonic instrument with durations in seconds and amplitude preserved by reset. The Music candidate's `instrument:` parameter becomes `using:`. Four executable variants and checks for voices, gain, units and errors.
 - Add `GFX.Audio.Music`: notes in beats and tempo, customizable retro/triangle/sine timbres, short-sound preparation with internal buffers and independent playbacks; user instruments and effects reuse existing protocols. Qualified limits and FR/EN examples.
 
 - Qualifies synthesis resources: controlled Debug/Release ARM64 allocation gate including MIDI events; stereo 16/64-voice workload with five effects measured separately from PCM transfer, with documented limits and headroom.

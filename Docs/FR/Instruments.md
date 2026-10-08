@@ -5,6 +5,10 @@ ADSR, sustain et pitch bend. `Synthesis.Sequence` place leurs commandes sur
 l’horloge audio et fournit un `Generator`, composable avec les effets existants.
 Aucune banque de sons ni entrée MIDI n’est nécessaire.
 
+Pour écrire quelques notes et préparer un son sans gérer les frames ou buffers,
+utiliser [le parcours musical](Music.md). `Music.Instruments.sine` configure
+ce même instrument avec des durées en secondes.
+
 [PolyphonicMelody.sx](../PolyphonicMelody.sx) joue quatre mesures à 120 BPM :
 accords, notes répétées avec identités distinctes, pédale dans la deuxième
 mesure et changement de hauteur dans la quatrième. Les accents sont écrits
@@ -76,6 +80,7 @@ float32, y compris après bend ; la limite haute est strictement Nyquist.
 | Réglage | Défaut | Plage |
 |---|---|---|
 | `max_voices` | 16 | 1..64, allouées à la création |
+| `amplitude` | 1 | float32 fini, 0..1, conservée au reset et multipliée par vélocité et gain |
 | `voice_policy` | `VoicePolicy.steal_oldest` | `steal_oldest` ou `reject` |
 | `attack_frames` | 240 | 0..16 777 216 |
 | `decay_frames` | 2 400 | 0..16 777 216 |

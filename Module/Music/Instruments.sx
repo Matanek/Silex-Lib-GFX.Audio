@@ -1,0 +1,22 @@
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+// Musical units for the existing polyphonic sine instrument.
+public static struct Instruments {
+    func sine(amplitude:float32 = 0.2, attack_seconds:float64 = 0.005, decay_seconds:float64 = 0.05, sustain:float32 = 0.7, release_seconds:float64 = 0.1, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.SineInstrument, Error> {
+        if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
+            return Result<Synthesis.SineInstrument, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.instrument", subject:null, detail:"instrument requires rate 1..192000, channels 1..8 and steal fade in [0, 4096] frames"))
+        }
+        let attack = try Synthesis.frame_at(attack_seconds, format.sample_rate)
+        let decay = try Synthesis.frame_at(decay_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(release_seconds, format.sample_rate)
+        let fade = try Synthesis.frame_at(steal_fade_seconds, format.sample_rate)
+        return Synthesis.SineInstrument.create(format, max_voices:max_voices,
+            voice_policy:voice_policy, attack_frames:attack, decay_frames:decay,
+            sustain:sustain, release_frames:release, steal_fade_frames:fade,
+            amplitude:amplitude)
+    }
+}

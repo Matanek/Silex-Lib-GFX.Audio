@@ -22,5 +22,7 @@ Play polyphonic notes with [instruments and a frame timeline](Docs/EN/Instrument
 
 Play [MIDI scores with application-selected procedural instruments](Docs/EN/MIDI.md), without sound banks.
 
-[Prepare and replay short melodies with customizable timbres](Docs/EN/Music.md),
-without handling PCM buffers.
+[Prepare and replay short melodies with customizable timbres or an integrated
+instrument](Docs/EN/Music.md), without handling PCM buffers. `Music.Instruments.sine`
+configures the polyphonic sine instrument with durations in seconds; application
+instruments keep their own musical settings and the existing extension protocol.

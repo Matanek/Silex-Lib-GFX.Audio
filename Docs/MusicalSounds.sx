@@ -10,14 +10,14 @@ class SoftAccent:Synthesis.Instrument {
     private var source:Synthesis.SineInstrument
     private init(source:Synthesis.SineInstrument) { self.source = source; self.format = source.format }
     static func create() Result<SoftAccent, Error> {
-        var source = try Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000, channels:1),
-            attack_frames:144, decay_frames:1_440, sustain:0.3, release_frames:4_800)
+        var source = try Music.Instruments.sine(amplitude:0.22,
+            attack_seconds:0.003, decay_seconds:0.03, sustain:0.3, release_seconds:0.1)
         return Result<SoftAccent, Error>.success(SoftAccent(source))
     }
     func validate(command:Synthesis.Command) Result<void, Error> { return self.source.validate(command) }
     func send(command:Synthesis.Command) Result<void, Error> {
         match command {
-            note_on(id, frequency, velocity) => { return self.source.send(Synthesis.Command.note_on(id, frequency, 0.22 * velocity * velocity)) }
+            note_on(id, frequency, velocity) => { return self.source.send(Synthesis.Command.note_on(id, frequency, velocity * velocity)) }
             else => { return self.source.send(command) }
         }
     }
@@ -38,13 +38,21 @@ func main() {
     var timbre = Music.Timbre.soft()
     timbre.release_seconds = 0.15
     timbre.amplitude = 0.16
-    let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+    let softer = try melody.prepare(audio, using:timbre) else error { panic(error.detail) }
     print("Same melody, customized soft timbre")
     audio.wait(audio.play(softer))
 
+    var instrument = try Music.Instruments.sine(amplitude:0.16,
+        attack_seconds:0.003, decay_seconds:0.03, sustain:0.35, release_seconds:0.1)
+        else error { panic(error.detail) }
+    let tone = try melody.prepare(audio, using:instrument, tail_seconds:0.1)
+        else error { panic(error.detail) }
+    print("Same melody, integrated polyphonic sine instrument")
+    audio.wait(audio.play(tone))
+
     var accent = try SoftAccent.create() else error { panic(error.detail) }
-    let personal = try melody.prepare(audio, accent, tail_seconds:0.1) else error { panic(error.detail) }
+    let personal = try melody.prepare(audio, using:accent, tail_seconds:0.1) else error { panic(error.detail) }
     print("Same preparation and playback, application instrument")
     audio.wait(audio.play(personal))
-    assert(audio.unload(victory) && audio.unload(softer) && audio.unload(personal))
+    assert(audio.unload(victory) && audio.unload(softer) && audio.unload(tone) && audio.unload(personal))
 }

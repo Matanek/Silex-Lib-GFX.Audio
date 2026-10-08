@@ -5,6 +5,10 @@ sustain and pitch bend. `Synthesis.Sequence` places their commands on the audio
 clock and provides a `Generator`, composable with the existing effects.
 No sound bank or MIDI input is required.
 
+To write a few notes and prepare a sound without handling frames or buffers,
+use [the musical path](Music.md). `Music.Instruments.sine` configures this same
+instrument with durations in seconds.
+
 [PolyphonicMelody.sx](../PolyphonicMelody.sx) plays four bars at 120 BPM:
 chords, repeated notes with distinct identities, a pedal in the second bar
 and a pitch change in the fourth. Accents are written into the score.
@@ -75,6 +79,7 @@ after bend; the upper limit is strictly Nyquist.
 | Setting | Default | Range |
 |---|---|---|
 | `max_voices` | 16 | 1..64, allocated at creation |
+| `amplitude` | 1 | finite float32, 0..1, preserved by reset and multiplied by velocity and gain |
 | `voice_policy` | `VoicePolicy.steal_oldest` | `steal_oldest` or `reject` |
 | `attack_frames` | 240 | 0..16,777,216 |
 | `decay_frames` | 2,400 | 0..16,777,216 |

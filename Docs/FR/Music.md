@@ -1,6 +1,6 @@
 # Préparer une mélodie et la jouer
 
-Décrivez quelques notes, choisissez un timbre et préparez un son réutilisable.
+Décrivez quelques notes, choisissez un timbre ou un instrument et préparez un son réutilisable.
 `GFX.Audio.Music` possède les buffers, les conversions de temps et le rendu ;
 aucune banque de sons n'est nécessaire. Utilisez la toolchain locale contenant
 les conversions optionnelles et les arguments nommés partagés, jusqu'à publication.
@@ -34,7 +34,7 @@ Fragment à utiliser avec `audio` et `melody` ci-dessus :
 var timbre = Music.Timbre.soft()
 timbre.release_seconds = 0.15
 timbre.amplitude = 0.16
-let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+let softer = try melody.prepare(audio, using:timbre) else error { panic(error.detail) }
 ```
 
 Les trois points de départ sont `retro()` (carré, 8 bits, maintien 125 µs),
@@ -50,23 +50,60 @@ Modifier un timbre puis préparer produit un nouveau Sound ; le précédent et
 ses lectures conservent leur PCM. Les notes et le tempo appartiennent à une
 copie possédée par Melody ; modifier la liste source ne change pas la mélodie.
 
+Le timbre est une recette sonore ; il ne reçoit pas de commandes et ne conserve
+pas de voix actives. La préparation produit chaque note puis somme ses queues.
+Les presets du timbre ne constituent donc pas un catalogue d'instruments.
+
+## Choisir un instrument intégré
+
+Fragment à utiliser avec `audio` et `melody` ci-dessus :
+
+```sx
+var instrument = try Music.Instruments.sine(amplitude:0.16,
+    attack_seconds:0.003, decay_seconds:0.03, sustain:0.35, release_seconds:0.1)
+    else error { panic(error.detail) }
+let tone = try melody.prepare(audio, using:instrument, tail_seconds:0.1)
+    else error { panic(error.detail) }
+audio.wait(audio.play(tone))
+```
+
+`Music.Instruments.sine` crée le véritable `Synthesis.SineInstrument`
+polyphonique du package. L'instrument reçoit les commandes musicales et possède
+ses voix. Cette entrée accepte les durées en secondes et choisit par défaut
+un format mono à 48 kHz, une amplitude de 0,2, une attaque de 5 ms, un déclin
+de 50 ms, un sustain de 0,7, un relâchement de 100 ms et 16 voix. `max_voices`
+accepte 1..64 ; `voice_policy` choisit rejet ou réattribution de la voix la
+plus ancienne, cette dernière par défaut. `steal_fade_seconds` vaut 1 ms par
+défaut et se limite à 4 096 frames au format choisi. L'amplitude par voix
+reste distincte de la vélocité et du gain pilotable ; reset la conserve.
+Les durées sont arrondies à la frame la plus proche et chaque étape ADSR
+se limite à 16 777 216 frames. Les réglages invalides retournent un `Result`.
+
+Les [commandes de notes, sustain, pitch bend et gain](Instruments.md) restent
+disponibles sur cet instrument. Une mélodie préparée fige leur résultat ;
+modifier ou commander ensuite l'instrument ne modifie pas le Sound préparé.
+Le format choisi lors de sa création doit correspondre à celui de `prepare`.
+Le sinus sert les tons et alertes simples ; aucun piano, batterie ou guitare
+n'est annoncé par cette entrée. Les timbres rétro restent directement utilisables
+pour les effets courts et la musique.
+
 ## Apporter un instrument et des effets
 
 [MusicalSounds.sx](../MusicalSounds.sx) joue successivement la victoire rétro,
-un timbre modifié et un instrument applicatif conforme au protocole existant
+un timbre modifié, l'instrument intégré et un instrument applicatif conforme au protocole existant
 `Synthesis.Instrument`. Depuis SilexProject :
 
 ```sh
 silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
 ```
 
-La même opération `melody.prepare(audio, instrument, tail_seconds:0.1)`
+La même opération `melody.prepare(audio, using:instrument, tail_seconds:0.1)`
 construit les événements et rend l'instrument. `effects:[myEffect]` ajoute
 jusqu'à 32 traitements `Processing.Processor`, dans l'ordre indiqué, après
 la somme des notes. Ils partagent le format demandé. Leur queue s'obtient
 avec `tail_seconds`, sans deviner la durée d'un traitement utilisateur.
 
-La préparation réinitialise l'instrument utilisateur et les effets puis
+La préparation réinitialise l'instrument choisi et les effets puis
 consomme leur état. Une classe reste partagée avec ses autres détenteurs ;
 utiliser une instance dédiée sur le thread applicatif. Une erreur de rendu
 peut laisser ces objets modifiés : les réinitialiser ou les reconstruire
@@ -83,13 +120,13 @@ arrondies à la frame la plus proche ; la fraction tenue doit occuper au
 moins une frame. Le tempo ne dépend pas de la cadence de l'application.
 
 `prepare` produit du mono à 48 kHz par défaut. `format:Processing.Format(...)`
-permet 1..192 000 Hz et 1..8 canaux. Un instrument utilisateur doit avoir
+permet 1..192 000 Hz et 1..8 canaux. Un instrument choisi doit avoir
 ce même format. Le timbre intégré envoie le signal identiquement aux canaux ;
 une note à Nyquist ou au-delà est refusée.
 
 La durée du Sound est la durée musicale plus `tail_seconds`. Sans cet
 argument, la queue vaut le release du timbre intégré ou 100 ms pour un
-instrument utilisateur. Une queue explicite plus courte coupe le relâchement ;
+instrument choisi, y compris l'instrument sinus intégré. Une queue explicite plus courte coupe le relâchement ;
 une queue plus longue laisse les effets finir puis ajoute du silence.
 `max_seconds` limite durée musicale et queue à 30 s par défaut ; il peut être
 remplacé dans ]0, 300]. Le résultat est aussi limité à 16 777 216 samples.

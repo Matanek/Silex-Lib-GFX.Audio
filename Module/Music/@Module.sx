@@ -1,3 +1,4 @@
 public use GFX.Audio.Music.Melody.Melody
 public use GFX.Audio.Music.Note.Note
 public use GFX.Audio.Music.Timbre.Timbre
+public use GFX.Audio.Music.Instruments.Instruments

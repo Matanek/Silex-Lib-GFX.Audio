@@ -176,3 +176,83 @@ test "musical preparation is bounded and stereo recipes duplicate the same music
     while i < 4_097 { notes.append(Music.Note(key:72, beats:0.1)); i++ }
     match Music.Melody.create(notes) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("excessive note count accepted") } }
 }
+
+test "integrated musical instrument keeps its amplitude through gain commands and reset" {
+    let format = Processing.Format(sample_rate:8_000, channels:1)
+    var source = try Music.Instruments.sine(amplitude:0.16, attack_seconds:0.0,
+        decay_seconds:0.0, sustain:1.0, release_seconds:0.02, format:format) else error { panic(error.detail) }
+    var reference = try Synthesis.SineInstrument.create(format, attack_frames:0,
+        decay_frames:0, sustain:1.0, release_frames:160) else error { panic(error.detail) }
+    assert(source.format.sample_rate == 8_000 && source.max_voices == 16)
+    assert(source.amplitude == 0.16 as float32 && source.steal_fade_frames == 8)
+    var samples:float32[] = []; var oracle:float32[] = []
+    var i = 0; while i < 1_024 { samples.append(0.0); oracle.append(0.0); i++ }
+    var repeat = 0
+    while repeat < 2 {
+        source.reset(); reference.reset()
+        let command = Synthesis.Command.note_on(1, 440.0, 0.5)
+        try source.send(command) else error { panic(error.detail) }
+        try reference.send(command) else error { panic(error.detail) }
+        let gain = Synthesis.Command.gain_to(0.5, 800)
+        try source.send(gain) else error { panic(error.detail) }
+        try reference.send(gain) else error { panic(error.detail) }
+        try source.render(&samples[0:samples.count()]) else error { panic(error.detail) }
+        try reference.render(&oracle[0:oracle.count()]) else error { panic(error.detail) }
+        i = 0
+        while i < samples.count() { assert(Math.abs(samples[i] - 0.16 as float32 * oracle[i]) < 0.000001); i++ }
+        repeat++
+    }
+}
+
+test "named musical choices prepare a timbre an integrated instrument and application effects" {
+    var audio = offline(); var song = melody([Music.Note(key:72, beats:0.1)])
+    var source = try Music.Instruments.sine(amplitude:0.12, release_seconds:0.03) else error { panic(error.detail) }
+    var gain = Gain(); gain.value = 0.5
+    let integrated = try song.prepare(audio, using:source, effects:[gain], tail_seconds:0.03) else error { panic(error.detail) }
+    let recipe = try song.prepare(audio, using:Music.Timbre.sine(), effects:[gain]) else error { panic(error.detail) }
+    assert(audio.contains(integrated) && audio.contains(recipe) && gain.resets == 2)
+    let playing = audio.play(integrated); let first = output(audio, 4_000)
+    assert(!audio.is_playing(playing))
+    let again = audio.play(integrated); let second = output(audio, 4_000)
+    var i = 0; var audible = false
+    while i < first.count() { assert(Math.abs(first[i] - second[i]) < 0.000001); if Math.abs(first[i]) > 0.001 { audible = true } i++ }
+    assert(audible && !audio.is_playing(again))
+}
+
+test "musical instrument units preserve polyphony sustain and capacity policy" {
+    var source = try Music.Instruments.sine(max_voices:2,
+        voice_policy:Synthesis.VoicePolicy.reject, release_seconds:0.002) else error { panic(error.detail) }
+    try source.send(Synthesis.Command.note_on(1, 440.0, 1.0)) else error { panic(error.detail) }
+    try source.send(Synthesis.Command.note_on(2, 660.0, 0.5)) else error { panic(error.detail) }
+    assert(source.active_voices() == 2)
+    match source.send(Synthesis.Command.note_on(3, 880.0, 1.0)) {
+        failure(error) => { assert(error.kind == Kind.limit_exceeded()) }
+        success => { panic("voice capacity exceeded") }
+    }
+    try source.send(Synthesis.Command.sustain(true)) else error { panic(error.detail) }
+    try source.send(Synthesis.Command.all_notes_off) else error { panic(error.detail) }
+    var samples:float32[] = []; var i = 0; while i < 256 { samples.append(0.0); i++ }
+    try source.render(&samples[0:samples.count()]) else error { panic(error.detail) }
+    assert(source.active_voices() == 0)
+    source.reset(); assert(source.active_voices() == 0)
+    try source.send(Synthesis.Command.note_on(1, 440.0, 1.0)) else error { panic(error.detail) }
+    try source.send(Synthesis.Command.sustain(true)) else error { panic(error.detail) }
+    try source.send(Synthesis.Command.note_off(1)) else error { panic(error.detail) }
+    try source.render(&samples[0:samples.count()]) else error { panic(error.detail) }
+    assert(source.active_voices() == 1)
+    try source.send(Synthesis.Command.sustain(false)) else error { panic(error.detail) }
+    try source.render(&samples[0:samples.count()]) else error { panic(error.detail) }
+    assert(source.active_voices() == 0)
+}
+
+test "musical instrument settings fail recoverably before use" {
+    var invalid_results:Result<Synthesis.SineInstrument, Error>[] = [Music.Instruments.sine(amplitude:-0.1), Music.Instruments.sine(amplitude:1.1),
+        Music.Instruments.sine(attack_seconds:-0.1), Music.Instruments.sine(decay_seconds:-0.1),
+        Music.Instruments.sine(release_seconds:-0.1), Music.Instruments.sine(steal_fade_seconds:1.0),
+        Music.Instruments.sine(max_voices:0), Music.Instruments.sine(max_voices:65),
+        Music.Instruments.sine(format:Processing.Format(sample_rate:0, channels:1)),
+        Music.Instruments.sine(sustain:1.1)]
+    for result in invalid_results {
+        match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid instrument accepted") } }
+    }
+}

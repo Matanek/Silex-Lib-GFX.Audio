@@ -1,6 +1,6 @@
 # Prepare and play a melody
 
-Describe a few notes, choose a timbre and prepare a reusable sound.
+Describe a few notes, choose a timbre or instrument and prepare a reusable sound.
 `GFX.Audio.Music` owns the buffers, time conversions and rendering; no sound
 bank is required. Use the local toolchain containing optional conversions and
 shared named argument contexts until they are published.
@@ -34,7 +34,7 @@ Fragment using `audio` and `melody` from above:
 var timbre = Music.Timbre.soft()
 timbre.release_seconds = 0.15
 timbre.amplitude = 0.16
-let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+let softer = try melody.prepare(audio, using:timbre) else error { panic(error.detail) }
 ```
 
 The three starting points are `retro()` (square, 8 bits, 125 µs sample hold),
@@ -50,23 +50,59 @@ Changing a timbre and preparing it creates a new Sound; earlier sounds and
 playbacks retain their PCM. Melody owns a copy of the notes and tempo;
 changing the original list does not change the melody.
 
+A timbre is a sound recipe; it receives no commands and keeps no active voices.
+Preparation produces each note and sums its tails. Timbre presets therefore
+do not constitute an instrument catalogue.
+
+## Choose an integrated instrument
+
+Fragment using `audio` and `melody` from above:
+
+```sx
+var instrument = try Music.Instruments.sine(amplitude:0.16,
+    attack_seconds:0.003, decay_seconds:0.03, sustain:0.35, release_seconds:0.1)
+    else error { panic(error.detail) }
+let tone = try melody.prepare(audio, using:instrument, tail_seconds:0.1)
+    else error { panic(error.detail) }
+audio.wait(audio.play(tone))
+```
+
+`Music.Instruments.sine` creates the package's actual polyphonic
+`Synthesis.SineInstrument`. The instrument receives musical commands and owns
+its voices. This entry accepts durations in seconds and defaults to mono at
+48 kHz, amplitude 0.2, a 5 ms attack, 50 ms decay, sustain 0.7, a 100 ms release
+and 16 voices. `max_voices` accepts 1..64; `voice_policy` chooses rejection or
+oldest-voice reassignment, with reassignment as the default.
+`steal_fade_seconds` defaults to 1 ms and is limited to 4,096 frames in the
+selected format. Per-voice amplitude remains separate from velocity and the
+controllable gain; reset preserves it. Durations round to the nearest frame,
+and each ADSR stage is limited to 16,777,216 frames. Invalid settings return
+a `Result`.
+
+[Note, sustain, pitch bend and gain commands](Instruments.md) remain available
+on this instrument. A prepared melody freezes their result; changing or
+commanding the instrument afterwards does not change the prepared Sound.
+The format selected at creation must match `prepare`'s format. The sine serves
+simple tones and alerts; this entry announces no piano, drums or guitar.
+Retro timbres remain directly usable for short effects and music.
+
 ## Bring an instrument and effects
 
 [MusicalSounds.sx](../MusicalSounds.sx) plays the retro victory, a customized
-timbre and an application instrument conforming to the existing
+timbre, the integrated instrument and an application instrument conforming to the existing
 `Synthesis.Instrument` protocol. From SilexProject:
 
 ```sh
 silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
 ```
 
-The same `melody.prepare(audio, instrument, tail_seconds:0.1)` operation
+The same `melody.prepare(audio, using:instrument, tail_seconds:0.1)` operation
 creates the events and renders the instrument. `effects:[myEffect]` adds
 up to 32 `Processing.Processor` treatments, in the specified order, after
 summing the notes. They share the requested format. Choose their tail with
 `tail_seconds`; the package does not guess a user effect's duration.
 
-Preparation resets the user instrument and effects, then consumes their
+Preparation resets the selected instrument and effects, then consumes their
 state. A class remains shared with its other holders; use a dedicated instance
 on the application thread. A rendering error may leave those objects changed:
 reset or reconstruct them before retrying. The [advanced primitives](Instruments.md)
@@ -83,13 +119,13 @@ fraction must occupy at least one frame. Tempo is independent of application
 update frequency.
 
 `prepare` produces mono at 48 kHz by default. `format:Processing.Format(...)`
-allows 1..192,000 Hz and 1..8 channels. A user instrument must have that format.
+allows 1..192,000 Hz and 1..8 channels. A selected instrument must have that format.
 The built-in timbre sends the same signal to each channel; notes at or above
 Nyquist are rejected.
 
 Sound duration is the musical duration plus `tail_seconds`. Without that
-argument, the tail is the built-in timbre's release or 100 ms for a user
-instrument. An explicitly shorter tail cuts release; a longer tail lets
+argument, the tail is the built-in timbre's release or 100 ms for a selected
+instrument, including the integrated sine instrument. An explicitly shorter tail cuts release; a longer tail lets
 effects finish, then adds silence. `max_seconds` limits music plus tail to
 30 s by default, replaceable within (0, 300]. Output is also limited to
 16,777,216 samples. These limits protect short-sound preparation, which

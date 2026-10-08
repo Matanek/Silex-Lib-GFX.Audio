@@ -55,6 +55,7 @@ class SineVoice {
 
 public class SineInstrument:Generator, Instrument {
     let format:Processing.Format
+    let amplitude:float32
     let max_voices:int
     let voice_policy:VoicePolicy
     let steal_fade_frames:int
@@ -69,22 +70,23 @@ public class SineInstrument:Generator, Instrument {
     private var bend_ratio:float32 = 1.0
     private var serial:int = 0
 
-    private init(format:Processing.Format, voices:SineVoice[], voice_policy:VoicePolicy, steal_fade_frames:int) {
+    private init(format:Processing.Format, voices:SineVoice[], voice_policy:VoicePolicy, steal_fade_frames:int, amplitude:float32) {
         self.format = format; self.max_voices = voices.count(); self.voices = voices
+        self.amplitude = amplitude
         self.voice_policy = voice_policy; self.steal_fade_frames = steal_fade_frames
         self.temporary = scratch(512)
         self.ratios = scratch(512); self.gains = scratch(512)
         self.bend = RampState(0.0); self.gain = RampState(1.0)
     }
-    static func create(format:Processing.Format, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, attack_frames:int = 240, decay_frames:int = 2_400, sustain:float32 = 0.7, release_frames:int = 4_800, steal_fade_frames:int = 32) Result<SineInstrument, Error> {
-        if !valid_format(format) || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 { return Result<SineInstrument, Error>.failure(invalid("instrument requires a valid format, 1 to 64 voices and steal fade in [0, 4096] frames")) }
+    static func create(format:Processing.Format, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, attack_frames:int = 240, decay_frames:int = 2_400, sustain:float32 = 0.7, release_frames:int = 4_800, steal_fade_frames:int = 32, amplitude:float32 = 1.0) Result<SineInstrument, Error> {
+        if !valid_format(format) || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 { return Result<SineInstrument, Error>.failure(invalid("instrument requires a valid format, 1 to 64 voices, unit amplitude and steal fade in [0, 4096] frames")) }
         var voices:SineVoice[] = []
         var i = 0
         while i < max_voices {
             var envelope = try Envelope.create(Processing.Format(sample_rate:format.sample_rate, channels:1), attack_frames, decay_frames, sustain, release_frames)
             voices.append(SineVoice(envelope, steal_fade_frames)); i++
         }
-        return Result<SineInstrument, Error>.success(SineInstrument(format, voices, voice_policy, steal_fade_frames))
+        return Result<SineInstrument, Error>.success(SineInstrument(format, voices, voice_policy, steal_fade_frames, amplitude))
     }
     func validate(command:Command) Result<void, Error> {
         match command {
@@ -181,7 +183,7 @@ public class SineInstrument:Generator, Instrument {
             control_frame = 0
             while control_frame < frames {
                 var channel = 0
-                while channel < self.format.channels { samples[start + control_frame * self.format.channels + channel] *= self.gains[control_frame]; channel++ }
+                while channel < self.format.channels { samples[start + control_frame * self.format.channels + channel] *= self.amplitude * self.gains[control_frame]; channel++ }
                 control_frame++
             }
             start += frames * self.format.channels

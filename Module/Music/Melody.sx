@@ -79,27 +79,27 @@ public class Melody {
         return Result<Audio.Sound, Error>.success(audio.create(@samples[0:samples.count()], format.sample_rate, format.channels))
     }
 
-    func prepare(audio:Audio, instrument:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
-        var tail = instrument.release_seconds
+    func prepare(audio:Audio, using:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
+        var tail = using.release_seconds
         if let seconds = tail_seconds { tail = seconds }
         let plan = try self.plan(format, tail, max_seconds)
         try self.validate_effects(effects, format)
-        let attack = try Synthesis.frame_at(instrument.attack_seconds, format.sample_rate)
-        let decay = try Synthesis.frame_at(instrument.decay_seconds, format.sample_rate)
-        let release = try Synthesis.frame_at(instrument.release_seconds, format.sample_rate)
-        let hold = try Synthesis.frame_at(instrument.hold_seconds, format.sample_rate)
+        let attack = try Synthesis.frame_at(using.attack_seconds, format.sample_rate)
+        let decay = try Synthesis.frame_at(using.decay_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(using.release_seconds, format.sample_rate)
+        let hold = try Synthesis.frame_at(using.hold_seconds, format.sample_rate)
         // Validate the recipe before allocating the owned output or rendering notes.
-        var envelope = try Synthesis.Envelope.create(format, attack, decay, instrument.sustain, release)
+        var envelope = try Synthesis.Envelope.create(format, attack, decay, using.sustain, release)
         var tone = try Synthesis.Oscillator.create(format, frequency_hz:0.0,
-            amplitude:instrument.amplitude, waveform:instrument.waveform, duty_cycle:instrument.duty_cycle)
+            amplitude:using.amplitude, waveform:using.waveform, duty_cycle:using.duty_cycle)
         var held = hold
         if held == 0 { held = 1 }
-        var crusher = try Processing.Bitcrusher.create(format, bits:instrument.bits, hold_frames:held)
+        var crusher = try Processing.Bitcrusher.create(format, bits:using.bits, hold_frames:held)
         var output = zeros(plan.frames * format.channels)
         var scratch = zeros(512 * format.channels)
         for note in plan.notes {
             try tone.set_frequency(note.frequency)
-            try tone.set_amplitude(instrument.amplitude * note.velocity)
+            try tone.set_amplitude(using.amplitude * note.velocity)
             tone.reset(); crusher.reset(); envelope.reset(); envelope.note_on()
             var position = note.start
             var end = note.off + release
@@ -111,7 +111,7 @@ public class Melody {
                 if until > end { until = end }
                 let count = (until - position) * format.channels
                 try tone.render(&scratch[0:count])
-                if instrument.bits < 24 || hold > 1 { try crusher.process(&scratch[0:count]) }
+                if using.bits < 24 || hold > 1 { try crusher.process(&scratch[0:count]) }
                 try envelope.process(&scratch[0:count])
                 var i = 0
                 while i < count { output[position * format.channels + i] += scratch[i]; i++ }
@@ -121,18 +121,18 @@ public class Melody {
         return self.finish(audio, &output[0:output.count()], format, effects)
     }
 
-    func prepare(audio:Audio, instrument:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
+    func prepare(audio:Audio, using:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
         var tail:float64 = 0.1
         if let seconds = tail_seconds { tail = seconds }
         let plan = try self.plan(format, tail, max_seconds)
-        if instrument.format.sample_rate != format.sample_rate || instrument.format.channels != format.channels { return Result<Audio.Sound, Error>.failure(invalid("instrument and prepared sound must share a format")) }
+        if using.format.sample_rate != format.sample_rate || using.format.channels != format.channels { return Result<Audio.Sound, Error>.failure(invalid("instrument and prepared sound must share a format")) }
         try self.validate_effects(effects, format)
         var events:Synthesis.Event[] = []; var id = 0
         for note in plan.notes {
             events.append(Synthesis.Event(frame:note.start, command:Synthesis.Command.note_on(id, note.frequency, note.velocity)))
             events.append(Synthesis.Event(frame:note.off, command:Synthesis.Command.note_off(id))); id++
         }
-        var source = try Synthesis.Sequence.create(instrument, events, capacity:8_192)
+        var source = try Synthesis.Sequence.create(using, events, capacity:8_192)
         source.reset()
         var output = zeros(plan.frames * format.channels)
         try source.render(&output[0:output.count()])
