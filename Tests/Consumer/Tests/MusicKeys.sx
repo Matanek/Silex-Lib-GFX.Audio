@@ -1,0 +1,104 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+
+func named(name:str) int { return try Music.key(name) else error { panic(error.detail) } }
+
+test "named musical keys use C4 60 and accept ASCII sharps flats and lowercase letters" {
+    assert(named("C4") == 60 && named("C5") == 72 && named("D#3") == 51)
+    assert(named("Bb4") == 70 && named("A4") == 69 && named("c#5") == 73)
+    assert(named("db5") == 73 && named("b4") == 71)
+    assert(Music.Key.C5 == 72 && Music.Key.Cs5 == 73 && Music.Key.Bb4 == 70)
+    assert(Music.Key.Cs5 == Music.Key.Db5)
+}
+
+test "musical accidentals cross octave boundaries and remain in MIDI range" {
+    assert(named("B#3") == 60 && named("Cb4") == 59)
+    assert(named("E#4") == 65 && named("Fb4") == 64)
+    assert(named("C-1") == 0 && named("B#-2") == 0 && named("G9") == 127)
+    assert(Music.Key.CMinus1 == 0 && Music.Key.BsMinus2 == 0 && Music.Key.G9 == 127)
+    assert(Music.Key.Bs3 == Music.Key.C4 && Music.Key.Cb4 == Music.Key.B3)
+    assert(Music.Key.Es4 == Music.Key.F4 && Music.Key.Fb4 == Music.Key.E4)
+}
+
+test "musical text names cover all 128 MIDI numbers in chromatic order" {
+    let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    var number = 0
+    var octave = -1
+    while number < 128 {
+        for name in names {
+            if number < 128 { assert(named("$(name)$(octave)") == number); number++ }
+        }
+        octave++
+    }
+    assert(number == 128)
+}
+
+test "invalid musical names return recoverable errors with their input" {
+    let invalid = ["", "C", "C#", "C-", "C#-", "H4", "Do5", "C##5", "Cbb5", "C+5",
+        "C04", "C10", "C-9", "Cb-1", "G#9", "Ab9", "B9", " C5", "C5 ", "C5\n",
+        "C\0", "C♯5", "B♭4", "Ｃ5", "999999999999999999999999999999999999999"]
+    for name in invalid {
+        match Music.key(name) {
+            failure(error) => {
+                assert(error.kind == Kind.invalid_input())
+                assert(error.operation == "audio.music.key" && error.subject == name)
+            }
+            success(_) => { panic("invalid musical name accepted") }
+        }
+    }
+}
+
+test "musical key lists preserve input order duplicates and errors" {
+    let numbers = try Music.keys(["C5", "E5", "G5", "C6", "C5"]) else error { panic(error.detail) }
+    for index, expected in [72, 76, 79, 84, 72].indexed() { assert(numbers[index] == expected) }
+    let empty = try Music.keys([]) else error { panic(error.detail) }; assert(empty.count() == 0)
+    match Music.keys(["C5", "bad", "G5"]) {
+        failure(error) => { assert(error.kind == Kind.invalid_input() && error.subject == "bad") }
+        success(_) => { panic("invalid key list accepted") }
+    }
+}
+
+func render_keys(numbers:int[]) float32[] {
+    var notes:Music.Note[] = []
+    for number in numbers { notes.append(Music.Note(key:number, beats:0.1)) }
+    var melody = try Music.Melody.create(notes, tempo:120.0) else error { panic(error.detail) }
+    var audio = try Audio.offline(8_000) else error { panic(error.detail) }
+    let sound = try melody.prepare(audio, format:Processing.Format(sample_rate:8_000, channels:1)) else error { panic(error.detail) }
+    let playing = audio.play(sound)
+    return try audio.render(2_000) else error { panic(error.detail) }
+}
+
+test "named constants and parsed notes prepare exactly the numeric PCM" {
+    let numeric = render_keys([72, 76, 79, 84])
+    let constants = render_keys([Music.Key.C5, Music.Key.E5, Music.Key.G5, Music.Key.C6])
+    let parsed = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+    let text = render_keys(parsed)
+    assert(numeric.count() == constants.count() && numeric.count() == text.count())
+    var audible = false
+    for index, sample in numeric.indexed() {
+        assert(sample == constants[index] && sample == text[index])
+        if sample != 0.0 as float32 { audible = true }
+    }
+    assert(audible)
+}
+
+test "all canonical named constants form the 128 MIDI key numbers" {
+    let numbers:int[] = [
+        Music.Key.CMinus1, Music.Key.CsMinus1, Music.Key.DMinus1, Music.Key.DsMinus1, Music.Key.EMinus1, Music.Key.FMinus1, Music.Key.FsMinus1, Music.Key.GMinus1, Music.Key.GsMinus1, Music.Key.AMinus1, Music.Key.AsMinus1, Music.Key.BMinus1,
+        Music.Key.C0, Music.Key.Cs0, Music.Key.D0, Music.Key.Ds0, Music.Key.E0, Music.Key.F0, Music.Key.Fs0, Music.Key.G0, Music.Key.Gs0, Music.Key.A0, Music.Key.As0, Music.Key.B0,
+        Music.Key.C1, Music.Key.Cs1, Music.Key.D1, Music.Key.Ds1, Music.Key.E1, Music.Key.F1, Music.Key.Fs1, Music.Key.G1, Music.Key.Gs1, Music.Key.A1, Music.Key.As1, Music.Key.B1,
+        Music.Key.C2, Music.Key.Cs2, Music.Key.D2, Music.Key.Ds2, Music.Key.E2, Music.Key.F2, Music.Key.Fs2, Music.Key.G2, Music.Key.Gs2, Music.Key.A2, Music.Key.As2, Music.Key.B2,
+        Music.Key.C3, Music.Key.Cs3, Music.Key.D3, Music.Key.Ds3, Music.Key.E3, Music.Key.F3, Music.Key.Fs3, Music.Key.G3, Music.Key.Gs3, Music.Key.A3, Music.Key.As3, Music.Key.B3,
+        Music.Key.C4, Music.Key.Cs4, Music.Key.D4, Music.Key.Ds4, Music.Key.E4, Music.Key.F4, Music.Key.Fs4, Music.Key.G4, Music.Key.Gs4, Music.Key.A4, Music.Key.As4, Music.Key.B4,
+        Music.Key.C5, Music.Key.Cs5, Music.Key.D5, Music.Key.Ds5, Music.Key.E5, Music.Key.F5, Music.Key.Fs5, Music.Key.G5, Music.Key.Gs5, Music.Key.A5, Music.Key.As5, Music.Key.B5,
+        Music.Key.C6, Music.Key.Cs6, Music.Key.D6, Music.Key.Ds6, Music.Key.E6, Music.Key.F6, Music.Key.Fs6, Music.Key.G6, Music.Key.Gs6, Music.Key.A6, Music.Key.As6, Music.Key.B6,
+        Music.Key.C7, Music.Key.Cs7, Music.Key.D7, Music.Key.Ds7, Music.Key.E7, Music.Key.F7, Music.Key.Fs7, Music.Key.G7, Music.Key.Gs7, Music.Key.A7, Music.Key.As7, Music.Key.B7,
+        Music.Key.C8, Music.Key.Cs8, Music.Key.D8, Music.Key.Ds8, Music.Key.E8, Music.Key.F8, Music.Key.Fs8, Music.Key.G8, Music.Key.Gs8, Music.Key.A8, Music.Key.As8, Music.Key.B8,
+        Music.Key.C9, Music.Key.Cs9, Music.Key.D9, Music.Key.Ds9, Music.Key.E9, Music.Key.F9, Music.Key.Fs9, Music.Key.G9,
+    ]
+    assert(numbers.count() == 128)
+    for index, number in numbers.indexed() { assert(number == index) }
+}

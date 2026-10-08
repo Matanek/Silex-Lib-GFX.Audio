@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajoute les constantes musicales `Music.Key.C5`, `Cs5`, `Bb4` et les conversions `Music.key` / `Music.keys` depuis les noms de notes ; convention C4=60, altérations et erreurs récupérables documentées, PCM identique à la saisie MIDI numérique.
+
 - Déplace les 21 exemples exécutables et leur partition MIDI dans `Examples/` ; aucun fichier `.sx` dans `Docs/`. Corrige les liens et commandes FR/EN sans modifier les sources sonores.
 
 - Qualifie les coûts du parcours musical : préparation et lectures répétées, partition longue et alimentation possédée ; compteurs DSP séparés des allocations natives/offline, mesures ARM64 et x64/Rosetta, guides FR/EN et protocole reproductible.

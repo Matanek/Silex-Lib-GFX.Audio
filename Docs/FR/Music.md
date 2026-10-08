@@ -12,8 +12,8 @@ use GFX.Audio.Music
 func main() {
     var audio = Audio()
     var melody = try Music.Melody.create([
-        Music.Note(key:72, beats:0.5), Music.Note(key:76, beats:0.5),
-        Music.Note(key:79, beats:0.5), Music.Note(key:84, beats:1.25),
+        Music.Note(key:Music.Key.C5, beats:0.5), Music.Note(key:Music.Key.E5, beats:0.5),
+        Music.Note(key:Music.Key.G5, beats:0.5), Music.Note(key:Music.Key.C6, beats:1.25),
     ], tempo:187.5) else error { panic(error.detail) }
     let victory = try melody.prepare(audio) else error { panic(error.detail) }
     audio.wait(audio.play(victory))
@@ -25,6 +25,42 @@ avec articulation à 80 % et relâchement rétro de 30 ms. Préparer au chargeme
 du jeu ; chaque `audio.play(victory)` crée ensuite une lecture indépendante,
 sans recalculer la mélodie. `audio.wait` sert seulement à cette démonstration
 autonome : le jeu poursuit sa boucle après `play`.
+
+## Écrire les notes par leur nom
+
+`Music.Key.C5`, `Cs5` et `Bb4` sont des constantes `int`, directement utilisables
+comme `key`. Le suffixe `s` signifie *sharp* (dièse), `b` signifie bémol ;
+`Cs5` et `Db5` donnent le même numéro. La convention est **C4 = 60**, C5 = 72
+et A4 = 69. Les constantes restent dans 0..127 ; `CMinus1` désigne C-1 (0),
+`G9` vaut 127. Les altérations peuvent changer d’octave : `Bs3` vaut `C4`.
+
+Pour une liste de constantes, le compilateur actuel demande l’annotation `int[]` :
+
+```sx
+let notes:int[] = [Music.Key.C5, Music.Key.E5, Music.Key.G5, Music.Key.C6]
+```
+
+Pour des noms saisis ou chargés, utilisez les helpers dans `main()` :
+
+```sx
+let sharp = try Music.key("D#3") else error { panic(error.detail) } // 51
+let flat = try Music.key("Bb4") else error { panic(error.detail) }  // 70
+let notes = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+```
+
+Les noms textuels acceptent A à G, une altération ASCII optionnelle `#` ou `b`,
+puis une octave à un chiffre, éventuellement négative. La lettre de note peut
+être minuscule ; les espaces, les doubles altérations et les symboles Unicode
+ne sont pas acceptés. La hauteur résultante doit rester dans 0..127 : C-1 et
+B#-2 valent 0, Cb-1 et G#9 sont rejetés. Aucun accordage n’est changé.
+
+`key` retourne `Result<int, Error>` ; `keys` retourne `Result<int[], Error>`,
+conserve l’ordre et les répétitions, et accepte une liste vide. Une entrée
+invalide produit `invalid_input`, l’opération `audio.music.key` et le nom dans
+`subject` ; la liste ne retourne aucun résultat partiel. Le fragment ci-dessus
+interrompt seulement la démo : une application peut traiter cette erreur.
+Ces conversions ont lieu lors de la description des notes ; elles ne participent
+pas au rendu DSP. Les numéros MIDI restent utilisables directement.
 
 ## Changer le son
 

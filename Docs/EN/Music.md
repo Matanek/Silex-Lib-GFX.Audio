@@ -12,8 +12,8 @@ use GFX.Audio.Music
 func main() {
     var audio = Audio()
     var melody = try Music.Melody.create([
-        Music.Note(key:72, beats:0.5), Music.Note(key:76, beats:0.5),
-        Music.Note(key:79, beats:0.5), Music.Note(key:84, beats:1.25),
+        Music.Note(key:Music.Key.C5, beats:0.5), Music.Note(key:Music.Key.E5, beats:0.5),
+        Music.Note(key:Music.Key.G5, beats:0.5), Music.Note(key:Music.Key.C6, beats:1.25),
     ], tempo:187.5) else error { panic(error.detail) }
     let victory = try melody.prepare(audio) else error { panic(error.detail) }
     audio.wait(audio.play(victory))
@@ -25,6 +25,41 @@ and a 30 ms retro release. Prepare at game loading time; each subsequent
 `audio.play(victory)` starts an independent playback without recalculating
 the melody. `audio.wait` is only for this standalone demonstration; a game
 continues its loop after `play`.
+
+## Write notes by name
+
+`Music.Key.C5`, `Cs5` and `Bb4` are `int` constants, usable directly as `key`.
+The `s` suffix means sharp, and `b` means flat; `Cs5` and `Db5` produce the same
+number. The convention is **C4 = 60**, C5 = 72 and A4 = 69. Constants remain
+within 0..127; `CMinus1` names C-1 (0), and `G9` is 127. Accidentals may cross
+octave boundaries: `Bs3` equals `C4`.
+
+For a list of constants, the current compiler requires the `int[]` annotation:
+
+```sx
+let notes:int[] = [Music.Key.C5, Music.Key.E5, Music.Key.G5, Music.Key.C6]
+```
+
+For entered or loaded names, use the helpers inside `main()`:
+
+```sx
+let sharp = try Music.key("D#3") else error { panic(error.detail) } // 51
+let flat = try Music.key("Bb4") else error { panic(error.detail) }  // 70
+let notes = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+```
+
+Text names accept A through G, an optional ASCII `#` or `b` accidental, then a
+single-digit octave, optionally negative. The note letter may be lowercase;
+spaces, double accidentals and Unicode symbols are not accepted. The resulting
+pitch must remain within 0..127: C-1 and B#-2 are 0, while Cb-1 and G#9 are
+rejected. Tuning is unchanged.
+
+`key` returns `Result<int, Error>`; `keys` returns `Result<int[], Error>`,
+preserves order and duplicates, and accepts an empty list. Invalid input produces
+`invalid_input`, operation `audio.music.key` and the name in `subject`; the list
+returns no partial result. The fragment above only terminates the demonstration;
+an application can handle that error. These conversions happen when describing
+notes, outside DSP rendering. MIDI numbers remain directly usable.
 
 ## Change the sound
 

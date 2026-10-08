@@ -4,3 +4,6 @@ public use GFX.Audio.Music.Timbre.Timbre
 public use GFX.Audio.Music.Instruments.Instruments
 public use GFX.Audio.Music.Player.Player
 public use GFX.Audio.Music.Player.State
+public use GFX.Audio.Music.Key.key
+public use GFX.Audio.Music.Key.keys
+public use GFX.Audio.Music.Key.Key
