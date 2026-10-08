@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add `GFX.Audio.Music`: notes in beats and tempo, customizable retro/triangle/sine timbres, short-sound preparation with internal buffers and independent playbacks; user instruments and effects reuse existing protocols. Qualified limits and FR/EN examples.
+
 - Qualifies synthesis resources: controlled Debug/Release ARM64 allocation gate including MIDI events; stereo 16/64-voice workload with five effects measured separately from PCM transfer, with documented limits and headroom.
 
 - Adds a procedural recipe guide from beeps to MIDI scores, including units, level control and extension contracts.

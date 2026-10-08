@@ -1,0 +1,7 @@
+// Beats describe the whole slot; gate is the fraction held before release.
+public struct Note {
+    let key:int
+    let beats:float64
+    let velocity:float32 = 1.0
+    let gate:float64 = 0.8
+}

@@ -1,0 +1,112 @@
+# Prepare and play a melody
+
+Describe a few notes, choose a timbre and prepare a reusable sound.
+`GFX.Audio.Music` owns the buffers, time conversions and rendering; no sound
+bank is required. Use the local toolchain containing optional conversions and
+shared named argument contexts until they are published.
+
+```sx
+use GFX.Audio
+use GFX.Audio.Music
+
+func main() {
+    var audio = Audio()
+    var melody = try Music.Melody.create([
+        Music.Note(key:72, beats:0.5), Music.Note(key:76, beats:0.5),
+        Music.Note(key:79, beats:0.5), Music.Note(key:84, beats:1.25),
+    ], tempo:187.5) else error { panic(error.detail) }
+    let victory = try melody.prepare(audio) else error { panic(error.detail) }
+    audio.wait(audio.play(victory))
+}
+```
+
+C5–E5–G5–C6: three 160 ms slots followed by a 400 ms slot, with 80% gate
+and a 30 ms retro release. Prepare at game loading time; each subsequent
+`audio.play(victory)` starts an independent playback without recalculating
+the melody. `audio.wait` is only for this standalone demonstration; a game
+continues its loop after `play`.
+
+## Change the sound
+
+Fragment using `audio` and `melody` from above:
+
+```sx
+var timbre = Music.Timbre.soft()
+timbre.release_seconds = 0.15
+timbre.amplitude = 0.16
+let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+```
+
+The three starting points are `retro()` (square, 8 bits, 125 µs sample hold),
+`soft()` (triangle, 10 ms attack) and `sine()` (sine). Their mutable fields
+are `waveform`, `amplitude`, `duty_cycle`, `attack_seconds`, `decay_seconds`,
+`sustain`, `release_seconds`, `bits` and `hold_seconds`. Waveforms and ADSR
+follow the [synthesis primitives](Synthesis.md). The square uses the package's
+bounded harmonics; sample hold and quantization precede the envelope, which
+preserves the silent onset and release.
+
+These are subjective sound choices without guaranteed acoustic imitation.
+Changing a timbre and preparing it creates a new Sound; earlier sounds and
+playbacks retain their PCM. Melody owns a copy of the notes and tempo;
+changing the original list does not change the melody.
+
+## Bring an instrument and effects
+
+[MusicalSounds.sx](../MusicalSounds.sx) plays the retro victory, a customized
+timbre and an application instrument conforming to the existing
+`Synthesis.Instrument` protocol. From SilexProject:
+
+```sh
+silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
+```
+
+The same `melody.prepare(audio, instrument, tail_seconds:0.1)` operation
+creates the events and renders the instrument. `effects:[myEffect]` adds
+up to 32 `Processing.Processor` treatments, in the specified order, after
+summing the notes. They share the requested format. Choose their tail with
+`tail_seconds`; the package does not guess a user effect's duration.
+
+Preparation resets the user instrument and effects, then consumes their
+state. A class remains shared with its other holders; use a dedicated instance
+on the application thread. A rendering error may leave those objects changed:
+reset or reconstruct them before retrying. The [advanced primitives](Instruments.md)
+remain available.
+
+## Rhythm, duration and limits
+
+`Music.Note` accepts `key` (MIDI number 0..127), positive `beats`, `velocity`
+in 0..1 (default 1), and `gate` in (0, 1] (default 0.8). The next note starts
+after `beats`; `gate` specifies the held fraction. Release tails may overlap.
+`Melody.create` accepts 1..4,096 notes and a finite positive `tempo`, defaulting
+to 120 BPM. Absolute positions are rounded to the nearest frame; the held
+fraction must occupy at least one frame. Tempo is independent of application
+update frequency.
+
+`prepare` produces mono at 48 kHz by default. `format:Processing.Format(...)`
+allows 1..192,000 Hz and 1..8 channels. A user instrument must have that format.
+The built-in timbre sends the same signal to each channel; notes at or above
+Nyquist are rejected.
+
+Sound duration is the musical duration plus `tail_seconds`. Without that
+argument, the tail is the built-in timbre's release or 100 ms for a user
+instrument. An explicitly shorter tail cuts release; a longer tail lets
+effects finish, then adds silence. `max_seconds` limits music plus tail to
+30 s by default, replaceable within (0, 300]. Output is also limited to
+16,777,216 samples. These limits protect short-sound preparation, which
+materializes the PCM.
+
+Description, setting, format and level errors return `Result`; note, duration
+and storage limits use `limit_exceeded`. The mix is neither normalized nor
+clipped: nonfinite samples or levels outside ±1 are rejected before `Audio.create`.
+Reduce the level or choose a [limiter](Dynamics.md). Native `Audio.create`
+failures keep that operation's existing contract.
+
+Preparation allocates PCM and working states, then Audio retains its copy;
+these costs belong to loading, not each playback trigger. The built-in timbre
+uses a 512-frame scratch buffer, while the full output remains in memory.
+`audio.unload(sound)` releases the reusable sound; already started playbacks
+may finish. `audio.release(playing)` releases a playback. All these handles
+belong to their Audio instance.
+
+[MIDI playback](MIDI.md) currently retains its advanced path. The self-contained
+musical player and its automatic feeding remain to be established.

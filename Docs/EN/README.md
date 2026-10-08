@@ -7,6 +7,8 @@ package works directly or through its `GFX.Application` plugin.
 
 [Lire cette documentation en français.](../FR/README.md)
 
+[Prepare a few notes with a customizable timbre](Music.md), then replay them without managing PCM.
+
 ## Install the package
 
 ```text

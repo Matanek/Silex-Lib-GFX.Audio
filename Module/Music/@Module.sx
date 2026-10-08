@@ -1,0 +1,3 @@
+public use GFX.Audio.Music.Melody.Melody
+public use GFX.Audio.Music.Note.Note
+public use GFX.Audio.Music.Timbre.Timbre

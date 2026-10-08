@@ -8,6 +8,8 @@ d’échantillons. Le package s’utilise directement ou avec son plugin
 
 [Read this documentation in English.](../EN/README.md)
 
+[Préparer quelques notes avec un timbre modifiable](Music.md), puis les rejouer sans gérer le PCM.
+
 ## Installer le package
 
 ```text

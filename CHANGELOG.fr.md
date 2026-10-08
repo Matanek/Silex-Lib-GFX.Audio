@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajoute `GFX.Audio.Music` : notes en temps et tempo, timbres rétro/triangle/sinus modifiables, préparation de sons courts avec buffers internes et lectures indépendantes ; instruments et effets utilisateur réutilisent les protocoles existants. Limites et exemples FR/EN qualifiés.
+
 - Qualifie les ressources de la synthèse : compteur avec témoins en Debug/Release ARM64, événements MIDI compris ; charge stéréo 16/64 voix avec cinq effets mesurée séparément du transfert PCM, limites et marges documentées.
 
 - Ajoute un guide de choix des recettes procédurales, du bip aux partitions MIDI, avec unités, contrôle des niveaux et contrats d’extension.

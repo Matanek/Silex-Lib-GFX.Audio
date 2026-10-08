@@ -1,0 +1,113 @@
+# Préparer une mélodie et la jouer
+
+Décrivez quelques notes, choisissez un timbre et préparez un son réutilisable.
+`GFX.Audio.Music` possède les buffers, les conversions de temps et le rendu ;
+aucune banque de sons n'est nécessaire. Utilisez la toolchain locale contenant
+les conversions optionnelles et les arguments nommés partagés, jusqu'à publication.
+
+```sx
+use GFX.Audio
+use GFX.Audio.Music
+
+func main() {
+    var audio = Audio()
+    var melody = try Music.Melody.create([
+        Music.Note(key:72, beats:0.5), Music.Note(key:76, beats:0.5),
+        Music.Note(key:79, beats:0.5), Music.Note(key:84, beats:1.25),
+    ], tempo:187.5) else error { panic(error.detail) }
+    let victory = try melody.prepare(audio) else error { panic(error.detail) }
+    audio.wait(audio.play(victory))
+}
+```
+
+Do5–Mi5–Sol5–Do6 : trois temps de 160 ms puis un dernier de 400 ms,
+avec articulation à 80 % et relâchement rétro de 30 ms. Préparer au chargement
+du jeu ; chaque `audio.play(victory)` crée ensuite une lecture indépendante,
+sans recalculer la mélodie. `audio.wait` sert seulement à cette démonstration
+autonome : le jeu poursuit sa boucle après `play`.
+
+## Changer le son
+
+Fragment à utiliser avec `audio` et `melody` ci-dessus :
+
+```sx
+var timbre = Music.Timbre.soft()
+timbre.release_seconds = 0.15
+timbre.amplitude = 0.16
+let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+```
+
+Les trois points de départ sont `retro()` (carré, 8 bits, maintien 125 µs),
+`soft()` (triangle, attaque 10 ms) et `sine()` (sinus). Leurs champs modifiables
+sont `waveform`, `amplitude`, `duty_cycle`, `attack_seconds`, `decay_seconds`,
+`sustain`, `release_seconds`, `bits` et `hold_seconds`. Les formes d'onde et
+l'ADSR suivent [les primitives de synthèse](Synthesis.md). Le carré emploie
+les harmoniques bornées du package ; le maintien et la quantification sont
+appliqués avant l'enveloppe, qui conserve son raccord silencieux.
+
+Ce sont des choix sonores subjectifs, sans imitation acoustique garantie.
+Modifier un timbre puis préparer produit un nouveau Sound ; le précédent et
+ses lectures conservent leur PCM. Les notes et le tempo appartiennent à une
+copie possédée par Melody ; modifier la liste source ne change pas la mélodie.
+
+## Apporter un instrument et des effets
+
+[MusicalSounds.sx](../MusicalSounds.sx) joue successivement la victoire rétro,
+un timbre modifié et un instrument applicatif conforme au protocole existant
+`Synthesis.Instrument`. Depuis SilexProject :
+
+```sh
+silex run Packages/GFX.Audio/Docs/MusicalSounds.sx --release
+```
+
+La même opération `melody.prepare(audio, instrument, tail_seconds:0.1)`
+construit les événements et rend l'instrument. `effects:[myEffect]` ajoute
+jusqu'à 32 traitements `Processing.Processor`, dans l'ordre indiqué, après
+la somme des notes. Ils partagent le format demandé. Leur queue s'obtient
+avec `tail_seconds`, sans deviner la durée d'un traitement utilisateur.
+
+La préparation réinitialise l'instrument utilisateur et les effets puis
+consomme leur état. Une classe reste partagée avec ses autres détenteurs ;
+utiliser une instance dédiée sur le thread applicatif. Une erreur de rendu
+peut laisser ces objets modifiés : les réinitialiser ou les reconstruire
+avant réessai. Les [primitives avancées](Instruments.md) restent disponibles.
+
+## Rythme, durée et limites
+
+`Music.Note` accepte `key` (numéro MIDI 0..127), `beats` positif, `velocity`
+dans 0..1 (1 par défaut) et `gate` dans ]0, 1] (0,8 par défaut). La note
+suivante commence après la durée `beats` ; `gate` indique la fraction tenue.
+Les queues peuvent donc se recouvrir. `Melody.create` accepte 1..4 096 notes
+et un `tempo` positif fini, 120 BPM par défaut. Les dates absolues sont
+arrondies à la frame la plus proche ; la fraction tenue doit occuper au
+moins une frame. Le tempo ne dépend pas de la cadence de l'application.
+
+`prepare` produit du mono à 48 kHz par défaut. `format:Processing.Format(...)`
+permet 1..192 000 Hz et 1..8 canaux. Un instrument utilisateur doit avoir
+ce même format. Le timbre intégré envoie le signal identiquement aux canaux ;
+une note à Nyquist ou au-delà est refusée.
+
+La durée du Sound est la durée musicale plus `tail_seconds`. Sans cet
+argument, la queue vaut le release du timbre intégré ou 100 ms pour un
+instrument utilisateur. Une queue explicite plus courte coupe le relâchement ;
+une queue plus longue laisse les effets finir puis ajoute du silence.
+`max_seconds` limite durée musicale et queue à 30 s par défaut ; il peut être
+remplacé dans ]0, 300]. Le résultat est aussi limité à 16 777 216 samples.
+Ces limites protègent une préparation de son court, qui matérialise le PCM.
+
+Les erreurs de description, de réglage, de format ou de niveau reviennent
+comme `Result` ; les dépassements de notes, de durée ou de stockage utilisent
+`limit_exceeded`. Le mix n'est ni normalisé ni écrêté : un sample non fini ou
+hors ±1 est refusé avant `Audio.create`. Réduire le niveau ou choisir un
+[limiteur](Dynamics.md). Les échecs natifs de `Audio.create` conservent son
+contrat existant.
+
+La préparation alloue le PCM et les états de travail, puis Audio conserve
+sa copie ; ces coûts appartiennent au chargement, pas à chaque déclenchement.
+Le timbre intégré utilise un scratch de 512 frames, mais le résultat complet
+reste en mémoire. `audio.unload(sound)` libère le son réutilisable ; les
+lectures déjà démarrées peuvent finir. `audio.release(playing)` libère une
+lecture. Tous ces handles appartiennent à leur instance Audio.
+
+La [lecture MIDI](MIDI.md) conserve actuellement son parcours avancé.
+Le player musical autonome et son alimentation automatique restent à établir.

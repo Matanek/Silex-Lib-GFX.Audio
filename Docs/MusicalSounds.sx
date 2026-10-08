@@ -1,0 +1,50 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+
+// An application instrument chooses its own articulation and note dynamics.
+class SoftAccent:Synthesis.Instrument {
+    let format:Processing.Format
+    private var source:Synthesis.SineInstrument
+    private init(source:Synthesis.SineInstrument) { self.source = source; self.format = source.format }
+    static func create() Result<SoftAccent, Error> {
+        var source = try Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000, channels:1),
+            attack_frames:144, decay_frames:1_440, sustain:0.3, release_frames:4_800)
+        return Result<SoftAccent, Error>.success(SoftAccent(source))
+    }
+    func validate(command:Synthesis.Command) Result<void, Error> { return self.source.validate(command) }
+    func send(command:Synthesis.Command) Result<void, Error> {
+        match command {
+            note_on(id, frequency, velocity) => { return self.source.send(Synthesis.Command.note_on(id, frequency, 0.22 * velocity * velocity)) }
+            else => { return self.source.send(command) }
+        }
+    }
+    func render(samples:&float32[..]) Result<void, Error> { return self.source.render(samples) }
+    func reset() { self.source.reset() }
+}
+
+func main() {
+    var audio = Audio()
+    var melody = try Music.Melody.create([
+        Music.Note(key:72, beats:0.5), Music.Note(key:76, beats:0.5),
+        Music.Note(key:79, beats:0.5), Music.Note(key:84, beats:1.25),
+    ], tempo:187.5) else error { panic(error.detail) }
+    let victory = try melody.prepare(audio) else error { panic(error.detail) }
+    print("Retro victory, prepared once")
+    audio.wait(audio.play(victory))
+
+    var timbre = Music.Timbre.soft()
+    timbre.release_seconds = 0.15
+    timbre.amplitude = 0.16
+    let softer = try melody.prepare(audio, timbre) else error { panic(error.detail) }
+    print("Same melody, customized soft timbre")
+    audio.wait(audio.play(softer))
+
+    var accent = try SoftAccent.create() else error { panic(error.detail) }
+    let personal = try melody.prepare(audio, accent, tail_seconds:0.1) else error { panic(error.detail) }
+    print("Same preparation and playback, application instrument")
+    audio.wait(audio.play(personal))
+    assert(audio.unload(victory) && audio.unload(softer) && audio.unload(personal))
+}

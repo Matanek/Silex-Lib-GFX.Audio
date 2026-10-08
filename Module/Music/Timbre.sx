@@ -1,0 +1,25 @@
+use GFX.Audio.Synthesis
+
+// A starting sound is a value, not a shared instrument or an acoustic model.
+public struct Timbre {
+    var waveform:Synthesis.Waveform = Synthesis.Waveform.sine
+    var amplitude:float32 = 0.2
+    var duty_cycle:float32 = 0.5
+    var attack_seconds:float64 = 0.005
+    var decay_seconds:float64 = 0.05
+    var sustain:float32 = 0.7
+    var release_seconds:float64 = 0.1
+    var bits:int = 24
+    var hold_seconds:float64 = 0.0
+
+    static func sine() Timbre { return Timbre() }
+    static func soft() Timbre {
+        return Timbre(waveform:Synthesis.Waveform.triangle, attack_seconds:0.01,
+            sustain:0.65, release_seconds:0.08)
+    }
+    static func retro() Timbre {
+        return Timbre(waveform:Synthesis.Waveform.square, amplitude:0.18,
+            attack_seconds:0.002, decay_seconds:0.02, release_seconds:0.03,
+            bits:8, hold_seconds:0.000125)
+    }
+}

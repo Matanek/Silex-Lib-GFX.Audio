@@ -1,0 +1,178 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func offline(rate:int = 48_000, channels:int = 1) Audio { return try Audio.offline(rate, channels) else error { panic(error.detail) } }
+func melody(notes:Music.Note[], tempo:float64 = 120.0) Music.Melody { return try Music.Melody.create(notes, tempo) else error { panic(error.detail) } }
+func output(audio:Audio, frames:int) float32[] { return try audio.render(frames) else error { panic(error.detail) } }
+func failure(result:Result<Audio.Sound, Error>, kind:Kind) {
+    match result { failure(error) => { assert(error.kind == kind) }; success(_) => { panic("invalid preparation accepted") } }
+}
+
+class Witness:Synthesis.Instrument {
+    let format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)
+    var rendered:int = 0
+    var resets:int = 0
+    var ons:int = 0
+    var offs:int = 0
+    var level:float32 = 0.0
+    var positions:int[] = []
+    func validate(command:Synthesis.Command) Result<void, Error> { return Result<void, Error>.success() }
+    func send(command:Synthesis.Command) Result<void, Error> {
+        match command {
+            note_on(id, frequency, velocity) => { self.ons++; self.level = 0.2 * velocity; self.positions.append(self.rendered) }
+            note_off(id) => { self.offs++; self.level = 0.0; self.positions.append(self.rendered) }
+            else => {}
+        }
+        return Result<void, Error>.success()
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        var i = 0; while i < samples.count() { samples[i] = self.level; i++ }
+        self.rendered += samples.count(); return Result<void, Error>.success()
+    }
+    func reset() { self.resets++; self.rendered = 0; self.level = 0.0; self.positions.clear() }
+}
+
+test "musical preparation owns notes and places absolute beats once with gate and tail" {
+    var audio = offline()
+    var notes:Music.Note[] = [Music.Note(key:72, beats:0.5, gate:0.5), Music.Note(key:76, beats:1.0, velocity:0.5, gate:1.0)]
+    var song = melody(notes, tempo:120.0); notes[0] = Music.Note(key:84, beats:8.0)
+    var witness = Witness()
+    let sound = try song.prepare(audio, witness, tail_seconds:0.01) else error { panic(error.detail) }
+    assert(witness.ons == 2 && witness.offs == 2 && witness.resets == 1)
+    assert(witness.positions.count() == 4)
+    for index, expected in [0, 6_000, 12_000, 36_000].indexed() { assert(witness.positions[index] == expected) }
+    assert(witness.rendered == 36_480)
+    let playing = audio.play(sound); let samples = output(audio, 36_481)
+    for i in [0, 5_999] { assert(Math.abs(samples[i] - 0.2 as float32) < 0.000001) }
+    for i in [6_000, 11_999, 36_000, 36_480] { assert(samples[i] == 0.0 as float32) }
+    for i in [12_000, 35_999] { assert(Math.abs(samples[i] - 0.1 as float32) < 0.000001) }
+    assert(!audio.is_playing(playing))
+}
+
+test "prepared sound replay never synthesizes and overlapping plays have independent positions" {
+    var audio = offline(); var song = melody([Music.Note(key:72, beats:1.0, gate:1.0)])
+    var witness = Witness()
+    let sound = try song.prepare(audio, witness, tail_seconds:0.0) else error { panic(error.detail) }
+    let first = audio.play(sound); let prefix = output(audio, 1_000)
+    let second = audio.play(sound); assert(!first.matches(second))
+    audio.pause(first); let paused = output(audio, 500)
+    assert(audio.is_paused(first) && audio.is_playing(second))
+    audio.resume(first); let mixed = output(audio, 23_000)
+    assert(Math.abs(mixed[0] - 0.4 as float32) < 0.000001)
+    assert(!audio.is_playing(first) && audio.is_playing(second))
+    let suffix = output(audio, 501); assert(!audio.is_playing(second))
+    assert(witness.rendered == 24_000 && witness.resets == 1 && witness.ons == 1 && witness.offs == 0)
+    let third = audio.play(sound); audio.stop(third); assert(!audio.is_playing(third))
+    assert(audio.release(third)); assert(audio.unload(sound))
+}
+
+test "absolute musical timing avoids accumulating fractional frame rounding" {
+    var audio = offline(); var notes:Music.Note[] = []
+    var i = 0; while i < 60 { notes.append(Music.Note(key:72, beats:0.01, gate:1.0)); i++ }
+    var song = melody(notes, tempo:137.0); var witness = Witness()
+    let sound = try song.prepare(audio, witness, tail_seconds:0.0) else error { panic(error.detail) }
+    assert(witness.rendered == Math.round(0.6 * 60.0 / 137.0 * 48_000.0) as int)
+    i = 0
+    while i < 60 {
+        let start = Math.round(i as float64 * 0.01 * 60.0 / 137.0 * 48_000.0) as int
+        assert(witness.positions[i * 2] == start); i++
+    }
+}
+
+test "timbre recipe sine PCM matches a musical oracle and includes the complete release" {
+    var audio = offline(rate:8_000)
+    var song = melody([Music.Note(key:69, beats:0.1, gate:0.5)], tempo:60.0)
+    let timbre = Music.Timbre(amplitude:0.2, attack_seconds:0.0, decay_seconds:0.0, sustain:1.0, release_seconds:0.02)
+    let sound = try song.prepare(audio, timbre, format:Processing.Format(sample_rate:8_000, channels:1)) else error { panic(error.detail) }
+    let playing = audio.play(sound); let samples = output(audio, 961)
+    var i = 0
+    while i < 960 {
+        var gain:float64 = 1.0
+        if i >= 400 { gain = 1.0 - (i - 400) as float64 / 160.0 }
+        if i >= 560 { gain = 0.0 }
+        let expected = 0.2 * Math.sin(2.0 * Math.pi<float64>() * 440.0 * i as float64 / 8_000.0) * gain
+        assert(Math.abs(samples[i] as float64 - expected) < 0.0001); i++
+    }
+    assert(!audio.is_playing(playing))
+}
+
+test "presets custom timbre and prepared PCM remain independent" {
+    var audio = offline(); var song = melody([Music.Note(key:72, beats:0.1)])
+    var recipe = Music.Timbre.retro()
+    let original = try song.prepare(audio, recipe) else error { panic(error.detail) }
+    recipe.waveform = Synthesis.Waveform.sine; recipe.amplitude = 0.1
+    let changed = try song.prepare(audio, recipe) else error { panic(error.detail) }
+    var playing = audio.play(original); let first = output(audio, 4_000)
+    playing = audio.play(changed); let second = output(audio, 4_000)
+    playing = audio.play(original); let again = output(audio, 4_000)
+    var different = false; var i = 0
+    while i < first.count() { if Math.abs(first[i] - second[i]) > 0.0001 { different = true } assert(Math.abs(first[i] - again[i]) < 0.000001); i++ }
+    assert(different)
+    let presets:Music.Timbre[] = [Music.Timbre.soft(), Music.Timbre.sine()]
+    for timbre in presets {
+        let sound = try song.prepare(audio, timbre) else error { panic(error.detail) }; assert(audio.contains(sound)); assert(audio.unload(sound))
+    }
+}
+
+test "invalid musical description returns recoverable errors" {
+    let invalid_notes:Music.Note[] = [Music.Note(key:-1, beats:1.0), Music.Note(key:128, beats:1.0),
+        Music.Note(key:72, beats:0.0), Music.Note(key:72, beats:-1.0),
+        Music.Note(key:72, beats:1.0, gate:0.0), Music.Note(key:72, beats:1.0, gate:1.1),
+        Music.Note(key:72, beats:1.0, velocity:1.1)]
+    for note in invalid_notes {
+        match Music.Melody.create([note]) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid note accepted") } }
+    }
+    match Music.Melody.create([]) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("empty melody accepted") } }
+    match Music.Melody.create([Music.Note(key:72, beats:1.0)], tempo:0.0) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid tempo accepted") } }
+}
+
+test "preparation checks duration capacity Nyquist and recipe before rendering" {
+    var audio = offline(); var song = melody([Music.Note(key:72, beats:1.0)]); var witness = Witness()
+    failure(song.prepare(audio, witness, max_seconds:0.1), Kind.limit_exceeded())
+    failure(song.prepare(audio, witness, tail_seconds:-1.0), Kind.invalid_input())
+    assert(witness.resets == 0 && witness.rendered == 0)
+    failure(song.prepare(audio, format:Processing.Format(sample_rate:1_000, channels:1)), Kind.invalid_input())
+    failure(song.prepare(audio, Music.Timbre(amplitude:1.1)), Kind.invalid_input())
+    failure(song.prepare(audio, Music.Timbre(attack_seconds:-1.0)), Kind.invalid_input())
+    failure(song.prepare(audio, Music.Timbre(bits:1)), Kind.invalid_input())
+    var tiny = melody([Music.Note(key:72, beats:0.00000001)]); failure(tiny.prepare(audio), Kind.invalid_input())
+}
+
+class Gain:Processing.Processor {
+    let format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)
+    var value:float32 = 1.0
+    var resets:int = 0
+    func reset() { self.resets++ }
+    func process(samples:&float32[..]) Result<void, Error> {
+        var i = 0; while i < samples.count() { samples[i] *= self.value; i++ }
+        return Result<void, Error>.success()
+    }
+}
+test "application effects compose and excessive output level is recoverable without hidden clipping" {
+    var audio = offline(); var song = melody([Music.Note(key:72, beats:0.1, gate:1.0)])
+    var witness = Witness(); var gain = Gain(); gain.value = 0.5
+    let sound = try song.prepare(audio, witness, tail_seconds:0.0, effects:[gain]) else error { panic(error.detail) }
+    let playing = audio.play(sound); let samples = output(audio, 1)
+    assert(Math.abs(samples[0] - 0.1 as float32) < 0.000001 && gain.resets == 1)
+    audio.stop(playing)
+    gain.value = 8.0
+    failure(song.prepare(audio, witness, effects:[gain]), Kind.invalid_input())
+}
+test "musical preparation is bounded and stereo recipes duplicate the same musical signal" {
+    var audio = offline(channels:2)
+    var song = melody([Music.Note(key:72, beats:0.1)])
+    let sound = try song.prepare(audio, Music.Timbre.soft(), format:Processing.Format(sample_rate:48_000, channels:2)) else error { panic(error.detail) }
+    let playing = audio.play(sound); let samples = output(audio, 10_000)
+    var i = 0; while i < samples.count() { assert(samples[i] == samples[i + 1]); i += 2 }
+    assert(!audio.is_playing(playing))
+    var too_long = melody([Music.Note(key:72, beats:600.0)], tempo:120.0)
+    failure(too_long.prepare(audio, format:Processing.Format(sample_rate:192_000, channels:8), max_seconds:300.0, tail_seconds:0.0), Kind.limit_exceeded())
+    var notes:Music.Note[] = []; i = 0
+    while i < 4_097 { notes.append(Music.Note(key:72, beats:0.1)); i++ }
+    match Music.Melody.create(notes) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("excessive note count accepted") } }
+}
