@@ -40,12 +40,12 @@ For a list of constants, the current compiler requires the `int[]` annotation:
 let notes:int[] = [Music.Key.C5, Music.Key.E5, Music.Key.G5, Music.Key.C6]
 ```
 
-For entered or loaded names, use the helpers inside `main()`:
+For known names, use direct conversions inside `main()`:
 
 ```sx
-let sharp = try Music.key("D#3") else error { panic(error.detail) } // 51
-let flat = try Music.key("Bb4") else error { panic(error.detail) }  // 70
-let notes = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+let sharp = Music.key("D#3") // 51
+let flat = Music.key("Bb4")  // 70
+let notes = Music.keys(["C5", "E5", "G5", "C6"])
 ```
 
 Text names accept A through G, an optional ASCII `#` or `b` accidental, then a
@@ -54,12 +54,28 @@ spaces, double accidentals and Unicode symbols are not accepted. The resulting
 pitch must remain within 0..127: C-1 and B#-2 are 0, while Cb-1 and G#9 are
 rejected. Tuning is unchanged.
 
-`key` returns `Result<int, Error>`; `keys` returns `Result<int[], Error>`,
-preserves order and duplicates, and accepts an empty list. Invalid input produces
-`invalid_input`, operation `audio.music.key` and the name in `subject`; the list
-returns no partial result. The fragment above only terminates the demonstration;
-an application can handle that error. These conversions happen when describing
-notes, outside DSP rendering. MIDI numbers remain directly usable.
+`key` returns `int` and `keys` returns `int[]`. Invalid input triggers `panic`
+with the offending name. For entered or loaded names, choose `try_key` or
+`try_keys` and inspect their `Result`:
+
+```sx
+let candidate = Music.try_key("C#5") // Result<int, Error>
+match candidate {
+    success(number) => { print(number) }
+    failure(error) => { print(error.detail) }
+}
+let notes = try Music.try_keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+```
+
+`try_key` returns `Result<int, Error>` and `try_keys` returns `Result<int[], Error>`.
+Errors preserve `invalid_input`, operation `audio.music.key` and the name in
+`subject`. Both list conversions preserve order and duplicates and accept an
+empty list; the recoverable variant returns no partial result. These conversions
+happen when describing notes, outside DSP rendering. MIDI numbers remain directly usable.
+
+Previous `try Music.key(...)` and `try Music.keys(...)` calls become
+`try Music.try_key(...)` and `try Music.try_keys(...)` to preserve error handling
+with the current language.
 
 ## Change the sound
 

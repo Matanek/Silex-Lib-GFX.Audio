@@ -6,4 +6,6 @@ public use GFX.Audio.Music.Player.Player
 public use GFX.Audio.Music.Player.State
 public use GFX.Audio.Music.Key.key
 public use GFX.Audio.Music.Key.keys
+public use GFX.Audio.Music.Key.try_key
+public use GFX.Audio.Music.Key.try_keys
 public use GFX.Audio.Music.Key.Key

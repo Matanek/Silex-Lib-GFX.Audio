@@ -4,7 +4,7 @@ use GFX.Audio.Processing
 use STD.Error
 use STD.Error.Kind
 
-func named(name:str) int { return try Music.key(name) else error { panic(error.detail) } }
+func named(name:str) int { return Music.key(name) }
 
 test "named musical keys use C4 60 and accept ASCII sharps flats and lowercase letters" {
     assert(named("C4") == 60 && named("C5") == 72 && named("D#3") == 51)
@@ -41,7 +41,7 @@ test "invalid musical names return recoverable errors with their input" {
         "C04", "C10", "C-9", "Cb-1", "G#9", "Ab9", "B9", " C5", "C5 ", "C5\n",
         "C\0", "C♯5", "B♭4", "Ｃ5", "999999999999999999999999999999999999999"]
     for name in invalid {
-        match Music.key(name) {
+        match Music.try_key(name) {
             failure(error) => {
                 assert(error.kind == Kind.invalid_input())
                 assert(error.operation == "audio.music.key" && error.subject == name)
@@ -52,10 +52,10 @@ test "invalid musical names return recoverable errors with their input" {
 }
 
 test "musical key lists preserve input order duplicates and errors" {
-    let numbers = try Music.keys(["C5", "E5", "G5", "C6", "C5"]) else error { panic(error.detail) }
+    let numbers = Music.keys(["C5", "E5", "G5", "C6", "C5"])
     for index, expected in [72, 76, 79, 84, 72].indexed() { assert(numbers[index] == expected) }
-    let empty = try Music.keys([]) else error { panic(error.detail) }; assert(empty.count() == 0)
-    match Music.keys(["C5", "bad", "G5"]) {
+    let empty = Music.keys([]); assert(empty.count() == 0)
+    match Music.try_keys(["C5", "bad", "G5"]) {
         failure(error) => { assert(error.kind == Kind.invalid_input() && error.subject == "bad") }
         success(_) => { panic("invalid key list accepted") }
     }
@@ -74,7 +74,7 @@ func render_keys(numbers:int[]) float32[] {
 test "named constants and parsed notes prepare exactly the numeric PCM" {
     let numeric = render_keys([72, 76, 79, 84])
     let constants = render_keys([Music.Key.C5, Music.Key.E5, Music.Key.G5, Music.Key.C6])
-    let parsed = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+    let parsed = Music.keys(["C5", "E5", "G5", "C6"])
     let text = render_keys(parsed)
     assert(numeric.count() == constants.count() && numeric.count() == text.count())
     var audible = false
@@ -101,4 +101,23 @@ test "all canonical named constants form the 128 MIDI key numbers" {
     ]
     assert(numbers.count() == 128)
     for index, number in numbers.indexed() { assert(number == index) }
+}
+
+test "direct and recoverable musical conversions expose distinct public return types" {
+    let direct:int = Music.key("C#5")
+    let direct_list:int[] = Music.keys(["C5", "Bb4", "C5"])
+    let checked:Result<int, Error> = Music.try_key("C#5")
+    let checked_list:Result<int[], Error> = Music.try_keys(["C5", "Bb4", "C5"])
+    let recovered = try checked else error { panic(error.detail) }
+    let recovered_list = try checked_list else error { panic(error.detail) }
+    assert(direct == 73 && recovered == direct)
+    assert(direct_list.count() == 3 && recovered_list.count() == 3)
+    for index, number in direct_list.indexed() { assert(number == recovered_list[index]) }
+    let empty = try Music.try_keys([]) else error { panic(error.detail) }
+    assert(empty.count() == 0)
+    let numeric = render_keys([72, 70, 72])
+    let direct_pcm = render_keys(direct_list)
+    let recovered_pcm = render_keys(recovered_list)
+    assert(numeric.count() == direct_pcm.count() && numeric.count() == recovered_pcm.count())
+    for index, sample in numeric.indexed() { assert(sample == direct_pcm[index] && sample == recovered_pcm[index]) }
 }

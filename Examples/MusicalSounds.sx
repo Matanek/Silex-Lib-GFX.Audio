@@ -27,7 +27,7 @@ class SoftAccent:Synthesis.Instrument {
 
 func main() {
     var audio = Audio()
-    let keys = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+    let keys = Music.keys(["C5", "E5", "G5", "C6"])
     var melody = try Music.Melody.create([
         Music.Note(key:keys[0], beats:0.5), Music.Note(key:keys[1], beats:0.5),
         Music.Note(key:keys[2], beats:0.5), Music.Note(key:keys[3], beats:1.25),

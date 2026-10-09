@@ -236,7 +236,7 @@ public static struct Key {
 }
 
 // Scientific pitch notation, parsed when describing music, before synthesis.
-public func key(name:str) Result<int, Error> {
+public func try_key(name:str) Result<int, Error> {
     let count = UTF8.byte_count(name)
     if count < 2 || count > 4 { return Result<int, Error>.failure(invalid(name)) }
     let bytes = UTF8.bytes(name)
@@ -268,8 +268,25 @@ public func key(name:str) Result<int, Error> {
     return Result<int, Error>.success(number)
 }
 
-public func keys(names:str[]) Result<int[], Error> {
+public func try_keys(names:str[]) Result<int[], Error> {
     var numbers:int[] = []
-    for name in names { numbers.append(try key(name)) }
+    for name in names { numbers.append(try try_key(name)) }
     return Result<int[], Error>.success(numbers)
+}
+
+public func key(name:str) int {
+    match try_key(name) {
+        success(number) => { return number }
+        failure(error) => { panic("$(error.detail): $(name)") }
+    }
+}
+
+public func keys(names:str[]) int[] {
+    match try_keys(names) {
+        success(numbers) => { return numbers }
+        failure(error) => {
+            if let name = error.subject { panic("$(error.detail): $(name)") }
+            panic(error.detail)
+        }
+    }
 }
