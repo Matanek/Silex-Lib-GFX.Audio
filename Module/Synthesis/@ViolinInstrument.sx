@@ -1,0 +1,36 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class ViolinInstrument:Generator, Instrument {
+    let format:Processing.Format
+    let amplitude:float32
+    let brightness:float32
+    let attack_frames:int
+    let release_frames:int
+    let vibrato_cents:float32
+    let vibrato_hz:float32
+    let max_voices:int
+    let voice_policy:VoicePolicy
+    let steal_fade_frames:int
+    private var pool:PolyphonicInstrument
+    private init(pool:PolyphonicInstrument, brightness:float32, attack_frames:int, release_frames:int, vibrato_cents:float32, vibrato_hz:float32) {
+        self.pool = pool; self.format = pool.format; self.amplitude = pool.amplitude
+        self.max_voices = pool.max_voices; self.voice_policy = pool.voice_policy; self.steal_fade_frames = pool.steal_fade_frames
+        self.brightness = brightness; self.attack_frames = attack_frames; self.release_frames = release_frames; self.vibrato_cents = vibrato_cents; self.vibrato_hz = vibrato_hz
+    }
+    static func create(format:Processing.Format, amplitude:float32 = 0.2, brightness:float32 = 0.65, attack_frames:int = 2_400, release_frames:int = 9_600, vibrato_cents:float32 = 12.0, vibrato_hz:float32 = 5.5, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, steal_fade_frames:int = 48) Result<ViolinInstrument, Error> {
+        if !valid_format(format) || format.sample_rate > 192_000 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(brightness) || brightness < 0.0 || brightness > 1.0 || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 || attack_frames < 0 || attack_frames > format.sample_rate * 5 || release_frames < 0 || release_frames > format.sample_rate * 5 || !Math.is_finite(vibrato_cents) || vibrato_cents < 0.0 || vibrato_cents > 50.0 || !Math.is_finite(vibrato_hz) || vibrato_hz < 0.0 || vibrato_hz > 12.0 {
+            return Result<ViolinInstrument, Error>.failure(invalid("invalid violin settings: see instrument ranges"))
+        }
+        var voices:InstrumentVoice[] = []; var i = 0
+        while i < max_voices { voices.append(StringVoice(format, true, brightness, 0.18, attack_frames, format.sample_rate, release_frames, steal_fade_frames, vibrato_cents, vibrato_hz)); i++ }
+        var pool = PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)
+        return Result<ViolinInstrument, Error>.success(ViolinInstrument(pool, brightness, attack_frames, release_frames, vibrato_cents, vibrato_hz))
+    }
+    func validate(command:Command) Result<void, Error> { return self.pool.validate(command) }
+    func send(command:Command) Result<void, Error> { return self.pool.send(command) }
+    func active_voices() int { return self.pool.active_voices() }
+    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func reset() { self.pool.reset() }
+}

@@ -1,0 +1,170 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.MIDI
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+func require(result:Result<void, Error>) { try result else error { panic(error.detail) } }
+func zeros(count:int) float32[] { var samples:float32[] = []; var i = 0; while i < count { samples.append(0.0); i++ } return samples }
+func energy(samples:@float32[..]) float64 { var sum:float64 = 0.0; for sample in samples { sum += sample as float64 * sample as float64 } return sum }
+func same(a:@float32[..], b:@float32[..]) { assert(a.count() == b.count()); var i = 0; while i < a.count() { assert(a[i] == b[i]); i++ } }
+func rejected(result:Result<void, Error>, kind:Kind = Kind.invalid_input()) { match result { failure(error) => { assert(error.kind == kind) }; success => { panic("invalid command accepted") } } }
+func frequency(key:int) float32 { return try MIDI.frequency(key) else error { panic(error.detail) } }
+func source(kind:int, channels:int = 1, voices:int = 2, policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, release:float64 = 0.02) Synthesis.Instrument {
+    let format = Processing.Format(sample_rate:8_192, channels:channels)
+    if kind == 0 { return try Music.Instruments.guitar(decay_seconds:0.2, release_seconds:release, max_voices:voices, voice_policy:policy, format:format) else error { panic(error.detail) } }
+    if kind == 1 { return try Music.Instruments.violin(attack_seconds:0.02, release_seconds:release, max_voices:voices, voice_policy:policy, format:format) else error { panic(error.detail) } }
+    return try Music.Instruments.drums(decay_seconds:0.2, release_seconds:release, max_voices:voices, voice_policy:policy, format:format) else error { panic(error.detail) }
+}
+func pitch(kind:int) float32 { if kind == 2 { return frequency(Music.Drum.snare) } return 256.0 }
+func spectral(samples:@float32[..], hz:float64) float64 {
+    var real:float64 = 0.0; var imaginary:float64 = 0.0; var i = 0
+    while i < samples.count() { let phase = 2.0 * Math.pi<float64>() * hz * i as float64 / 8_192.0; real += samples[i] as float64 * Math.cos(phase); imaginary += samples[i] as float64 * Math.sin(phase); i++ }
+    return real * real + imaginary * imaginary
+}
+test "guitar pluck naturally decays while violin maintains a held bowed note" {
+    var guitar = source(0); var violin = source(1)
+    require(guitar.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(violin.send(Synthesis.Command.note_on(1, 256.0, 1.0)))
+    var a = zeros(8_192); var b = a; require(guitar.render(&a[0:a.count()])); require(violin.render(&b[0:b.count()]))
+    assert(energy(@a[32:288]) > energy(@a[1_024:1_280]) * 10.0)
+    assert(energy(@b[4_096:4_352]) > 0.1 && energy(@b[4_096:4_352]) > energy(@b[256:512]) * 0.5)
+    for sample in @a[4_096:8_192] { assert(sample == 0.0 as float32) }
+    require(violin.send(Synthesis.Command.note_off(1))); require(violin.render(&b[0:512])); for sample in @b[256:512] { assert(sample == 0.0 as float32) }
+}
+test "guitar pluck position puts nodes into the harmonic spectrum" {
+    let format = Processing.Format(sample_rate:8_192, channels:1)
+    var middle = try Music.Instruments.guitar(pluck_position:0.5, decay_seconds:3.0, format:format) else error { panic(error.detail) }
+    var edge = try Music.Instruments.guitar(pluck_position:0.18, decay_seconds:3.0, format:format) else error { panic(error.detail) }
+    require(middle.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(edge.send(Synthesis.Command.note_on(1, 256.0, 1.0)))
+    var a = zeros(2_048); var b = a; require(middle.render(&a[0:a.count()])); require(edge.render(&b[0:b.count()]))
+    let node = spectral(@a[256:1_280], 512.0) / spectral(@a[256:1_280], 256.0)
+    let harmonic = spectral(@b[256:1_280], 512.0) / spectral(@b[256:1_280], 256.0)
+    assert(node < 0.0001 && harmonic > 0.01)
+}
+test "violin attack brightness and vibrato produce independent audible changes" {
+    let format = Processing.Format(sample_rate:8_192, channels:1)
+    var slow = try Music.Instruments.violin(attack_seconds:0.2, brightness:0.0, vibrato_cents:0.0, format:format) else error { panic(error.detail) }
+    var bright = try Music.Instruments.violin(attack_seconds:0.0, brightness:1.0, vibrato_cents:0.0, format:format) else error { panic(error.detail) }
+    var vibrato = try Music.Instruments.violin(attack_seconds:0.0, brightness:1.0, vibrato_cents:30.0, format:format) else error { panic(error.detail) }
+    var a = zeros(2_048); var b = a; var c = a
+    require(slow.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(bright.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(vibrato.send(Synthesis.Command.note_on(1, 256.0, 1.0)))
+    require(slow.render(&a[0:a.count()])); require(bright.render(&b[0:b.count()])); require(vibrato.render(&c[0:c.count()]))
+    assert(energy(@a[0:128]) < energy(@a[1_792:1_920]) * 0.02)
+    assert(spectral(@b[1_024:2_048], 2_048.0) / spectral(@b[1_024:2_048], 256.0) > spectral(@a[1_024:2_048], 2_048.0) / spectral(@a[1_024:2_048], 256.0) * 3.0)
+    var difference:float64 = 0.0; var i = 0; while i < b.count() { let d = (b[i] - c[i]) as float64; difference += d * d; i++ } assert(difference > 0.1)
+}
+test "all seven drum keys produce distinct decaying strikes and deterministic noise" {
+    let keys:int[] = [Music.Drum.kick, Music.Drum.snare, Music.Drum.closed_hat, Music.Drum.open_hat, Music.Drum.low_tom, Music.Drum.high_tom, Music.Drum.crash]
+    var drums = source(2); var previous = zeros(1_024)
+    for key in keys {
+        drums.reset(); require(drums.send(Synthesis.Command.note_on(key, frequency(key), 1.0)))
+        var a = zeros(8_192); require(drums.render(&a[0:a.count()])); assert(energy(@a[0:512]) > 0.001)
+        assert(energy(@a[0:512]) > energy(@a[6_144:6_656]) * 100.0)
+        var differs = false; var i = 0; while i < 1_024 { if a[i] != previous[i] { differs = true } previous[i] = a[i]; i++ } assert(differs)
+        drums.reset(); require(drums.send(Synthesis.Command.note_on(key, frequency(key), 1.0))); var b = zeros(8_192); require(drums.render(&b[0:b.count()])); same(@a[0:a.count()], @b[0:b.count()])
+    }
+}
+test "drum key validation is explicit atomic and used by melody preparation" {
+    var drums = source(2); var reference = source(2); let on = Synthesis.Command.note_on(1, frequency(Music.Drum.snare), 1.0)
+    require(drums.send(on)); require(reference.send(on)); rejected(drums.validate(Synthesis.Command.note_on(2, 440.0, 1.0))); rejected(drums.send(Synthesis.Command.note_on(2, 440.0, 1.0)))
+    var a = zeros(512); var b = a; require(drums.render(&a[0:512])); require(reference.render(&b[0:512])); same(@a[0:512], @b[0:512])
+    var audio = try Audio.offline(8_192, 1) else error { panic(error.detail) }
+    var unsupported = try Music.Melody.create([Music.Note(key:Music.Key.A4, beats:1.0)]) else error { panic(error.detail) }
+    let result = unsupported.prepare(audio, using:drums, format:Processing.Format(sample_rate:8_192, channels:1))
+    match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("unsupported drum key accepted") } }
+}
+test "catalogue velocity controls energy for every family" {
+    for kind in 0...3 {
+        var soft = source(kind); var loud = source(kind); require(soft.send(Synthesis.Command.note_on(1, pitch(kind), 0.25))); require(loud.send(Synthesis.Command.note_on(1, pitch(kind), 1.0)))
+        var a = zeros(512); var b = a; require(soft.render(&a[0:512])); require(loud.render(&b[0:512])); assert(energy(@b[0:512]) > energy(@a[0:512]) * 4.0)
+    }
+}
+test "catalogue pedal release and all notes off share the common instrument contract" {
+    for kind in 0...3 {
+        var instrument = source(kind); var a = zeros(512)
+        require(instrument.send(Synthesis.Command.note_on(1, pitch(kind), 1.0))); require(instrument.send(Synthesis.Command.sustain(true))); require(instrument.send(Synthesis.Command.note_off(1)))
+        require(instrument.render(&a[0:128])); assert(energy(@a[0:128]) > 0.001)
+        require(instrument.send(Synthesis.Command.sustain(false))); require(instrument.render(&a[0:512])); for sample in @a[256:512] { assert(sample == 0.0 as float32) }
+        instrument.reset(); require(instrument.send(Synthesis.Command.note_on(1, pitch(kind), 1.0))); require(instrument.send(Synthesis.Command.sustain(true))); require(instrument.send(Synthesis.Command.all_notes_off))
+        require(instrument.render(&a[0:512])); for sample in @a[256:512] { assert(sample == 0.0 as float32) }
+        var immediate = source(kind, release:0.0); require(immediate.send(Synthesis.Command.note_on(1, pitch(kind), 1.0))); require(immediate.send(Synthesis.Command.note_off(1))); require(immediate.render(&a[0:512])); for sample in a { assert(sample == 0.0 as float32) }
+    }
+}
+test "catalogue capacity reject and duplicate identity preserve samples and stealing is continuous" {
+    for kind in 0...3 {
+        var instrument = source(kind, voices:1, policy:Synthesis.VoicePolicy.reject); var reference = source(kind, voices:1, policy:Synthesis.VoicePolicy.reject)
+        let on = Synthesis.Command.note_on(1, pitch(kind), 1.0); require(instrument.send(on)); require(reference.send(on)); rejected(instrument.send(on))
+        rejected(instrument.send(Synthesis.Command.note_on(2, pitch(kind), 0.5)), Kind.limit_exceeded())
+        var a = zeros(64); var b = a; require(instrument.render(&a[0:64])); require(reference.render(&b[0:64])); same(@a[0:64], @b[0:64])
+        var stolen = source(kind, voices:1); require(stolen.send(on)); require(stolen.render(&a[0:64])); let last = a[63]
+        require(stolen.send(Synthesis.Command.note_on(2, pitch(kind), 0.5))); require(stolen.send(Synthesis.Command.note_off(1))); require(stolen.render(&b[0:1])); assert(b[0] == last)
+    }
+}
+test "catalogue commands stereo reset and irregular chunks produce identical PCM" {
+    for kind in 0...3 {
+        var instrument = source(kind, channels:2)
+        var sequence = try Synthesis.Sequence.create(instrument, [
+            Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, pitch(kind), 1.0)),
+            Synthesis.Event(frame:64, command:Synthesis.Command.sustain(true)),
+            Synthesis.Event(frame:128, command:Synthesis.Command.note_off(1)),
+            Synthesis.Event(frame:170, command:Synthesis.Command.pitch_bend_to(5.0, 512)),
+            Synthesis.Event(frame:234, command:Synthesis.Command.gain_to(0.5, 200)),
+            Synthesis.Event(frame:512, command:Synthesis.Command.note_on(2, pitch(kind), 0.7)),
+            Synthesis.Event(frame:600, command:Synthesis.Command.note_on(3, pitch(kind), 0.5)),
+            Synthesis.Event(frame:900, command:Synthesis.Command.sustain(false)),
+            Synthesis.Event(frame:1_024, command:Synthesis.Command.all_notes_off),
+        ]) else error { panic(error.detail) }
+        var a = zeros(4_096); var b = a; require(sequence.render(&a[0:a.count()])); sequence.reset()
+        var position = 0; while position < b.count() { var end = position + 34; if end > b.count() { end = b.count() } require(sequence.render(&b[position:end])); position = end }
+        same(@a[0:a.count()], @b[0:b.count()]); var i = 0; while i < a.count() { assert(a[i] == a[i + 1]); i += 2 }
+        instrument.reset(); require(instrument.render(&a[0:a.count()])); for sample in a { assert(sample == 0.0 as float32) }
+    }
+}
+test "catalogue rejects invalid commands and interleaved frames before mutation" {
+    for kind in 0...3 {
+        var instrument = source(kind, channels:2); var reference = source(kind, channels:2)
+        let on = Synthesis.Command.note_on(1, pitch(kind), 1.0); require(instrument.send(on)); require(reference.send(on))
+        rejected(instrument.send(Synthesis.Command.note_on(-1, pitch(kind), 1.0))); rejected(instrument.send(Synthesis.Command.pitch_bend(25.0))); rejected(instrument.send(Synthesis.Command.gain_to(-0.1, 0)))
+        var a = zeros(128); var b = a; a[0] = 0.123; rejected(instrument.render(&a[0:1])); assert(a[0] == 0.123 as float32)
+        require(instrument.render(&a[0:128])); require(reference.render(&b[0:128])); same(@a[0:128], @b[0:128])
+    }
+}
+test "catalogue public settings reject nonfinite values and out of range durations" {
+    let nan = Math.sqrt(-1.0 as float32)
+    var guitars:Result<Synthesis.GuitarInstrument, Error>[] = [Music.Instruments.guitar(pluck_position:0.0), Music.Instruments.guitar(pluck_position:1.0), Music.Instruments.guitar(decay_seconds:0.0), Music.Instruments.guitar(decay_seconds:31.0), Music.Instruments.guitar(amplitude:nan), Music.Instruments.guitar(max_voices:65), Music.Instruments.guitar(release_seconds:6.0), Music.Instruments.guitar(brightness:1.1)]
+    for result in guitars { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid guitar") } } }
+    var violins:Result<Synthesis.ViolinInstrument, Error>[] = [Music.Instruments.violin(attack_seconds:-0.1), Music.Instruments.violin(attack_seconds:6.0), Music.Instruments.violin(vibrato_cents:51.0), Music.Instruments.violin(vibrato_hz:13.0), Music.Instruments.violin(vibrato_hz:nan), Music.Instruments.violin(max_voices:0), Music.Instruments.violin(release_seconds:Math.sqrt(-1.0 as float64))]
+    for result in violins { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid violin") } } }
+    var drums:Result<Synthesis.DrumsInstrument, Error>[] = [Music.Instruments.drums(decay_seconds:0.0), Music.Instruments.drums(decay_seconds:6.0), Music.Instruments.drums(brightness:nan), Music.Instruments.drums(format:Processing.Format(sample_rate:511, channels:1)), Music.Instruments.drums(steal_fade_seconds:1.0)]
+    for result in drums { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid drums") } } }
+}
+test "catalogue works as prepared musical sounds and MIDI instruments" {
+    for kind in 0...3 {
+        var audio = try Audio.offline(8_192, 1) else error { panic(error.detail) }; var instrument = source(kind)
+        var key = Music.Key.C4; if kind == 2 { key = Music.Drum.kick }
+        var melody = try Music.Melody.create([Music.Note(key:key, beats:0.1)], tempo:120.0) else error { panic(error.detail) }
+        let sound = try melody.prepare(audio, using:instrument, tail_seconds:0.05, format:Processing.Format(sample_rate:8_192, channels:1)) else error { panic(error.detail) }
+        let playback = audio.play(sound); let output = try audio.render(2_048) else error { panic(error.detail) }; assert(energy(@output[0:output.count()]) > 0.001 && !audio.is_playing(playback)); assert(audio.unload(sound))
+        // Format 0: note-on/off, matching a supported percussion key as well as pitched sources.
+        var bytes:uint8[] = [0x4d,0x54,0x68,0x64,0,0,0,6,0,0,0,1,0,96,0x4d,0x54,0x72,0x6b,0,0,0,12,0,0x99,36,100,96,0x89,36,0,0,0xff,0x2f,0]
+        var score = try MIDI.Score.parse(@bytes[0:bytes.count()], 8_192) else error { panic(error.detail) }
+        var player = try Music.Player.create(audio, score, using:instrument, tail_seconds:0.05, block_frames:128) else error { panic(error.detail) }
+        let playing = try player.play() else error { panic(error.detail) }; player.stop(); let stopped = try player.state() else error { panic(error.detail) }; assert(stopped == Music.State.stopped)
+        let again = try player.replay() else error { panic(error.detail) }; player.stop()
+    }
+}
+test "catalogue keeps high notes finite band limited and maximum voices bounded" {
+    let format = Processing.Format(sample_rate:192_000, channels:8)
+    var guitar = try Music.Instruments.guitar(decay_seconds:30.0, max_voices:64, format:format) else error { panic(error.detail) }
+    var violin = try Music.Instruments.violin(attack_seconds:0.0, max_voices:64, format:format) else error { panic(error.detail) }
+    var drums = try Music.Instruments.drums(decay_seconds:5.0, max_voices:64, format:format) else error { panic(error.detail) }
+    for id in 0...64 { require(guitar.send(Synthesis.Command.note_on(id, 55.0, 1.0 / 64.0))); require(violin.send(Synthesis.Command.note_on(id, 55.0, 1.0 / 64.0))); require(drums.send(Synthesis.Command.note_on(id, frequency(Music.Drum.crash), 1.0 / 64.0))) }
+    var samples = zeros(512); require(guitar.render(&samples[0:512])); require(violin.render(&samples[0:512])); require(drums.render(&samples[0:512])); assert(guitar.active_voices() == 64 && violin.active_voices() == 64 && drums.active_voices() == 64)
+    for kind in 0...2 {
+        var instrument = source(kind); require(instrument.send(Synthesis.Command.note_on(1, 3_072.0, 1.0))); require(instrument.send(Synthesis.Command.pitch_bend_to(-24.0, 512))); require(instrument.render(&samples[0:512])); for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.20001) }
+        instrument.reset(); require(instrument.send(Synthesis.Command.note_on(1, 4_000.0, 1.0))); rejected(instrument.send(Synthesis.Command.pitch_bend(12.0)))
+    }
+}

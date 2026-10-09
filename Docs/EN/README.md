@@ -252,3 +252,5 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 [Choose musical playback costs](MusicResources.md).
 
 [Play a procedural piano](Piano.md).
+
+[Play guitar, violin and drums](Catalogue.md), with built-in instruments and audible examples.

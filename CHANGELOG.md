@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Adds `Music.Instruments.guitar`, `violin` and `drums`: naturally decaying plucked strings, sustained violin with vibrato and a seven-piece `Music.Drum` kit. Shared polyphony/commands, family-specific settings, examples outside Docs, FR/EN guides and numerical/resource oracles.
+
 - Add `Music.Instruments.piano` and `Synthesis.PianoInstrument`: polyphonic procedural piano with strike dynamics, natural decay, brightness and sustain pedal. Share the sine command pool without changing its PCM; piano/MIDI examples, FR/EN guides and numerical validation.
 
 - Add musical constants `Music.Key.C5`, `Cs5`, `Bb4` and direct `Music.key` / `Music.keys` conversions from note names, with `Music.try_key` / `Music.try_keys` for recoverable Results; direct invalid inputs panic. Previous Result calls move to the `try_*` names; documented C4=60 convention, accidentals and recoverable errors, with PCM identical to numeric MIDI input.

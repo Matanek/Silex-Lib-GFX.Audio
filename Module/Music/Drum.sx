@@ -1,0 +1,10 @@
+// Supported General MIDI percussion note numbers, usable as Music.Note.key.
+public static struct Drum {
+    let kick:int = 36
+    let snare:int = 38
+    let closed_hat:int = 42
+    let open_hat:int = 46
+    let low_tom:int = 45
+    let high_tom:int = 50
+    let crash:int = 49
+}

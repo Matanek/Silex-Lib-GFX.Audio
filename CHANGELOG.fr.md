@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajoute `Music.Instruments.guitar`, `violin` et `drums` : cordes pincées à décroissance naturelle, violon tenu avec vibrato et kit de sept percussions `Music.Drum`. Polyphonie/commandes communes, réglages propres, exemples hors Docs, guides FR/EN et oracles numériques/ressources.
+
 - Ajoute `Music.Instruments.piano` et `Synthesis.PianoInstrument` : piano procédural polyphonique, dynamique de frappe, déclin naturel, brillance et pédale. Partage le pool de commandes du sinus sans changer son PCM ; exemples piano/MIDI, guides FR/EN et preuves numériques.
 
 - Ajoute les constantes musicales `Music.Key.C5`, `Cs5`, `Bb4` et les conversions `Music.key` / `Music.keys` depuis les noms de notes ; convention C4=60, altérations et erreurs récupérables documentées, PCM identique à la saisie MIDI numérique.

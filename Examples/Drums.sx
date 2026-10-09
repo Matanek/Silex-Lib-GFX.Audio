@@ -1,0 +1,29 @@
+use GFX.Audio
+use GFX.Audio.Music
+
+func main() {
+    var audio = Audio()
+    var drums = try Music.Instruments.drums() else error { panic(error.detail) }
+    let pattern_keys:int[] = [Music.Drum.kick, Music.Drum.closed_hat, Music.Drum.snare, Music.Drum.closed_hat,
+        Music.Drum.kick, Music.Drum.open_hat, Music.Drum.snare, Music.Drum.closed_hat]
+    let kit_keys:int[] = [Music.Drum.kick, Music.Drum.snare, Music.Drum.closed_hat, Music.Drum.open_hat,
+        Music.Drum.low_tom, Music.Drum.high_tom, Music.Drum.crash]
+    var beat:Music.Note[] = []
+    for bar in 0...2 {
+        for key in pattern_keys {
+            beat.append(Music.Note(key:key, beats:0.5, velocity:0.85))
+        }
+    }
+    var pattern = try Music.Melody.create(beat, tempo:120.0) else error { panic(error.detail) }
+    let sound = try pattern.prepare(audio, using:drums, tail_seconds:0.1) else error { panic(error.detail) }
+    print("Procedural drums: kick, hats and snare")
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+    var notes:Music.Note[] = []
+    for key in kit_keys {
+        notes.append(Music.Note(key:key, beats:2.0, velocity:0.8, gate:1.0))
+    }
+    var kit = try Music.Melody.create(notes, tempo:120.0) else error { panic(error.detail) }
+    let strikes = try kit.prepare(audio, using:drums, tail_seconds:0.1) else error { panic(error.detail) }
+    print("Seven kit sounds, with longer gates to hear their natural decay")
+    audio.wait(audio.play(strikes)); assert(audio.unload(strikes))
+}

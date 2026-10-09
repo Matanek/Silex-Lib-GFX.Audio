@@ -1,0 +1,167 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+// The frequency in note_on selects a percussion key, not its resonator pitch.
+// This explicit seven-key subset also accepts the MIDI adapter's equal temperament.
+func drum_index(frequency:float32) int {
+    var index = 0
+    while index < 7 {
+        var key = 36
+        if index == 1 { key = 38 } else if index == 2 { key = 42 } else if index == 3 { key = 46 }
+        else if index == 4 { key = 45 } else if index == 5 { key = 50 } else if index == 6 { key = 49 }
+        let expected = 440.0 as float32 * Math.pow(2.0 as float32, (key - 69) as float32 / 12.0)
+        if Math.abs(frequency - expected) <= expected * 0.001 { return index }
+        index++
+    }
+    return -1
+}
+class DrumVoice:InstrumentVoice {
+    var id:int = -1
+    var order:int = 0
+    var held:bool = false
+    var frequency:float32 = 0.0
+    private let rate:float32
+    private let brightness:float32
+    private let decay_frames:int
+    private let release_frames:int
+    private let fade_frames:int
+    private let attack_frames:int
+    private let noise_filter:float32
+    private var phases:float32[] = []
+    private var modes:float32[] = []
+    private var levels:float32[] = []
+    private var decays:float32[] = []
+    private var active:bool = false
+    private var age:int = 0
+    private var lifetime:int = 0
+    private var release_left:int = -1
+    private var noise:int = 1
+    private var filtered:float32 = 0.0
+    private var noisy:float32 = 0.0
+    private var noise_decay:float32 = 0.0
+    private var sweep:float32 = 0.0
+    private var sweep_decay:float32 = 0.0
+    private var kind:int = 0
+    private var last:float32 = 0.0
+    private var tail:float32 = 0.0
+    private var fading:int = 0
+    init(format:Processing.Format, brightness:float32, decay_frames:int, release_frames:int, fade_frames:int) {
+        self.rate = format.sample_rate as float32; self.brightness = brightness
+        self.decay_frames = decay_frames; self.release_frames = release_frames; self.fade_frames = fade_frames
+        self.attack_frames = Math.max(1.0 as float32, Math.round(self.rate * 0.001)) as int
+        self.noise_filter = 1.0 - Math.exp(-6.283185307179586 as float32 * Math.min(1_000.0 as float32 + brightness * 3_000.0, self.rate * 0.2) / self.rate)
+        self.sweep_decay = Math.exp(-1.0 as float32 / Math.max(1.0 as float32, self.rate * 0.025))
+        var i = 0; while i < 8 { self.phases.append(0.0); self.modes.append(0.0); self.levels.append(0.0); self.decays.append(0.0); i++ }
+    }
+    func occupied() bool { return self.active || self.fading > 0 }
+    func start(id:int, frequency:float32, velocity:float32, order:int) {
+        let replacing = self.occupied(); self.tail = 0.0; self.fading = 0
+        if replacing && self.fade_frames > 0 { self.tail = self.last; self.fading = self.fade_frames }
+        self.id = id; self.order = order; self.frequency = frequency; self.held = true
+        self.active = true; self.age = 0; self.release_left = -1; self.noise = 1; self.filtered = 0.0
+        self.kind = drum_index(frequency)
+        var seconds:float32 = 0.45; var base:float32 = 52.0; var fraction:float32 = 0.03
+        self.sweep = 1.4
+        if self.kind == 1 { seconds = 0.25; base = 180.0; fraction = 0.7; self.sweep = 0.2 }
+        else if self.kind == 2 { seconds = 0.08; base = 3_100.0; fraction = 0.7; self.sweep = 0.0 }
+        else if self.kind == 3 { seconds = 0.5; base = 3_100.0; fraction = 0.7; self.sweep = 0.0 }
+        else if self.kind == 4 { seconds = 0.6; base = 110.0; fraction = 0.05; self.sweep = 0.25 }
+        else if self.kind == 5 { seconds = 0.45; base = 165.0; fraction = 0.05; self.sweep = 0.25 }
+        else if self.kind == 6 { seconds = 1.5; base = 1_200.0; fraction = 0.55; self.sweep = 0.0 }
+        let duration = Math.max(1.0 as float32, self.decay_frames as float32 * seconds / 0.6)
+        self.lifetime = Math.ceil(duration * (4.0 / 3.0)) as int
+        let loudness = velocity * (0.35 + 0.65 * velocity)
+        self.noisy = loudness * fraction; self.noise_decay = Math.exp(-6.907755278982137 as float32 / duration)
+        var total:float32 = 0.0; var i = 0
+        while i < 8 {
+            let n = (i + 1) as float32; self.phases[i] = 0.0
+            // Membrane and metal modes are inharmonic; kick emphasizes its lowest mode.
+            self.modes[i] = base * (1.0 + (n - 1.0) * 1.47)
+            self.levels[i] = Math.exp(-(n - 1.0) * (0.35 + 1.2 * (1.0 - self.brightness))) / n
+            if self.kind == 0 && i > 0 { self.levels[i] *= 0.05 }
+            total += self.levels[i]
+            self.decays[i] = Math.exp(-6.907755278982137 as float32 * (1.0 + 0.18 * (n - 1.0)) / duration); i++
+        }
+        i = 0; while i < 8 { self.levels[i] *= loudness * (1.0 - fraction) / total; i++ }
+    }
+    func release() {
+        if !self.active || self.release_left >= 0 { return }
+        self.release_left = self.release_frames; if self.release_frames == 0 { self.active = false }
+    }
+    func render(samples:&float32[..], ratios:@float32[..]) Result<void, Error> {
+        var i = 0
+        while i < samples.count() {
+            var value:float32 = 0.0
+            if self.active {
+                var partial = 0
+                while partial < 8 {
+                    let increment = self.modes[partial] * (1.0 + self.sweep) * ratios[i] / self.rate
+                    let band = Math.clamp((0.5 - increment) / 0.05, 0.0, 1.0) as float32
+                    if band > 0.0 { value += self.levels[partial] * band * Math.sin(self.phases[partial] * 6.283185307179586) as float32 }
+                    self.phases[partial] += increment; self.phases[partial] -= Math.floor(self.phases[partial])
+                    self.levels[partial] *= self.decays[partial]; partial++
+                }
+                self.sweep *= self.sweep_decay
+                self.noise = (self.noise * 48_271) % 2_147_483_647
+                let noise = 2.0 * ((self.noise % 16_777_216) as float32 / 16_777_216.0) - 1.0
+                self.filtered += self.noise_filter * (noise - self.filtered)
+                var texture = self.filtered
+                if self.kind == 2 || self.kind == 3 || self.kind == 6 { texture = (noise - self.filtered) * 0.5 }
+                value += self.noisy * texture; self.noisy *= self.noise_decay
+                // A 1 ms onset avoids a discontinuous noise attack.
+                if self.age < self.attack_frames { value *= self.age as float32 / self.attack_frames as float32 }
+                if self.release_left >= 0 {
+                    value *= self.release_left as float32 / self.release_frames as float32
+                    self.release_left--; if self.release_left == 0 { self.active = false }
+                }
+                self.age++; if self.age >= self.lifetime { self.active = false }
+            }
+            if self.fading > 0 {
+                let weight = self.fading as float32 / self.fade_frames as float32
+                value = weight * self.tail + (1.0 - weight) * value; self.fading--
+            }
+            samples[i] = value; self.last = value; i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        self.active = false; self.fading = 0; self.id = -1; self.order = 0; self.held = false
+        self.age = 0; self.release_left = -1; self.last = 0.0; self.tail = 0.0
+    }
+}
+
+public class DrumsInstrument:Generator, Instrument {
+    let format:Processing.Format
+    let amplitude:float32
+    let brightness:float32
+    let decay_frames:int
+    let release_frames:int
+    let max_voices:int
+    let voice_policy:VoicePolicy
+    let steal_fade_frames:int
+    private var pool:PolyphonicInstrument
+    private init(pool:PolyphonicInstrument, brightness:float32, decay_frames:int, release_frames:int) {
+        self.pool = pool; self.format = pool.format; self.amplitude = pool.amplitude
+        self.max_voices = pool.max_voices; self.voice_policy = pool.voice_policy; self.steal_fade_frames = pool.steal_fade_frames
+        self.brightness = brightness; self.decay_frames = decay_frames; self.release_frames = release_frames
+    }
+    static func create(format:Processing.Format, amplitude:float32 = 0.2, brightness:float32 = 0.65, decay_frames:int = 28_800, release_frames:int = 1_920, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, steal_fade_frames:int = 48) Result<DrumsInstrument, Error> {
+        if !valid_format(format) || format.sample_rate < 512 || format.sample_rate > 192_000 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(brightness) || brightness < 0.0 || brightness > 1.0 || decay_frames < 1 || decay_frames > format.sample_rate * 5 || release_frames < 0 || release_frames > format.sample_rate * 5 || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 {
+            return Result<DrumsInstrument, Error>.failure(invalid("drums require rate 512..192000, channels 1..8, unit amplitude/brightness, decay 1 frame..5 seconds, release 0..5 seconds, voices 1..64 and fade 0..4096 frames"))
+        }
+        var voices:InstrumentVoice[] = []; var i = 0
+        while i < max_voices { voices.append(DrumVoice(format, brightness, decay_frames, release_frames, steal_fade_frames)); i++ }
+        var pool = PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)
+        return Result<DrumsInstrument, Error>.success(DrumsInstrument(pool, brightness, decay_frames, release_frames))
+    }
+    func validate(command:Command) Result<void, Error> {
+        try self.pool.validate(command)
+        match command { note_on(_, frequency, _) => { if drum_index(frequency) < 0 { return Result<void, Error>.failure(invalid("drums support MIDI keys 36, 38, 42, 45, 46, 49 and 50; use Music.Drum")) } }; else => {} }
+        return Result<void, Error>.success()
+    }
+    func send(command:Command) Result<void, Error> { try self.validate(command); return self.pool.send(command) }
+    func active_voices() int { return self.pool.active_voices() }
+    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func reset() { self.pool.reset() }
+}

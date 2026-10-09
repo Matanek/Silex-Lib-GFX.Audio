@@ -32,3 +32,5 @@ instruments keep their own musical settings and the existing extension protocol.
 [Choose preparation and continuous playback costs](Docs/EN/MusicResources.md), with measured scope and resource limits.
 
 [Play a procedural piano](Docs/EN/Piano.md) with `Music.Instruments.piano`, strike dynamics, natural decay and sustain pedal.
+
+[Play procedural guitar, violin and drums](Docs/EN/Catalogue.md), with named percussion keys and family-specific settings.

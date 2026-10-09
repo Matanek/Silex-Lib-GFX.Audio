@@ -205,3 +205,5 @@ Les [coûts musicaux](MusicResources.md) distinguent préparation, déclenchemen
 et production continue.
 
 [Jouer une partition avec un player et des contrôles de lecture](MusicPlayer.md).
+
+[Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.

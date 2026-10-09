@@ -160,3 +160,5 @@ controls these instruments. User banks, realistic instrument models and
 humanization remain separate capabilities to establish.
 
 [Play a MIDI score with your own instruments](MIDI.md).
+
+[Play guitar, violin and drums](Catalogue.md), with built-in instruments and audible examples.

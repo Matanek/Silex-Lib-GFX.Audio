@@ -166,3 +166,5 @@ Les banques utilisateur, les modèles d’instruments réalistes et l’humanisa
 restent des capacités séparées à établir.
 
 [Jouer une partition MIDI avec ses propres instruments](MIDI.md).
+
+[Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.

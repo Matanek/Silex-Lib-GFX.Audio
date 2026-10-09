@@ -1,0 +1,17 @@
+use GFX.Audio
+use GFX.Audio.Music
+
+func main() {
+    var audio = Audio()
+    let keys = Music.keys(["G3", "D4", "G4", "A4", "B4", "D5", "B4", "G4"])
+    var notes:Music.Note[] = []
+    for key in keys { notes.append(Music.Note(key:key, beats:0.5, velocity:0.8)) }
+    var melody = try Music.Melody.create(notes, tempo:110.0) else error { panic(error.detail) }
+    var instrument = try Music.Instruments.guitar() else error { panic(error.detail) }
+    let sound = try melody.prepare(audio, using:instrument, tail_seconds:0.15) else error { panic(error.detail) }
+    print("Plucked guitar: natural decay, then a softer center pluck")
+    audio.wait(audio.play(sound)); assert(audio.unload(sound))
+    var variant = try Music.Instruments.guitar(brightness:0.35, pluck_position:0.5) else error { panic(error.detail) }
+    let other = try melody.prepare(audio, using:variant, tail_seconds:0.15) else error { panic(error.detail) }
+    audio.wait(audio.play(other)); assert(audio.unload(other))
+}

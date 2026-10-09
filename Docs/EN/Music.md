@@ -202,3 +202,5 @@ The [advanced path](MIDI.md) retains channel/program routing.
 and continuous production.
 
 [Play a score with a player and playback controls](MusicPlayer.md).
+
+[Play guitar, violin and drums](Catalogue.md), with built-in instruments and audible examples.

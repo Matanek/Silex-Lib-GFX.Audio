@@ -31,4 +31,34 @@ public static struct Instruments {
             max_voices:max_voices, voice_policy:voice_policy, steal_fade_frames:fade)
     }
 
+    func guitar(amplitude:float32 = 0.2, brightness:float32 = 0.65, pluck_position:float32 = 0.18, decay_seconds:float64 = 2.0, release_seconds:float64 = 0.08, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.GuitarInstrument, Error> {
+        if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || !Math.is_finite(decay_seconds) || decay_seconds <= 0.0 || decay_seconds > 30.0 || !Math.is_finite(release_seconds) || release_seconds < 0.0 || release_seconds > 5.0 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
+            return Result<Synthesis.GuitarInstrument, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.instrument", subject:null, detail:"invalid guitar duration or format: see instrument ranges"))
+        }
+        let decay = try Synthesis.frame_at(decay_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(release_seconds, format.sample_rate)
+        let fade = try Synthesis.frame_at(steal_fade_seconds, format.sample_rate)
+        return Synthesis.GuitarInstrument.create(format, amplitude:amplitude, brightness:brightness,
+            pluck_position:pluck_position, decay_frames:decay, release_frames:release, max_voices:max_voices, voice_policy:voice_policy, steal_fade_frames:fade)
+    }
+    func violin(amplitude:float32 = 0.2, brightness:float32 = 0.65, attack_seconds:float64 = 0.05, release_seconds:float64 = 0.2, vibrato_cents:float32 = 12.0, vibrato_hz:float32 = 5.5, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.ViolinInstrument, Error> {
+        if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || !Math.is_finite(attack_seconds) || attack_seconds < 0.0 || attack_seconds > 5.0 || !Math.is_finite(release_seconds) || release_seconds < 0.0 || release_seconds > 5.0 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
+            return Result<Synthesis.ViolinInstrument, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.instrument", subject:null, detail:"invalid violin duration or format: see instrument ranges"))
+        }
+        let attack = try Synthesis.frame_at(attack_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(release_seconds, format.sample_rate)
+        let fade = try Synthesis.frame_at(steal_fade_seconds, format.sample_rate)
+        return Synthesis.ViolinInstrument.create(format, amplitude:amplitude, brightness:brightness,
+            attack_frames:attack, release_frames:release, vibrato_cents:vibrato_cents, vibrato_hz:vibrato_hz, max_voices:max_voices, voice_policy:voice_policy, steal_fade_frames:fade)
+    }
+    func drums(amplitude:float32 = 0.2, brightness:float32 = 0.65, decay_seconds:float64 = 0.6, release_seconds:float64 = 0.04, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.DrumsInstrument, Error> {
+        if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || format.sample_rate < 512 || !Math.is_finite(decay_seconds) || decay_seconds <= 0.0 || decay_seconds > 5.0 || !Math.is_finite(release_seconds) || release_seconds < 0.0 || release_seconds > 5.0 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
+            return Result<Synthesis.DrumsInstrument, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.instrument", subject:null, detail:"invalid drums duration or format: see instrument ranges"))
+        }
+        let decay = try Synthesis.frame_at(decay_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(release_seconds, format.sample_rate)
+        let fade = try Synthesis.frame_at(steal_fade_seconds, format.sample_rate)
+        return Synthesis.DrumsInstrument.create(format, amplitude:amplitude, brightness:brightness,
+            decay_frames:decay, release_frames:release, max_voices:max_voices, voice_policy:voice_policy, steal_fade_frames:fade)
+    }
 }

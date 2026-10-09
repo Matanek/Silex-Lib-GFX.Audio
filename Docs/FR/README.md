@@ -258,3 +258,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Choisir le coût d’une lecture musicale](MusicResources.md).
 
 [Jouer un piano procédural](Piano.md).
+
+[Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.

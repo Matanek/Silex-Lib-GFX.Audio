@@ -1,0 +1,58 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use GFX.Audio.MIDI
+use Interop.C
+use Interop.Boundary
+use STD.Error
+use STD.Math
+
+let phase = C.function<func() int32>(library:Boundary.System, name:"getppid")
+func require(result:Result<void, Error>) { try result else error { panic(error.detail) } }
+func make(kind:int, voices:int) Synthesis.Instrument {
+    let format = Processing.Format(sample_rate:48_000, channels:2)
+    if kind == 0 { return try Music.Instruments.guitar(max_voices:voices, format:format) else error { panic(error.detail) } }
+    if kind == 1 { return try Music.Instruments.violin(max_voices:voices, format:format) else error { panic(error.detail) } }
+    return try Music.Instruments.drums(max_voices:voices, format:format) else error { panic(error.detail) }
+}
+func main() {
+    print("empty"); phase(); phase()
+    print("positive allocation"); phase()
+    var positive:float32[] = []; for i in 0...1_024 { positive.append(i as float32) }
+    phase(); assert(positive[1_023] == 1_023.0 as float32)
+    var audio = try Audio.offline(sample_rate:48_000, channels:1) else error { panic(error.detail) }
+    var stream = try audio.stream(sample_rate:48_000, channels:1, capacity_frames:1_024) else error { panic(error.detail) }
+    var pcm:float32[] = []; for i in 0...1_024 { pcm.append(0.125) }
+    print("positive copy"); phase()
+    let written = try audio.write(stream, @pcm[0:pcm.count()]) else error { panic(error.detail) }
+    phase(); assert(written == 1_024); audio.release(stream)
+    for kind in 0...3 {
+        for voices in [16, 64] {
+            for frames in [128, 512] {
+                print("preparation voices=", voices, " frames=", frames, " kind=", kind); phase()
+                var instrument = make(kind, voices)
+                var samples:float32[] = []; for i in 0...frames * 2 { samples.append(0.0) }
+                phase()
+                var hz:float32 = 220.0; if kind == 2 { hz = try MIDI.frequency(Music.Drum.snare) else error { panic(error.detail) } }
+                print("strike commands"); phase()
+                for id in 0...voices { require(instrument.send(Synthesis.Command.note_on(id, hz, 0.5 / voices as float32))) }
+                phase()
+                print("first instrument block"); phase(); require(instrument.render(&samples[0:samples.count()])); phase()
+                print("100 instrument blocks and control changes"); phase()
+                for i in 0...100 {
+                    require(instrument.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128)))
+                    require(instrument.send(Synthesis.Command.gain_to(0.75, 128)))
+                    require(instrument.render(&samples[0:samples.count()]))
+                    if i % 10 == 0 { require(instrument.send(Synthesis.Command.note_on(voices + i, hz, 0.1))); require(instrument.send(Synthesis.Command.note_off(voices + i))) }
+                }
+                phase()
+                for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 1.0) }
+                print("pedal release reset"); phase()
+                require(instrument.send(Synthesis.Command.sustain(true))); require(instrument.send(Synthesis.Command.all_notes_off))
+                require(instrument.render(&samples[0:samples.count()])); instrument.reset(); phase()
+                require(instrument.render(&samples[0:samples.count()])); for sample in samples { assert(sample == 0.0 as float32) }
+            }
+        }
+    }
+}

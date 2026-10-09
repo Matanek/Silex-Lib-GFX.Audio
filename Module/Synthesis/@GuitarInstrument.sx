@@ -1,0 +1,35 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public class GuitarInstrument:Generator, Instrument {
+    let format:Processing.Format
+    let amplitude:float32
+    let brightness:float32
+    let pluck_position:float32
+    let decay_frames:int
+    let release_frames:int
+    let max_voices:int
+    let voice_policy:VoicePolicy
+    let steal_fade_frames:int
+    private var pool:PolyphonicInstrument
+    private init(pool:PolyphonicInstrument, brightness:float32, pluck_position:float32, decay_frames:int, release_frames:int) {
+        self.pool = pool; self.format = pool.format; self.amplitude = pool.amplitude
+        self.max_voices = pool.max_voices; self.voice_policy = pool.voice_policy; self.steal_fade_frames = pool.steal_fade_frames
+        self.brightness = brightness; self.pluck_position = pluck_position; self.decay_frames = decay_frames; self.release_frames = release_frames
+    }
+    static func create(format:Processing.Format, amplitude:float32 = 0.2, brightness:float32 = 0.65, pluck_position:float32 = 0.18, decay_frames:int = 96_000, release_frames:int = 3_840, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, steal_fade_frames:int = 48) Result<GuitarInstrument, Error> {
+        if !valid_format(format) || format.sample_rate > 192_000 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(brightness) || brightness < 0.0 || brightness > 1.0 || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 || !Math.is_finite(pluck_position) || pluck_position < 0.05 || pluck_position > 0.95 || decay_frames < 1 || decay_frames > format.sample_rate * 30 || release_frames < 0 || release_frames > format.sample_rate * 5 {
+            return Result<GuitarInstrument, Error>.failure(invalid("invalid guitar settings: see instrument ranges"))
+        }
+        var voices:InstrumentVoice[] = []; var i = 0
+        while i < max_voices { voices.append(StringVoice(format, false, brightness, pluck_position, Math.max(1.0 as float32, Math.round(format.sample_rate as float32 * 0.003)) as int, decay_frames, release_frames, steal_fade_frames, 0.0, 0.0)); i++ }
+        var pool = PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)
+        return Result<GuitarInstrument, Error>.success(GuitarInstrument(pool, brightness, pluck_position, decay_frames, release_frames))
+    }
+    func validate(command:Command) Result<void, Error> { return self.pool.validate(command) }
+    func send(command:Command) Result<void, Error> { return self.pool.send(command) }
+    func active_voices() int { return self.pool.active_voices() }
+    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func reset() { self.pool.reset() }
+}
