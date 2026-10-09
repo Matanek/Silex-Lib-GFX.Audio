@@ -1,5 +1,9 @@
 # Jouer une mélodie polyphonique
 
+Pour un instrument à décroissance naturelle et dynamique de frappe, choisir
+[le piano procédural](Piano.md). Les règles de voix et de commandes ci-dessous
+sont partagées ; la section ADSR décrit le sinus.
+
 `Synthesis.SineInstrument` joue des notes sinusoïdales avec vélocité, enveloppe
 ADSR, sustain et pitch bend. `Synthesis.Sequence` place leurs commandes sur
 l’horloge audio et fournit un `Generator`, composable avec les effets existants.

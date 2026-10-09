@@ -133,8 +133,9 @@ a `Result`.
 [Note, sustain, pitch bend and gain commands](Instruments.md) remain available
 on this instrument. A prepared melody freezes their result; changing or
 commanding the instrument afterwards does not change the prepared Sound.
-The format selected at creation must match `prepare`'s format. The sine serves
-simple tones and alerts; this entry announces no piano, drums or guitar.
+The format selected at creation must match `prepare`'s format.
+The sine serves simple tones and alerts. [Music.Instruments.piano](Piano.md)
+adds a procedural piano with strike dynamics and natural decay.
 Retro timbres remain directly usable for short effects and music.
 
 ## Bring an instrument and effects

@@ -1,0 +1,149 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+// One struck string spectrum per voice. Tables are allocated once, never on note-on.
+class PianoVoice:InstrumentVoice {
+    var id:int = -1
+    var order:int = 0
+    var held:bool = false
+    var frequency:float32 = 0.0
+    private let rate:float32
+    private let brightness:float32
+    private let decay_frames:int
+    private let release_frames:int
+    private let fade_frames:int
+    private let attack_frames:int
+    private let hammer_decay:float32
+    private let hammer_filter:float32
+    private var phases:float32[] = []
+    private var partials:float32[] = []
+    private var levels:float32[] = []
+    private var decays:float32[] = []
+    private var active:bool = false
+    private var age:int = 0
+    private var lifetime:int = 0
+    private var release_left:int = -1
+    private var hammer:float32 = 0.0
+    private var noise:int = 1
+    private var filtered:float32 = 0.0
+    private var last:float32 = 0.0
+    private var tail:float32 = 0.0
+    private var fading:int = 0
+
+    init(format:Processing.Format, brightness:float32, decay_frames:int, release_frames:int, fade_frames:int) {
+        self.rate = format.sample_rate as float32; self.brightness = brightness
+        self.decay_frames = decay_frames; self.release_frames = release_frames
+        self.fade_frames = fade_frames
+        var attack = Math.round(self.rate * 0.002) as int; if attack < 1 { attack = 1 }
+        self.attack_frames = attack
+        self.hammer_decay = Math.exp(-1.0 as float32 / (self.rate * 0.008))
+        self.hammer_filter = (1.0 - Math.exp(-6.283185307179586 as float32 * Math.min(3_000.0 as float32, self.rate * 0.2) / self.rate)) as float32
+        var i = 0
+        while i < 24 { self.phases.append(0.0); self.partials.append(0.0); self.levels.append(0.0); self.decays.append(0.0); i++ }
+    }
+    func occupied() bool { return self.active || self.fading > 0 }
+    func start(id:int, frequency:float32, velocity:float32, order:int) {
+        let replacing = self.occupied(); self.tail = 0.0; self.fading = 0
+        if replacing && self.fade_frames > 0 { self.tail = self.last; self.fading = self.fade_frames }
+        self.id = id; self.frequency = frequency; self.order = order; self.held = true
+        self.active = true; self.age = 0; self.release_left = -1; self.noise = 1; self.filtered = 0.0
+        // T60 varies with register; high partials lose energy sooner than the fundamental.
+        let register = Math.clamp(Math.pow(440.0 as float32 / frequency, 0.35), 0.35, 3.0)
+        let duration = self.decay_frames as float32 * register
+        self.lifetime = Math.ceil(duration * (4.0 / 3.0)) as int
+        let relative = frequency / 440.0
+        let stiffness = Math.min(0.002 as float32, 0.00006 * (1.0 + 0.25 * relative * relative))
+        let bright = self.brightness * (0.25 + 0.75 * velocity)
+        let loudness = velocity * (0.25 + 0.75 * velocity)
+        self.hammer = 0.015 * loudness * (0.3 + 0.7 * bright)
+        var total:float32 = 0.0; var i = 0
+        while i < 24 {
+            let n = (i + 1) as float32
+            self.partials[i] = n * Math.sqrt((1.0 + stiffness * n * n) / (1.0 + stiffness))
+            self.phases[i] = 0.0
+            let strike = Math.abs(Math.sin(n * 0.18 * Math.pi<float32>()))
+            self.levels[i] = (strike * Math.exp(-(n - 1.0) * (0.14 + 0.55 * (1.0 - bright as float32))) / Math.pow(n, 0.7)) as float32
+            total += self.levels[i]
+            self.decays[i] = Math.exp(-6.907755278982137 as float32 * (1.0 + 0.15 * (n - 1.0)) / duration)
+            i++
+        }
+        i = 0
+        while i < 24 { self.levels[i] *= (loudness - self.hammer) / total; i++ }
+    }
+    func release() {
+        if !self.active || self.release_left >= 0 { return }
+        self.release_left = self.release_frames
+        if self.release_frames == 0 { self.active = false }
+    }
+    func render(samples:&float32[..], ratios:@float32[..]) Result<void, Error> {
+        var i = 0
+        while i < samples.count() {
+            var value:float32 = 0.0
+            if self.active {
+                let step = self.frequency * ratios[i] / self.rate
+                var partial = 0
+                while partial < 24 {
+                    let increment = step * self.partials[partial]
+                    // Fade the top 10% of the band; never fold an out-of-band partial.
+                    let band = Math.clamp((0.5 - increment) / 0.05, 0.0, 1.0) as float32
+                    if band > 0.0 { value += self.levels[partial] * band * Math.sin(self.phases[partial] * 6.283185307179586) as float32 }
+                    self.phases[partial] += increment
+                    self.phases[partial] -= Math.floor(self.phases[partial])
+                    self.levels[partial] *= self.decays[partial]; partial++
+                }
+                self.noise = (self.noise * 48_271) % 2_147_483_647
+                let noise = 2.0 * ((self.noise % 16_777_216) as float32 / 16_777_216.0) - 1.0
+                self.filtered += self.hammer_filter * (noise - self.filtered)
+                value += self.hammer * self.filtered; self.hammer *= self.hammer_decay
+                if self.age < self.attack_frames { value *= self.age as float32 / self.attack_frames as float32 }
+                if self.release_left >= 0 {
+                    value *= self.release_left as float32 / self.release_frames as float32
+                    self.release_left--; if self.release_left == 0 { self.active = false }
+                }
+                self.age++; if self.age >= self.lifetime { self.active = false }
+            }
+            if self.fading > 0 {
+                let weight = self.fading as float32 / self.fade_frames as float32
+                value = weight * self.tail + (1.0 - weight) * value; self.fading--
+            }
+            samples[i] = value; self.last = value; i++
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        self.active = false; self.fading = 0; self.id = -1; self.order = 0; self.held = false
+        self.age = 0; self.release_left = -1; self.last = 0.0; self.tail = 0.0
+    }
+}
+
+public class PianoInstrument:Generator, Instrument {
+    let format:Processing.Format
+    let amplitude:float32
+    let brightness:float32
+    let decay_frames:int
+    let release_frames:int
+    let max_voices:int
+    let voice_policy:VoicePolicy
+    let steal_fade_frames:int
+    private var pool:PolyphonicInstrument
+    private init(pool:PolyphonicInstrument, brightness:float32, decay_frames:int, release_frames:int) {
+        self.pool = pool; self.format = pool.format; self.amplitude = pool.amplitude
+        self.max_voices = pool.max_voices; self.voice_policy = pool.voice_policy; self.steal_fade_frames = pool.steal_fade_frames
+        self.brightness = brightness; self.decay_frames = decay_frames; self.release_frames = release_frames
+    }
+    static func create(format:Processing.Format, amplitude:float32 = 0.2, brightness:float32 = 0.65, decay_frames:int = 144_000, release_frames:int = 7_200, max_voices:int = 16, voice_policy:VoicePolicy = VoicePolicy.steal_oldest, steal_fade_frames:int = 48) Result<PianoInstrument, Error> {
+        if !valid_format(format) || format.sample_rate > 192_000 || !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 || !Math.is_finite(brightness) || brightness < 0.0 || brightness > 1.0 || decay_frames < 1 || decay_frames > format.sample_rate * 30 || release_frames < 0 || release_frames > format.sample_rate * 5 || max_voices < 1 || max_voices > 64 || steal_fade_frames < 0 || steal_fade_frames > 4_096 {
+            return Result<PianoInstrument, Error>.failure(invalid("piano requires rate 1..192000, channels 1..8, unit amplitude/brightness, decay 1 frame..30 seconds, release 0..5 seconds, voices 1..64 and fade 0..4096 frames"))
+        }
+        var voices:InstrumentVoice[] = []; var i = 0
+        while i < max_voices { voices.append(PianoVoice(format, brightness, decay_frames, release_frames, steal_fade_frames)); i++ }
+        var pool = PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)
+        return Result<PianoInstrument, Error>.success(PianoInstrument(pool, brightness, decay_frames, release_frames))
+    }
+    func validate(command:Command) Result<void, Error> { return self.pool.validate(command) }
+    func send(command:Command) Result<void, Error> { return self.pool.send(command) }
+    func active_voices() int { return self.pool.active_voices() }
+    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func reset() { self.pool.reset() }
+}

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajoute `Music.Instruments.piano` et `Synthesis.PianoInstrument` : piano procédural polyphonique, dynamique de frappe, déclin naturel, brillance et pédale. Partage le pool de commandes du sinus sans changer son PCM ; exemples piano/MIDI, guides FR/EN et preuves numériques.
+
 - Ajoute les constantes musicales `Music.Key.C5`, `Cs5`, `Bb4` et les conversions `Music.key` / `Music.keys` depuis les noms de notes ; convention C4=60, altérations et erreurs récupérables documentées, PCM identique à la saisie MIDI numérique.
 
 - Déplace les 21 exemples exécutables et leur partition MIDI dans `Examples/` ; aucun fichier `.sx` dans `Docs/`. Corrige les liens et commandes FR/EN sans modifier les sources sonores.

@@ -1,0 +1,30 @@
+use GFX.Audio
+use GFX.Audio.Music
+
+func main() {
+    var audio = Audio()
+    let keys = Music.keys(["C3", "C4", "E4", "G4", "C5", "E5", "G5", "C6"])
+    var notes:Music.Note[] = []
+    for key in keys { notes.append(Music.Note(key:key, beats:0.4, velocity:0.8)) }
+    var melody = try Music.Melody.create(notes, tempo:110.0) else error { panic(error.detail) }
+    var piano = try Music.Instruments.piano() else error { panic(error.detail) }
+    let sound = try melody.prepare(audio, using:piano, tail_seconds:0.25) else error { panic(error.detail) }
+    print("Procedural piano: bass to treble, natural decay and key release")
+    audio.wait(audio.play(sound))
+    assert(audio.unload(sound))
+
+    var soft = try Music.Instruments.piano(brightness:0.25, decay_seconds:2.0,
+        release_seconds:0.25) else error { panic(error.detail) }
+    let mellow = try melody.prepare(audio, using:soft, tail_seconds:0.3) else error { panic(error.detail) }
+    print("Same notes: softer brightness and longer release")
+    audio.wait(audio.play(mellow)); assert(audio.unload(mellow))
+
+    var touch = try Music.Melody.create([
+        Music.Note(key:Music.Key.C4, beats:0.75, velocity:0.25),
+        Music.Note(key:Music.Key.C4, beats:0.75, velocity:0.6),
+        Music.Note(key:Music.Key.C4, beats:0.75, velocity:1.0),
+    ], tempo:100.0) else error { panic(error.detail) }
+    let dynamics = try touch.prepare(audio, using:piano, tail_seconds:0.25) else error { panic(error.detail) }
+    print("Same C4: three strike velocities, changing level and color")
+    audio.wait(audio.play(dynamics)); assert(audio.unload(dynamics))
+}

@@ -1,5 +1,8 @@
 # Play a polyphonic melody
 
+For natural decay and strike dynamics, choose [the procedural piano](Piano.md).
+Voice and command rules below are shared; the ADSR section describes the sine.
+
 `Synthesis.SineInstrument` plays sine notes with velocity, an ADSR envelope,
 sustain and pitch bend. `Synthesis.Sequence` places their commands on the audio
 clock and provides a `Generator`, composable with the existing effects.

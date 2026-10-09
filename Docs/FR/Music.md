@@ -135,8 +135,9 @@ Les [commandes de notes, sustain, pitch bend et gain](Instruments.md) restent
 disponibles sur cet instrument. Une mélodie préparée fige leur résultat ;
 modifier ou commander ensuite l'instrument ne modifie pas le Sound préparé.
 Le format choisi lors de sa création doit correspondre à celui de `prepare`.
-Le sinus sert les tons et alertes simples ; aucun piano, batterie ou guitare
-n'est annoncé par cette entrée. Les timbres rétro restent directement utilisables
+Le sinus sert les tons et alertes simples. [Music.Instruments.piano](Piano.md)
+ajoute un piano procédural avec dynamique de frappe et décroissance naturelle.
+Les timbres rétro restent directement utilisables
 pour les effets courts et la musique.
 
 ## Apporter un instrument et des effets

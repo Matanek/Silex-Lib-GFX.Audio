@@ -4,7 +4,7 @@ use STD.Error
 use STD.Error.Kind
 use STD.Math
 
-// Musical units for the existing polyphonic sine instrument.
+// Built-in instruments configured in musical time units.
 public static struct Instruments {
     func sine(amplitude:float32 = 0.2, attack_seconds:float64 = 0.005, decay_seconds:float64 = 0.05, sustain:float32 = 0.7, release_seconds:float64 = 0.1, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.SineInstrument, Error> {
         if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
@@ -19,4 +19,16 @@ public static struct Instruments {
             sustain:sustain, release_frames:release, steal_fade_frames:fade,
             amplitude:amplitude)
     }
+    func piano(amplitude:float32 = 0.2, brightness:float32 = 0.65, decay_seconds:float64 = 3.0, release_seconds:float64 = 0.15, max_voices:int = 16, voice_policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, steal_fade_seconds:float64 = 0.001, format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)) Result<Synthesis.PianoInstrument, Error> {
+        if format.sample_rate < 1 || format.sample_rate > 192_000 || format.channels < 1 || format.channels > 8 || !Math.is_finite(decay_seconds) || decay_seconds <= 0.0 || decay_seconds > 30.0 || !Math.is_finite(release_seconds) || release_seconds < 0.0 || release_seconds > 5.0 || !Math.is_finite(steal_fade_seconds) || steal_fade_seconds < 0.0 || steal_fade_seconds * format.sample_rate as float64 > 4_096.0 {
+            return Result<Synthesis.PianoInstrument, Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.music.instrument", subject:null, detail:"piano requires rate 1..192000, channels 1..8, decay in (0, 30] seconds, release in [0, 5] seconds and steal fade in [0, 4096] frames"))
+        }
+        let decay = try Synthesis.frame_at(decay_seconds, format.sample_rate)
+        let release = try Synthesis.frame_at(release_seconds, format.sample_rate)
+        let fade = try Synthesis.frame_at(steal_fade_seconds, format.sample_rate)
+        return Synthesis.PianoInstrument.create(format, amplitude:amplitude,
+            brightness:brightness, decay_frames:decay, release_frames:release,
+            max_voices:max_voices, voice_policy:voice_policy, steal_fade_frames:fade)
+    }
+
 }

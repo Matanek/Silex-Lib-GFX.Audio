@@ -250,3 +250,5 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 [Choose capacities and a production budget](Resources.md).
 
 [Choose musical playback costs](MusicResources.md).
+
+[Play a procedural piano](Piano.md).

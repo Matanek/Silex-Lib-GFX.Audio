@@ -1,0 +1,147 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Error.Kind
+use STD.Math
+
+// Private voice pool shared by built-in instruments; no new public extension API.
+protocol InstrumentVoice {
+    id:int { get }
+    order:int { get }
+    held:bool { get set }
+    frequency:float32 { get }
+    func occupied() bool
+    func start(id:int, frequency:float32, velocity:float32, order:int)
+    func release()
+    func render(samples:&float32[..], ratios:@float32[..]) Result<void, Error>
+    func reset()
+}
+
+class PolyphonicInstrument {
+    let format:Processing.Format
+    let amplitude:float32
+    let max_voices:int
+    let voice_policy:VoicePolicy
+    let steal_fade_frames:int
+    private var voices:InstrumentVoice[]
+    private var temporary:float32[]
+    private var ratios:float32[]
+    private var gains:float32[]
+    private var bend:RampState
+    private var gain:RampState
+    private var last_bend:float32 = 0.0
+    private var pedal:bool = false
+    private var bend_ratio:float32 = 1.0
+    private var serial:int = 0
+
+    init(format:Processing.Format, voices:InstrumentVoice[], voice_policy:VoicePolicy, steal_fade_frames:int, amplitude:float32) {
+        self.format = format; self.max_voices = voices.count(); self.voices = voices
+        self.amplitude = amplitude
+        self.voice_policy = voice_policy; self.steal_fade_frames = steal_fade_frames
+        self.temporary = scratch(512)
+        self.ratios = scratch(512); self.gains = scratch(512)
+        self.bend = RampState(0.0); self.gain = RampState(1.0)
+    }
+    func validate(command:Command) Result<void, Error> {
+        match command {
+            note_on(id, frequency, velocity) => {
+                if id < 0 || !Math.is_finite(frequency) || frequency <= 0.0 || frequency >= self.format.sample_rate as float32 * 0.5 || frequency / self.format.sample_rate as float32 == 0.0 || !Math.is_finite(velocity) || velocity < 0.0 || velocity > 1.0 { return Result<void, Error>.failure(invalid("note requires a nonnegative identity, positive frequency below Nyquist and velocity in [0, 1]")) }
+            }
+            note_off(id) => { if id < 0 { return Result<void, Error>.failure(invalid("note identity must be nonnegative")) } }
+            pitch_bend(semitones) => { if !Math.is_finite(semitones) || semitones < -24.0 || semitones > 24.0 { return Result<void, Error>.failure(invalid("pitch bend must be in [-24, 24] semitones")) } }
+            pitch_bend_to(semitones, frames) => { if !Math.is_finite(semitones) || semitones < -24.0 || semitones > 24.0 || !valid_ramp(frames) { return Result<void, Error>.failure(invalid("pitch bend requires [-24, 24] semitones and ramp in [0, 16777216] frames")) } }
+            gain_to(gain, frames) => { if !Math.is_finite(gain) || gain < 0.0 || gain > 1.0 || !valid_ramp(frames) { return Result<void, Error>.failure(invalid("instrument gain requires [0, 1] and ramp in [0, 16777216] frames")) } }
+            else => {}
+        }
+        return Result<void, Error>.success()
+    }
+    private func valid_pitch(frequency:float32, ratio:float32) bool {
+        let step = frequency * ratio / self.format.sample_rate as float32
+        return Math.is_finite(step) && step > 0.0 && step < 0.5
+    }
+    func send(command:Command) Result<void, Error> {
+        try self.validate(command)
+        match command {
+            note_on(id, frequency, velocity) => {
+                if !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.value / 12.0)) || !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.target / 12.0)) { return Result<void, Error>.failure(invalid("bent frequency must remain positive and below Nyquist through the current ramp")) }
+                var slot = -1; var oldest = 0; var i = 0
+                while i < self.voices.count() {
+                    var voice = self.voices[i]
+                    if voice.occupied() && voice.id == id { return Result<void, Error>.failure(invalid("note identity is already active, including its release")) }
+                    if !voice.occupied() && slot < 0 { slot = i }
+                    if voice.order < self.voices[oldest].order { oldest = i }
+                    i++
+                }
+                if slot < 0 {
+                    match self.voice_policy {
+                        reject => { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.synthesis", subject:null, detail:"instrument voice capacity reached")) }
+                        steal_oldest => { slot = oldest }
+                    }
+                }
+                if self.serial == 9_223_372_036_854_775_807 { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.synthesis", subject:null, detail:"note counter exhausted; reset instrument")) }
+                self.serial++
+                var voice = self.voices[slot]
+                voice.start(id, frequency, velocity, self.serial)
+            }
+            note_off(id) => {
+                for var voice in self.voices {
+                    if voice.occupied() && voice.id == id { voice.held = false; if !self.pedal { voice.release() } }
+                }
+            }
+            sustain(down) => {
+                self.pedal = down
+                if !down { for var voice in self.voices { if !voice.held { voice.release() } } }
+            }
+            pitch_bend(semitones) => {
+                try self.set_bend(semitones, 0)
+            }
+            pitch_bend_to(semitones, frames) => { try self.set_bend(semitones, frames) }
+            gain_to(gain, frames) => { self.gain.set(gain, frames) }
+            all_notes_off => { for var voice in self.voices { voice.held = false; voice.release() } }
+        }
+        return Result<void, Error>.success()
+    }
+    private func set_bend(semitones:float32, frames:int) Result<void, Error> {
+        let ratio = Math.pow(2.0 as float32, semitones / 12.0)
+        for var voice in self.voices { if voice.occupied() && !self.valid_pitch(voice.frequency, ratio) { return Result<void, Error>.failure(invalid("pitch bend would move an active voice outside the supported frequency range")) } }
+        self.bend.set(semitones, frames)
+        return Result<void, Error>.success()
+    }
+    func active_voices() int { var count = 0; for var voice in self.voices { if voice.occupied() { count++ } } return count }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels)
+        var start = 0
+        while start < samples.count() {
+            var frames = (samples.count() - start) / self.format.channels
+            if frames > 512 { frames = 512 }
+            var i = start
+            while i < start + frames * self.format.channels { samples[i] = 0.0; i++ }
+            var control_frame = 0
+            while control_frame < frames {
+                let bend = self.bend.next()
+                if bend != self.last_bend { self.bend_ratio = Math.pow(2.0 as float32, bend / 12.0); self.last_bend = bend }
+                self.ratios[control_frame] = self.bend_ratio; self.gains[control_frame] = self.gain.next()
+                control_frame++
+            }
+            for var voice in self.voices {
+                if voice.occupied() {
+                    try voice.render(&self.temporary[0:frames], @self.ratios[0:frames])
+                    var frame = 0
+                    while frame < frames {
+                        var channel = 0
+                        while channel < self.format.channels { samples[start + frame * self.format.channels + channel] += self.temporary[frame]; channel++ }
+                        frame++
+                    }
+                }
+            }
+            control_frame = 0
+            while control_frame < frames {
+                var channel = 0
+                while channel < self.format.channels { samples[start + control_frame * self.format.channels + channel] *= self.amplitude * self.gains[control_frame]; channel++ }
+                control_frame++
+            }
+            start += frames * self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() { for var voice in self.voices { voice.reset() } self.pedal = false; self.bend_ratio = 1.0; self.last_bend = 0.0; self.bend.reset(); self.gain.reset(); self.serial = 0 }
+}

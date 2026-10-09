@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add `Music.Instruments.piano` and `Synthesis.PianoInstrument`: polyphonic procedural piano with strike dynamics, natural decay, brightness and sustain pedal. Share the sine command pool without changing its PCM; piano/MIDI examples, FR/EN guides and numerical validation.
+
 - Add musical constants `Music.Key.C5`, `Cs5`, `Bb4` and direct `Music.key` / `Music.keys` conversions from note names, with `Music.try_key` / `Music.try_keys` for recoverable Results; direct invalid inputs panic. Previous Result calls move to the `try_*` names; documented C4=60 convention, accidentals and recoverable errors, with PCM identical to numeric MIDI input.
 
 - Move the 21 runnable examples and their MIDI score to `Examples/`; `Docs/` contains no `.sx` files. Update bilingual links and commands without changing sound sources.

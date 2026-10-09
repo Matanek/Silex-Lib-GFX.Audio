@@ -30,3 +30,5 @@ instruments keep their own musical settings and the existing extension protocol.
 [Play a MIDI score and pause, resume, stop or replay it](Docs/EN/MusicPlayer.md). The player owns bounded audio feeding in an application or a standalone program.
 
 [Choose preparation and continuous playback costs](Docs/EN/MusicResources.md), with measured scope and resource limits.
+
+[Play a procedural piano](Docs/EN/Piano.md) with `Music.Instruments.piano`, strike dynamics, natural decay and sustain pedal.

@@ -62,3 +62,11 @@ bytes. Each mode covers at least 100 recipe blocks and 16 valid commands.
 Controls, finite levels and the queue-plus-block production bound are assertions;
 no timing threshold is used. Allocation and copy controls have the same ARM64
 limits as the advanced gate above. See [musical resource costs](../../Docs/EN/MusicResources.md).
+
+## Piano
+
+`ValidatePiano.py` exerce le piano en Debug et Release macOS ARM64 avec témoins
+d’allocation et copie : 16/64 voix stéréo, blocs 128/512, frappes, rendu,
+vols de voix, contrôles, pédale et reset. Le compteur du thread appelant ne
+mesure ni une latence maximale, ni le transfert PCM natif du player.
+Depuis la racine workspace : `python3 Packages/GFX.Audio/Tests/Resources/ValidatePiano.py`.

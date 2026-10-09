@@ -1,0 +1,48 @@
+use GFX.Audio
+use GFX.Audio.Music
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use Interop.C
+use Interop.Boundary
+use STD.Error
+use STD.Math
+
+let phase = C.function<func() int32>(library:Boundary.System, name:"getppid")
+func require(result:Result<void, Error>) { try result else error { panic(error.detail) } }
+func main() {
+    print("empty"); phase(); phase()
+    print("positive allocation"); phase()
+    var positive:float32[] = []; for i in 0...1_024 { positive.append(i as float32) }
+    phase(); assert(positive[1_023] == 1_023.0 as float32)
+    var audio = try Audio.offline(sample_rate:48_000, channels:1) else error { panic(error.detail) }
+    var stream = try audio.stream(sample_rate:48_000, channels:1, capacity_frames:1_024) else error { panic(error.detail) }
+    var pcm:float32[] = []; for i in 0...1_024 { pcm.append(0.125) }
+    print("positive copy"); phase()
+    let written = try audio.write(stream, @pcm[0:pcm.count()]) else error { panic(error.detail) }
+    phase(); assert(written == 1_024); audio.release(stream)
+    for voices in [16, 64] {
+        for frames in [128, 512] {
+            print("preparation voices=", voices, " frames=", frames); phase()
+            var piano = try Music.Instruments.piano(max_voices:voices, format:Processing.Format(sample_rate:48_000, channels:2)) else error { panic(error.detail) }
+            var samples:float32[] = []; for i in 0...frames * 2 { samples.append(0.0) }
+            phase()
+            print("strike commands"); phase()
+            for id in 0...voices { require(piano.send(Synthesis.Command.note_on(id, 110.0 + id as float32 * 3.0, 0.5 / voices as float32))) }
+            phase()
+            print("first piano block"); phase(); require(piano.render(&samples[0:samples.count()])); phase()
+            print("100 piano blocks and control changes"); phase()
+            for i in 0...100 {
+                require(piano.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128)))
+                require(piano.send(Synthesis.Command.gain_to(0.75, 128)))
+                require(piano.render(&samples[0:samples.count()]))
+                if i % 10 == 0 { require(piano.send(Synthesis.Command.note_on(voices + i, 220.0, 0.1))); require(piano.send(Synthesis.Command.note_off(voices + i))) }
+            }
+            phase()
+            for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 1.0) }
+            print("pedal release reset"); phase()
+            require(piano.send(Synthesis.Command.sustain(true))); require(piano.send(Synthesis.Command.all_notes_off))
+            require(piano.render(&samples[0:samples.count()])); piano.reset(); phase()
+            assert(piano.active_voices() == 0)
+        }
+    }
+}
