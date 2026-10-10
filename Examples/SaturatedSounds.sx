@@ -13,21 +13,21 @@ func play(audio:&Audio, samples:&float32[..], name:str) {
     audio.wait(audio.play(sound)); assert(audio.unload(sound))
 }
 func example(audio:&Audio, mode:Processing.DistortionMode, drive:float32, bypass:bool, name:str) {
-    match Synthesis.Oscillator.create(format(), frequency_hz:220.0, amplitude:0.75) {
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:220.0, amplitude:0.75)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
             var samples:float32[] = []; var i = 0
             while i < 48_000 { samples.append(0.0); i++ }
-            require(source.render(&samples[0:48_000]))
-            match Processing.Distortion.create(format(), drive, mode) {
+            require((try source.render(&samples[0:48_000])))
+            match (try Processing.Distortion.create(format(), drive, mode)) {
                 failure(error) => { panic(error.detail) }
-                success(var effect) => { effect.set_bypass(bypass); require(effect.process(&samples[0:48_000])) }
+                success(var effect) => { effect.set_bypass(bypass); require((try effect.process(&samples[0:48_000]))) }
             }
-            match Synthesis.Envelope.create(format(), attack_frames:480, decay_frames:4_800, sustain:0.7, release_frames:4_800) {
+            match (try Synthesis.Envelope.create(format(), attack_frames:480, decay_frames:4_800, sustain:0.7, release_frames:4_800)) {
                 failure(error) => { panic(error.detail) }
                 success(var envelope) => {
-                    envelope.note_on(); require(envelope.process(&samples[0:43_200]))
-                    envelope.note_off(); require(envelope.process(&samples[43_200:48_000]))
+                    envelope.note_on(); require((try envelope.process(&samples[0:43_200])))
+                    envelope.note_off(); require((try envelope.process(&samples[43_200:48_000])))
                 }
             }
             play(audio, &samples[0:48_000], name)

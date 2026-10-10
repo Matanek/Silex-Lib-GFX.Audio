@@ -21,7 +21,7 @@ func play_from_plugin(audio:&Audio, probe:&AudioPluginProbe) {
 test "load control spatialize wait and release a real sound" {
     let encoded = embed_bytes("../Assets/Audio/SpatialTone.wav")
     let path = "/private/tmp/silex-gfx-spatial-tone.wav"
-    match File.write_all(path, @encoded[0:encoded.count()]) {
+    match (try File.write_all(path, @encoded[0:encoded.count()])) {
         failure(error) => { panic(error.detail) }
         success => {}
     }
@@ -73,7 +73,7 @@ test "share SDL safely between audio and windows in either order" {
 test "play through the added audio plugin from a consumer system" {
     let encoded = embed_bytes("../Assets/Audio/SpatialTone.wav")
     let path = "/private/tmp/silex-gfx-plugin-tone.wav"
-    match File.write_all(path, @encoded[0:encoded.count()]) {
+    match (try File.write_all(path, @encoded[0:encoded.count()])) {
         failure(error) => { panic(error.detail) }
         success => {}
     }

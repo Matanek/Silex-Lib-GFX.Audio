@@ -28,10 +28,10 @@ mutable sur le thread applicatif et peut rejoindre une chaîne
 Voici le fragment à utiliser une fois `format` et `samples` préparés :
 
 ```sx
-match Processing.Bitcrusher.create(format, bits:8, hold_frames:6, wet:0.75) {
+match try Processing.Bitcrusher.create(format, bits:8, hold_frames:6, wet:0.75) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

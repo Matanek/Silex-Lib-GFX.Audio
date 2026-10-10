@@ -2,19 +2,19 @@ use GFX.Audio.Processing
 use STD.Math
 use STD.Error.Kind
 func lowpass(format:Processing.Format, cutoff:float32 = 1_000.0) Processing.LowPass {
-    match Processing.LowPass.create(format, cutoff) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Processing.LowPass.create(format, cutoff)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func delay(format:Processing.Format) Processing.Delay {
-    match Processing.Delay.create(format, delay_frames:2, feedback:0.5, wet:1.0) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Processing.Delay.create(format, delay_frames:2, feedback:0.5, wet:1.0)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func eq(format:Processing.Format, low:float32 = 1.0, mid:float32 = 1.0, high:float32 = 1.0) Processing.Equalizer {
-    match Processing.Equalizer.create(format, low_gain:low, mid_gain:mid, high_gain:high) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Processing.Equalizer.create(format, low_gain:low, mid_gain:mid, high_gain:high)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func apply<T:Processing.Processor>(effect:&T, samples:&float32[..]) {
-    match effect.process(samples) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try effect.process(samples)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 func rms(samples:@float32[..]) float64 {
-    match Processing.levels(samples, channels:1) { failure(error) => { panic(error.detail) }; success(levels) => { return levels[0].rms } }
+    match (try Processing.levels(samples, channels:1)) { failure(error) => { panic(error.detail) }; success(levels) => { return levels[0].rms } }
 }
 func tone(hz:float32) float32[] {
     var samples:float32[] = []
@@ -35,9 +35,9 @@ test "stereo impulse echo preserves channels feedback and tail across blocks" {
     var silent:float32[] = [0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32]
     apply<Processing.Delay>(echo, &silent[0:4])
     assert(silent[0] == 0.0 as float32 && silent[2] == 0.0 as float32)
-    match echo.set_feedback(1.0) { success => { panic("unstable feedback accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match echo.set_feedback(0.0) { failure(error) => { panic(error.detail) }; success => {} }
-    match echo.set_wet(0.25) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try echo.set_feedback(1.0)) { success => { panic("unstable feedback accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try echo.set_feedback(0.0)) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try echo.set_wet(0.25)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 test "lowpass and equalizer discriminate low and high tones" {
     let format = Processing.Format(sample_rate:48_000, channels:1)
@@ -95,21 +95,21 @@ test "ordered processor states preserve whole and chunked PCM and reset" {
 }
 test "levels report peak and RMS per channel including empty silence" {
     var samples:float32[] = [1.0 as float32, 0.5 as float32, -1.0 as float32, 0.0 as float32]
-    match Processing.levels(@samples[0:4], channels:2) {
+    match (try Processing.levels(@samples[0:4], channels:2)) {
         failure(error) => { panic(error.detail) }
         success(levels) => { assert(levels.count() == 2 && levels[0].peak == 1.0 && levels[0].rms == 1.0); assert(levels[1].peak == 0.5 && Math.abs(levels[1].rms - Math.sqrt(0.125)) < 0.000001) }
     }
-    match Processing.levels(@samples[0:0], channels:2) { failure(error) => { panic(error.detail) }; success(levels) => { assert(levels[0].peak == 0.0 && levels[1].rms == 0.0) } }
-    match Processing.levels(@samples[0:3], channels:2) { success(levels) => { panic("partial frames") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.levels(@samples[0:0], channels:2)) { failure(error) => { panic(error.detail) }; success(levels) => { assert(levels[0].peak == 0.0 && levels[1].rms == 0.0) } }
+    match (try Processing.levels(@samples[0:3], channels:2)) { success(levels) => { panic("partial frames") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
 }
 test "invalid blocks settings and output overflow are explicit and recoverable" {
     let format = Processing.Format(sample_rate:48_000, channels:2)
-    match Processing.LowPass.create(format, cutoff_hz:24_000.0) { success(value) => { panic("Nyquist") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Processing.Delay.create(format, delay_frames:524_289) { success(value) => { panic("unbounded memory") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Processing.Equalizer.create(format, low_hz:5_000.0, high_hz:1_000.0) { success(value) => { panic("inverted bands") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.LowPass.create(format, cutoff_hz:24_000.0)) { success(value) => { panic("Nyquist") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.Delay.create(format, delay_frames:524_289)) { success(value) => { panic("unbounded memory") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.Equalizer.create(format, low_hz:5_000.0, high_hz:1_000.0)) { success(value) => { panic("inverted bands") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     var filter = lowpass(format)
     var invalid:float32[] = [0.5 as float32, Math.sqrt(-1.0) as float32]
-    match filter.process(&invalid[0:2]) { success => { panic("NaN accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try filter.process(&invalid[0:2])) { success => { panic("NaN accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     assert(invalid[0] == 0.5 as float32)
     var valid:float32[] = [0.5 as float32, 0.0 as float32]
     var reference = lowpass(format)
@@ -117,14 +117,14 @@ test "invalid blocks settings and output overflow are explicit and recoverable" 
     apply<Processing.LowPass>(filter, &valid[0:2])
     apply<Processing.LowPass>(reference, &expected[0:2])
     assert(valid[0] == expected[0] && valid[1] == expected[1])
-    match filter.set_cutoff(-1.0) { success => { panic("negative cutoff") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match filter.set_cutoff(2_000.0) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try filter.set_cutoff(-1.0)) { success => { panic("negative cutoff") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try filter.set_cutoff(2_000.0)) { failure(error) => { panic(error.detail) }; success => {} }
     var equalizer = eq(format)
-    match equalizer.set_gains(4.0, 4.0, 4.0) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try equalizer.set_gains(4.0, 4.0, 4.0)) { failure(error) => { panic(error.detail) }; success => {} }
     var large:float32[] = [3.0e38 as float32, 0.0 as float32]
-    match equalizer.process(&large[0:2]) { success => { panic("overflow hidden") }; failure(error) => { assert(error.kind == Kind.limit_exceeded()) } }
+    match (try equalizer.process(&large[0:2])) { success => { panic("overflow hidden") }; failure(error) => { assert(error.kind == Kind.limit_exceeded()) } }
     equalizer.reset()
-    match equalizer.set_gains(0.5, 0.5, 0.5) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try equalizer.set_gains(0.5, 0.5, 0.5)) { failure(error) => { panic(error.detail) }; success => {} }
     var normal:float32[] = [0.5 as float32, -0.5 as float32]
     apply<Processing.Equalizer>(equalizer, &normal[0:2])
     assert(normal[0] == 0.25 as float32 && normal[1] == -0.25 as float32)
@@ -132,10 +132,10 @@ test "invalid blocks settings and output overflow are explicit and recoverable" 
 
 test "levels keep float64 energy for finite large samples and invalid formats reject safely" {
     var samples:float32[] = [3.0e38 as float32, -3.0e38 as float32]
-    match Processing.levels(@samples[0:2], channels:1) { failure(error) => { panic(error.detail) }; success(levels) => { assert(Math.is_finite(levels[0].rms)); assert(Math.abs(levels[0].rms / levels[0].peak - 1.0) < 0.000001) } }
+    match (try Processing.levels(@samples[0:2], channels:1)) { failure(error) => { panic(error.detail) }; success(levels) => { assert(Math.is_finite(levels[0].rms)); assert(Math.abs(levels[0].rms / levels[0].peak - 1.0) < 0.000001) } }
     let invalid = Processing.Format(sample_rate:0, channels:0)
-    match Processing.Delay.create(invalid, delay_frames:1) { success(value) => { panic("invalid format accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Processing.LowPass.create(Processing.Format(sample_rate:48_000, channels:1), cutoff_hz:Math.sqrt(-1.0)) { success(value) => { panic("NaN cutoff accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.Delay.create(invalid, delay_frames:1)) { success(value) => { panic("invalid format accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.LowPass.create(Processing.Format(sample_rate:48_000, channels:1), cutoff_hz:Math.sqrt(-1.0))) { success(value) => { panic("NaN cutoff accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
 }
 
 test "extreme opposite PCM stays finite and delay state overflow is explicit" {
@@ -145,9 +145,9 @@ test "extreme opposite PCM stays finite and delay state overflow is explicit" {
     apply<Processing.LowPass>(filter, &samples[0:3])
     assert(Math.is_finite(samples[0]) && Math.is_finite(samples[1]) && Math.is_finite(samples[2]))
     var echo = delay(format)
-    match echo.set_wet(0.0) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try echo.set_wet(0.0)) { failure(error) => { panic(error.detail) }; success => {} }
     var large:float32[] = [3.0e38 as float32, 0.0 as float32, 3.0e38 as float32]
-    match echo.process(&large[0:3]) { success => { panic("delay state overflow hidden") }; failure(error) => { assert(error.kind == Kind.limit_exceeded()) } }
+    match (try echo.process(&large[0:3])) { success => { panic("delay state overflow hidden") }; failure(error) => { assert(error.kind == Kind.limit_exceeded()) } }
     echo.reset()
     var silent:float32[] = [0.0 as float32, 0.0 as float32, 0.0 as float32]
     apply<Processing.Delay>(echo, &silent[0:3])

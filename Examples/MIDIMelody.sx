@@ -7,45 +7,45 @@ use STD.Error.Kind
 
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func voice(attack:int, decay:int, sustain:float32, release:int) Result<Synthesis.SineInstrument, Error> {
-    return Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000,channels:2),max_voices:16,attack_frames:attack,decay_frames:decay,sustain:sustain,release_frames:release)
+    return (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:48_000,channels:2),max_voices:16,attack_frames:attack,decay_frames:decay,sustain:sustain,release_frames:release))
 }
 func music() Result<Synthesis.Processed, Error> {
     let bytes = embed_bytes("../Tests/Fixtures/MIDI/Tempo.mid")
-    var score = try MIDI.Score.parse(@bytes[0:bytes.count()],48_000)
+    var score = try MIDI.Score.parse(@bytes[0:bytes.count()],48_000) else error { return Result<Synthesis.Processed,Error>.failure(error) }
     assert(score.track_count == 2 && score.end_frame == 172_800)
-    var bass = try voice(240,2_400,0.65,4_800)
-    var lead = try voice(480,4_800,0.45,7_200)
-    var bright = try voice(48,1_200,0.8,9_600)
+    var bass = try voice(240,2_400,0.65,4_800) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    var lead = try voice(480,4_800,0.45,7_200) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    var bright = try voice(48,1_200,0.8,9_600) else error { return Result<Synthesis.Processed,Error>.failure(error) }
     var synth = try MIDI.Synthesizer.create([
         MIDI.Binding(channel:0,program:0,instrument:bass),
         MIDI.Binding(channel:1,program:1,instrument:lead),
         MIDI.Binding(channel:1,program:2,instrument:bright),
-    ],gain:0.35,controller_ramp_frames:240)
-    var player = try MIDI.Player.create(score,synth)
-    var echo = try Processing.Delay.create(player.format,delay_frames:7_200,feedback:0.25,wet:0.25)
-    return Synthesis.Processed.create(player,[echo])
+    ],gain:0.35,controller_ramp_frames:240) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    var player = try MIDI.Player.create(score,synth) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    var echo = try Processing.Delay.create(player.format,delay_frames:7_200,feedback:0.25,wet:0.25) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    return (try Synthesis.Processed.create(player,[echo]))
 }
 func main() {
     var audio = Audio()
-    match music() {
+    match (try music()) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
             print("M1 - Two MIDI tracks: 120 to 150 BPM, program change, pan and sustain")
-            match Synthesis.StreamProducer.create(audio,source,220_800,block_frames:480,capacity_frames:1_440) {
+            match (try Synthesis.StreamProducer.create(audio,source,220_800,block_frames:480,capacity_frames:1_440)) {
                 failure(error) => { panic(error.detail) }
                 success(var producer) => {
                     var prefill = 0
-                    while prefill < 3 { match producer.pump() { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 480) } }; prefill++ }
+                    while prefill < 3 { match (try producer.pump()) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 480) } }; prefill++ }
                     let playing = audio.play(producer.stream())
                     while !producer.input_closed() {
-                        match producer.pump() {
+                        match (try producer.pump()) {
                             failure(error) => { if error.kind != Kind.would_block() { panic(error.detail) }
-                                require(audio.wait_writable(producer.stream())) }
+                                require((try audio.wait_writable(producer.stream()))) }
                             success(count) => {}
                         }
                     }
                     audio.wait(playing)
-                    match audio.stream_info(producer.stream()) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.drained && info.consumed_frames == 220_800 && info.discarded_frames == 0) } }
+                    match (try audio.stream_info(producer.stream())) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.drained && info.consumed_frames == 220_800 && info.discarded_frames == 0) } }
                 }
             }
         }

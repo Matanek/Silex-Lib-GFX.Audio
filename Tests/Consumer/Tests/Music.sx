@@ -125,22 +125,22 @@ test "invalid musical description returns recoverable errors" {
         Music.Note(key:72, beats:1.0, gate:0.0), Music.Note(key:72, beats:1.0, gate:1.1),
         Music.Note(key:72, beats:1.0, velocity:1.1)]
     for note in invalid_notes {
-        match Music.Melody.create([note]) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid note accepted") } }
+        match (try Music.Melody.create([note])) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid note accepted") } }
     }
-    match Music.Melody.create([]) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("empty melody accepted") } }
-    match Music.Melody.create([Music.Note(key:72, beats:1.0)], tempo:0.0) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid tempo accepted") } }
+    match (try Music.Melody.create([])) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("empty melody accepted") } }
+    match (try Music.Melody.create([Music.Note(key:72, beats:1.0)], tempo:0.0)) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid tempo accepted") } }
 }
 
 test "preparation checks duration capacity Nyquist and recipe before rendering" {
     var audio = offline(); var song = melody([Music.Note(key:72, beats:1.0)]); var witness = Witness()
-    failure(song.prepare(audio, witness, max_seconds:0.1), Kind.limit_exceeded())
-    failure(song.prepare(audio, witness, tail_seconds:-1.0), Kind.invalid_input())
+    failure((try song.prepare(audio, witness, max_seconds:0.1)), Kind.limit_exceeded())
+    failure((try song.prepare(audio, witness, tail_seconds:-1.0)), Kind.invalid_input())
     assert(witness.resets == 0 && witness.rendered == 0)
-    failure(song.prepare(audio, format:Processing.Format(sample_rate:1_000, channels:1)), Kind.invalid_input())
-    failure(song.prepare(audio, Music.Timbre(amplitude:1.1)), Kind.invalid_input())
-    failure(song.prepare(audio, Music.Timbre(attack_seconds:-1.0)), Kind.invalid_input())
-    failure(song.prepare(audio, Music.Timbre(bits:1)), Kind.invalid_input())
-    var tiny = melody([Music.Note(key:72, beats:0.00000001)]); failure(tiny.prepare(audio), Kind.invalid_input())
+    failure((try song.prepare(audio, format:Processing.Format(sample_rate:1_000, channels:1))), Kind.invalid_input())
+    failure((try song.prepare(audio, Music.Timbre(amplitude:1.1))), Kind.invalid_input())
+    failure((try song.prepare(audio, Music.Timbre(attack_seconds:-1.0))), Kind.invalid_input())
+    failure((try song.prepare(audio, Music.Timbre(bits:1))), Kind.invalid_input())
+    var tiny = melody([Music.Note(key:72, beats:0.00000001)]); failure((try tiny.prepare(audio)), Kind.invalid_input())
 }
 
 class Gain:Processing.Processor {
@@ -161,7 +161,7 @@ test "application effects compose and excessive output level is recoverable with
     assert(Math.abs(samples[0] - 0.1 as float32) < 0.000001 && gain.resets == 1)
     audio.stop(playing)
     gain.value = 8.0
-    failure(song.prepare(audio, witness, effects:[gain]), Kind.invalid_input())
+    failure((try song.prepare(audio, witness, effects:[gain])), Kind.invalid_input())
 }
 test "musical preparation is bounded and stereo recipes duplicate the same musical signal" {
     var audio = offline(channels:2)
@@ -171,10 +171,10 @@ test "musical preparation is bounded and stereo recipes duplicate the same music
     var i = 0; while i < samples.count() { assert(samples[i] == samples[i + 1]); i += 2 }
     assert(!audio.is_playing(playing))
     var too_long = melody([Music.Note(key:72, beats:600.0)], tempo:120.0)
-    failure(too_long.prepare(audio, format:Processing.Format(sample_rate:192_000, channels:8), max_seconds:300.0, tail_seconds:0.0), Kind.limit_exceeded())
+    failure((try too_long.prepare(audio, format:Processing.Format(sample_rate:192_000, channels:8), max_seconds:300.0, tail_seconds:0.0)), Kind.limit_exceeded())
     var notes:Music.Note[] = []; i = 0
     while i < 4_097 { notes.append(Music.Note(key:72, beats:0.1)); i++ }
-    match Music.Melody.create(notes) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("excessive note count accepted") } }
+    match (try Music.Melody.create(notes)) { failure(error) => { assert(error.kind == Kind.limit_exceeded()) }; success(_) => { panic("excessive note count accepted") } }
 }
 
 test "integrated musical instrument keeps its amplitude through gain commands and reset" {
@@ -225,7 +225,7 @@ test "musical instrument units preserve polyphony sustain and capacity policy" {
     try source.send(Synthesis.Command.note_on(1, 440.0, 1.0)) else error { panic(error.detail) }
     try source.send(Synthesis.Command.note_on(2, 660.0, 0.5)) else error { panic(error.detail) }
     assert(source.active_voices() == 2)
-    match source.send(Synthesis.Command.note_on(3, 880.0, 1.0)) {
+    match (try source.send(Synthesis.Command.note_on(3, 880.0, 1.0))) {
         failure(error) => { assert(error.kind == Kind.limit_exceeded()) }
         success => { panic("voice capacity exceeded") }
     }
@@ -246,12 +246,12 @@ test "musical instrument units preserve polyphony sustain and capacity policy" {
 }
 
 test "musical instrument settings fail recoverably before use" {
-    var invalid_results:Result<Synthesis.SineInstrument, Error>[] = [Music.Instruments.sine(amplitude:-0.1), Music.Instruments.sine(amplitude:1.1),
-        Music.Instruments.sine(attack_seconds:-0.1), Music.Instruments.sine(decay_seconds:-0.1),
-        Music.Instruments.sine(release_seconds:-0.1), Music.Instruments.sine(steal_fade_seconds:1.0),
-        Music.Instruments.sine(max_voices:0), Music.Instruments.sine(max_voices:65),
-        Music.Instruments.sine(format:Processing.Format(sample_rate:0, channels:1)),
-        Music.Instruments.sine(sustain:1.1)]
+    var invalid_results:Result<Synthesis.SineInstrument, Error>[] = [(try Music.Instruments.sine(amplitude:-0.1)), (try Music.Instruments.sine(amplitude:1.1)),
+        (try Music.Instruments.sine(attack_seconds:-0.1)), (try Music.Instruments.sine(decay_seconds:-0.1)),
+        (try Music.Instruments.sine(release_seconds:-0.1)), (try Music.Instruments.sine(steal_fade_seconds:1.0)),
+        (try Music.Instruments.sine(max_voices:0)), (try Music.Instruments.sine(max_voices:65)),
+        (try Music.Instruments.sine(format:Processing.Format(sample_rate:0, channels:1))),
+        (try Music.Instruments.sine(sustain:1.1))]
     for result in invalid_results {
         match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid instrument accepted") } }
     }

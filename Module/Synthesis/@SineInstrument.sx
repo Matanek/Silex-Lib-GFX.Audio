@@ -35,7 +35,7 @@ class SineVoice:InstrumentVoice {
             if self.phase >= 1.0 { self.phase -= 1.0 }
             i++
         }
-        try self.envelope.process(samples)
+        try self.envelope.process(samples) else error { return Result<void,Error>.failure(error) }
         i = 0
         while i < samples.count() {
             if self.fading > 0 {
@@ -70,14 +70,14 @@ public class SineInstrument:Generator, Instrument {
         var voices:InstrumentVoice[] = []
         var i = 0
         while i < max_voices {
-            var envelope = try Envelope.create(Processing.Format(sample_rate:format.sample_rate, channels:1), attack_frames, decay_frames, sustain, release_frames)
+            var envelope = try Envelope.create(Processing.Format(sample_rate:format.sample_rate, channels:1), attack_frames, decay_frames, sustain, release_frames) else error { return Result<SineInstrument,Error>.failure(error) }
             voices.append(SineVoice(envelope, steal_fade_frames)); i++
         }
         return Result<SineInstrument, Error>.success(SineInstrument(PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)))
     }
-    func validate(command:Command) Result<void, Error> { return self.pool.validate(command) }
-    func send(command:Command) Result<void, Error> { return self.pool.send(command) }
+    func validate(command:Command) Result<void, Error> { return (try self.pool.validate(command)) }
+    func send(command:Command) Result<void, Error> { return (try self.pool.send(command)) }
     func active_voices() int { return self.pool.active_voices() }
-    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func render(samples:&float32[..]) Result<void, Error> { return (try self.pool.render(samples)) }
     func reset() { self.pool.reset() }
 }

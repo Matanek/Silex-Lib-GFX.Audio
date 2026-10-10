@@ -17,11 +17,11 @@ silex run Packages/GFX.Audio/Examples/ChorusAndFlanger.sx --release
 Fragment for a 48 kHz `format` and a prepared `samples` buffer:
 
 ```sx
-match Processing.ModulatedDelay.create(format, max_delay_frames:1_200,
+match try Processing.ModulatedDelay.create(format, max_delay_frames:1_200,
     delay_frames:720.0, depth_frames:240.0, rate_hz:0.8, feedback:0.0, wet:0.5) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

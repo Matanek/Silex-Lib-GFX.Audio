@@ -25,17 +25,17 @@ func rejected(result:Result<void, Error>, kind:Kind = Kind.invalid_input()) {
     match result { failure(error) => { assert(error.kind == kind) }; success => { panic("invalid command accepted") } }
 }
 test "piano decays naturally with a held key and becomes silent without note off" {
-    var source = piano(); require(source.send(Synthesis.Command.note_on(1, 256.0, 1.0)))
-    var samples = zeros(8_192); require(source.render(&samples[0:samples.count()]))
+    var source = piano(); require((try source.send(Synthesis.Command.note_on(1, 256.0, 1.0))))
+    var samples = zeros(8_192); require((try source.render(&samples[0:samples.count()])))
     assert(energy(@samples[32:288]) > 20.0 * energy(@samples[800:1_056]))
     assert(source.active_voices() == 0)
     var i = 4_096; while i < samples.count() { assert(samples[i] == 0.0 as float32); i++ }
 }
 test "piano velocity changes spectrum as well as level and brightness shapes the strike" {
     var soft = piano(brightness:1.0, decay:3.0); var loud = piano(brightness:1.0, decay:3.0); var dark = piano(brightness:0.0, decay:3.0)
-    require(soft.send(Synthesis.Command.note_on(1, 256.0, 0.25))); require(loud.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(dark.send(Synthesis.Command.note_on(1, 256.0, 1.0)))
+    require((try soft.send(Synthesis.Command.note_on(1, 256.0, 0.25)))); require((try loud.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try dark.send(Synthesis.Command.note_on(1, 256.0, 1.0))))
     var a = zeros(2_048); var b = a; var c = a
-    require(soft.render(&a[0:a.count()])); require(loud.render(&b[0:b.count()])); require(dark.render(&c[0:c.count()]))
+    require((try soft.render(&a[0:a.count()]))); require((try loud.render(&b[0:b.count()]))); require((try dark.render(&c[0:c.count()])))
     assert(energy(@b[256:1_280]) > 4.0 * energy(@a[256:1_280]))
     let soft_ratio = spectral(@a[256:1_280], 768.0) / spectral(@a[256:1_280], 256.0)
     let loud_ratio = spectral(@b[256:1_280], 768.0) / spectral(@b[256:1_280], 256.0)
@@ -44,30 +44,30 @@ test "piano velocity changes spectrum as well as level and brightness shapes the
 }
 test "piano pedal delays damping while natural decay continues and all notes off overrides pedal" {
     var source = piano(decay:3.0); var samples = zeros(512)
-    require(source.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(source.send(Synthesis.Command.sustain(true)))
-    require(source.send(Synthesis.Command.note_off(1))); require(source.render(&samples[0:512])); assert(source.active_voices() == 1 && energy(@samples[0:512]) > 0.01)
-    require(source.send(Synthesis.Command.sustain(false))); require(source.render(&samples[0:512])); assert(source.active_voices() == 0)
-    source.reset(); require(source.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(source.send(Synthesis.Command.sustain(true)))
-    require(source.send(Synthesis.Command.all_notes_off)); require(source.render(&samples[0:512])); assert(source.active_voices() == 0)
-    var held = piano(); require(held.send(Synthesis.Command.sustain(true))); require(held.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(held.send(Synthesis.Command.note_off(1)))
-    var ending = zeros(8_192); require(held.render(&ending[0:ending.count()])); assert(held.active_voices() == 0)
+    require((try source.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try source.send(Synthesis.Command.sustain(true))))
+    require((try source.send(Synthesis.Command.note_off(1)))); require((try source.render(&samples[0:512]))); assert(source.active_voices() == 1 && energy(@samples[0:512]) > 0.01)
+    require((try source.send(Synthesis.Command.sustain(false)))); require((try source.render(&samples[0:512]))); assert(source.active_voices() == 0)
+    source.reset(); require((try source.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try source.send(Synthesis.Command.sustain(true))))
+    require((try source.send(Synthesis.Command.all_notes_off))); require((try source.render(&samples[0:512]))); assert(source.active_voices() == 0)
+    var held = piano(); require((try held.send(Synthesis.Command.sustain(true)))); require((try held.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try held.send(Synthesis.Command.note_off(1))))
+    var ending = zeros(8_192); require((try held.render(&ending[0:ending.count()]))); assert(held.active_voices() == 0)
 }
 test "piano release preserves pressed notes and zero release stops immediately" {
     var source = piano(decay:3.0); var samples = zeros(512)
-    require(source.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(source.send(Synthesis.Command.note_on(2, 256.0, 0.5)))
-    require(source.send(Synthesis.Command.sustain(true))); require(source.send(Synthesis.Command.note_off(1)))
-    require(source.send(Synthesis.Command.sustain(false))); require(source.render(&samples[0:512])); assert(source.active_voices() == 1)
-    rejected(source.send(Synthesis.Command.note_on(2, 512.0, 1.0)))
-    var short = piano(release:0.0); require(short.send(Synthesis.Command.note_on(1, 256.0, 1.0))); require(short.render(&samples[0:512]))
-    require(short.send(Synthesis.Command.note_off(1))); require(short.render(&samples[0:512])); for value in samples { assert(value == 0.0 as float32) }
+    require((try source.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try source.send(Synthesis.Command.note_on(2, 256.0, 0.5))))
+    require((try source.send(Synthesis.Command.sustain(true)))); require((try source.send(Synthesis.Command.note_off(1))))
+    require((try source.send(Synthesis.Command.sustain(false)))); require((try source.render(&samples[0:512]))); assert(source.active_voices() == 1)
+    rejected((try source.send(Synthesis.Command.note_on(2, 512.0, 1.0))))
+    var short = piano(release:0.0); require((try short.send(Synthesis.Command.note_on(1, 256.0, 1.0)))); require((try short.render(&samples[0:512])))
+    require((try short.send(Synthesis.Command.note_off(1)))); require((try short.render(&samples[0:512]))); for value in samples { assert(value == 0.0 as float32) }
 }
 test "piano rejects full capacity without mutation and steals with a continuous first sample" {
     var source = piano(voices:1, policy:Synthesis.VoicePolicy.reject); var reference = piano(voices:1, policy:Synthesis.VoicePolicy.reject)
-    let on = Synthesis.Command.note_on(1, 256.0, 1.0); require(source.send(on)); require(reference.send(on))
-    rejected(source.send(Synthesis.Command.note_on(2, 512.0, 1.0)), Kind.limit_exceeded())
-    var a = zeros(64); var b = a; require(source.render(&a[0:64])); require(reference.render(&b[0:64])); same(@a[0:a.count()], @b[0:b.count()])
-    var stolen = piano(voices:1, fade:0.002); require(stolen.send(on)); require(stolen.render(&a[0:64])); let last = a[63]
-    require(stolen.send(Synthesis.Command.note_on(2, 512.0, 1.0))); require(stolen.send(Synthesis.Command.note_off(1))); require(stolen.render(&b[0:1])); assert(b[0] == last && stolen.active_voices() == 1)
+    let on = Synthesis.Command.note_on(1, 256.0, 1.0); require((try source.send(on))); require((try reference.send(on)))
+    rejected((try source.send(Synthesis.Command.note_on(2, 512.0, 1.0))), Kind.limit_exceeded())
+    var a = zeros(64); var b = a; require((try source.render(&a[0:64]))); require((try reference.render(&b[0:64]))); same(@a[0:a.count()], @b[0:b.count()])
+    var stolen = piano(voices:1, fade:0.002); require((try stolen.send(on))); require((try stolen.render(&a[0:64]))); let last = a[63]
+    require((try stolen.send(Synthesis.Command.note_on(2, 512.0, 1.0)))); require((try stolen.send(Synthesis.Command.note_off(1)))); require((try stolen.render(&b[0:1]))); assert(b[0] == last && stolen.active_voices() == 1)
 }
 test "piano event rendering is bit exact across chunks stereo and reset with controls" {
     var instrument = piano(channels:2, decay:1.0, voices:2)
@@ -82,31 +82,31 @@ test "piano event rendering is bit exact across chunks stereo and reset with con
         Synthesis.Event(frame:900, command:Synthesis.Command.sustain(false)),
         Synthesis.Event(frame:1_000, command:Synthesis.Command.all_notes_off),
     ]) else error { panic(error.detail) }
-    var a = zeros(4_096); var b = a; require(sequence.render(&a[0:a.count()]))
+    var a = zeros(4_096); var b = a; require((try sequence.render(&a[0:a.count()])))
     sequence.reset(); var position = 0
-    while position < b.count() { var end = position + 34; if end > b.count() { end = b.count() } require(sequence.render(&b[position:end])); position = end }
+    while position < b.count() { var end = position + 34; if end > b.count() { end = b.count() } require((try sequence.render(&b[position:end]))); position = end }
     same(@a[0:a.count()], @b[0:b.count()]); assert(instrument.active_voices() == 0)
     var i = 0; while i < a.count() { assert(a[i] == a[i + 1]); i += 2 }
 }
 test "piano validates settings commands and frames before mutation" {
-    var bad:Result<Synthesis.PianoInstrument, Error>[] = [Music.Instruments.piano(amplitude:1.1), Music.Instruments.piano(brightness:-0.1), Music.Instruments.piano(brightness:1.1), Music.Instruments.piano(decay_seconds:0.0), Music.Instruments.piano(decay_seconds:31.0), Music.Instruments.piano(release_seconds:-0.1), Music.Instruments.piano(release_seconds:6.0), Music.Instruments.piano(max_voices:0), Music.Instruments.piano(max_voices:65), Music.Instruments.piano(steal_fade_seconds:1.0), Music.Instruments.piano(format:Processing.Format(sample_rate:0, channels:1))]
+    var bad:Result<Synthesis.PianoInstrument, Error>[] = [(try Music.Instruments.piano(amplitude:1.1)), (try Music.Instruments.piano(brightness:-0.1)), (try Music.Instruments.piano(brightness:1.1)), (try Music.Instruments.piano(decay_seconds:0.0)), (try Music.Instruments.piano(decay_seconds:31.0)), (try Music.Instruments.piano(release_seconds:-0.1)), (try Music.Instruments.piano(release_seconds:6.0)), (try Music.Instruments.piano(max_voices:0)), (try Music.Instruments.piano(max_voices:65)), (try Music.Instruments.piano(steal_fade_seconds:1.0)), (try Music.Instruments.piano(format:Processing.Format(sample_rate:0, channels:1)))]
     for result in bad { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid piano accepted") } } }
     var source = piano(channels:2); var reference = piano(channels:2)
-    let on = Synthesis.Command.note_on(1, 256.0, 1.0); require(source.send(on)); require(reference.send(on))
-    rejected(source.send(on)); rejected(source.send(Synthesis.Command.note_on(-1, 256.0, 1.0))); rejected(source.send(Synthesis.Command.pitch_bend(25.0))); rejected(source.send(Synthesis.Command.gain_to(-0.1, 0)))
-    var a = zeros(128); var b = a; a[0] = 0.123; rejected(source.render(&a[0:1])); assert(a[0] == 0.123 as float32)
-    require(source.render(&a[0:128])); require(reference.render(&b[0:128])); same(@a[0:a.count()], @b[0:b.count()])
+    let on = Synthesis.Command.note_on(1, 256.0, 1.0); require((try source.send(on))); require((try reference.send(on)))
+    rejected((try source.send(on))); rejected((try source.send(Synthesis.Command.note_on(-1, 256.0, 1.0)))); rejected((try source.send(Synthesis.Command.pitch_bend(25.0)))); rejected((try source.send(Synthesis.Command.gain_to(-0.1, 0))))
+    var a = zeros(128); var b = a; a[0] = 0.123; rejected((try source.render(&a[0:1]))); assert(a[0] == 0.123 as float32)
+    require((try source.render(&a[0:128]))); require((try reference.render(&b[0:128]))); same(@a[0:a.count()], @b[0:b.count()])
 }
 test "piano handles the MIDI range and removes harmonics above the output band" {
     var source = piano(rate:48_000, brightness:1.0); var samples = zeros(512)
     var key = 0
-    while key < 128 { source.reset(); let frequency = try MIDI.frequency(key) else error { panic(error.detail) }; require(source.send(Synthesis.Command.note_on(key, frequency, 1.0))); require(source.render(&samples[0:512])); for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.20001) } key++ }
-    var band = piano(brightness:1.0, decay:3.0); require(band.send(Synthesis.Command.note_on(1, 3_072.0, 1.0)))
-    var settling = zeros(2_048); require(band.render(&settling[0:settling.count()])); var spectrum = zeros(1_024); require(band.render(&spectrum[0:spectrum.count()]))
+    while key < 128 { source.reset(); let frequency = try MIDI.frequency(key) else error { panic(error.detail) }; require((try source.send(Synthesis.Command.note_on(key, frequency, 1.0)))); require((try source.render(&samples[0:512]))); for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.20001) } key++ }
+    var band = piano(brightness:1.0, decay:3.0); require((try band.send(Synthesis.Command.note_on(1, 3_072.0, 1.0))))
+    var settling = zeros(2_048); require((try band.render(&settling[0:settling.count()]))); var spectrum = zeros(1_024); require((try band.render(&spectrum[0:spectrum.count()])))
     let fundamental = spectral(@spectrum[0:spectrum.count()], 3_072.0)
     assert(spectral(@spectrum[0:spectrum.count()], 2_048.0) < fundamental * 0.0001 && spectral(@spectrum[0:spectrum.count()], 1_024.0) < fundamental * 0.0001)
-    var high = piano(); require(high.send(Synthesis.Command.note_on(1, 4_000.0, 1.0))); rejected(high.send(Synthesis.Command.pitch_bend(12.0)))
-    require(high.send(Synthesis.Command.pitch_bend_to(-24.0, 512))); require(high.render(&samples[0:512])); for sample in samples { assert(Math.is_finite(sample)) }
+    var high = piano(); require((try high.send(Synthesis.Command.note_on(1, 4_000.0, 1.0)))); rejected((try high.send(Synthesis.Command.pitch_bend(12.0))))
+    require((try high.send(Synthesis.Command.pitch_bend_to(-24.0, 512)))); require((try high.render(&samples[0:512]))); for sample in samples { assert(Math.is_finite(sample)) }
 }
 test "piano preparation and MIDI player use the ordinary instrument path" {
     var audio = try Audio.offline(8_192, 1) else error { panic(error.detail) }
@@ -124,13 +124,13 @@ test "piano preparation and MIDI player use the ordinary instrument path" {
 
 test "piano capacity format limits and nonfinite settings remain bounded" {
     var source = piano(rate:192_000, channels:8, decay:30.0, release:5.0, voices:64)
-    for id in 0...64 { require(source.send(Synthesis.Command.note_on(id, 55.0 + id as float32, 1.0 / 64.0))) }
-    var samples = zeros(256); require(source.render(&samples[0:samples.count()])); assert(source.active_voices() == 64)
+    for id in 0...64 { require((try source.send(Synthesis.Command.note_on(id, 55.0 + id as float32, 1.0 / 64.0)))) }
+    var samples = zeros(256); require((try source.render(&samples[0:samples.count()]))); assert(source.active_voices() == 64)
     for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.20001) }
-    source.reset(); require(source.render(&samples[0:samples.count()])); for sample in samples { assert(sample == 0.0 as float32) }
-    var minimal = piano(rate:1, decay:1.0, release:0.0); require(minimal.send(Synthesis.Command.note_on(1, 0.1, 1.0)))
-    var low = zeros(16); require(minimal.render(&low[0:low.count()])); assert(minimal.active_voices() == 0)
+    source.reset(); require((try source.render(&samples[0:samples.count()]))); for sample in samples { assert(sample == 0.0 as float32) }
+    var minimal = piano(rate:1, decay:1.0, release:0.0); require((try minimal.send(Synthesis.Command.note_on(1, 0.1, 1.0))))
+    var low = zeros(16); require((try minimal.render(&low[0:low.count()]))); assert(minimal.active_voices() == 0)
     let nan = Math.sqrt(-1.0 as float32)
-    var bad:Result<Synthesis.PianoInstrument, Error>[] = [Music.Instruments.piano(amplitude:nan), Music.Instruments.piano(brightness:nan), Music.Instruments.piano(decay_seconds:Math.sqrt(-1.0 as float64)), Music.Instruments.piano(decay_seconds:0.00000001), Music.Instruments.piano(format:Processing.Format(sample_rate:192_001, channels:1)), Music.Instruments.piano(format:Processing.Format(sample_rate:48_000, channels:9))]
+    var bad:Result<Synthesis.PianoInstrument, Error>[] = [(try Music.Instruments.piano(amplitude:nan)), (try Music.Instruments.piano(brightness:nan)), (try Music.Instruments.piano(decay_seconds:Math.sqrt(-1.0 as float64))), (try Music.Instruments.piano(decay_seconds:0.00000001)), (try Music.Instruments.piano(format:Processing.Format(sample_rate:192_001, channels:1))), (try Music.Instruments.piano(format:Processing.Format(sample_rate:48_000, channels:9)))]
     for result in bad { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid piano accepted") } } }
 }

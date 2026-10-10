@@ -16,11 +16,11 @@ silex run Packages/GFX.Audio/Examples/SaturatedSounds.sx --release
 Fragment for an already prepared `format` and `samples` buffer:
 
 ```sx
-match Processing.Distortion.create(format, drive:4.0,
+match try Processing.Distortion.create(format, drive:4.0,
     mode:Processing.DistortionMode.soft, output_gain:0.5, wet:0.75) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

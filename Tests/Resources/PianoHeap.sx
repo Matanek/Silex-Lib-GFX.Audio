@@ -27,21 +27,21 @@ func main() {
             var samples:float32[] = []; for i in 0...frames * 2 { samples.append(0.0) }
             phase()
             print("strike commands"); phase()
-            for id in 0...voices { require(piano.send(Synthesis.Command.note_on(id, 110.0 + id as float32 * 3.0, 0.5 / voices as float32))) }
+            for id in 0...voices { require((try piano.send(Synthesis.Command.note_on(id, 110.0 + id as float32 * 3.0, 0.5 / voices as float32)))) }
             phase()
-            print("first piano block"); phase(); require(piano.render(&samples[0:samples.count()])); phase()
+            print("first piano block"); phase(); require((try piano.render(&samples[0:samples.count()]))); phase()
             print("100 piano blocks and control changes"); phase()
             for i in 0...100 {
-                require(piano.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128)))
-                require(piano.send(Synthesis.Command.gain_to(0.75, 128)))
-                require(piano.render(&samples[0:samples.count()]))
-                if i % 10 == 0 { require(piano.send(Synthesis.Command.note_on(voices + i, 220.0, 0.1))); require(piano.send(Synthesis.Command.note_off(voices + i))) }
+                require((try piano.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128))))
+                require((try piano.send(Synthesis.Command.gain_to(0.75, 128))))
+                require((try piano.render(&samples[0:samples.count()])))
+                if i % 10 == 0 { require((try piano.send(Synthesis.Command.note_on(voices + i, 220.0, 0.1)))); require((try piano.send(Synthesis.Command.note_off(voices + i)))) }
             }
             phase()
             for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 1.0) }
             print("pedal release reset"); phase()
-            require(piano.send(Synthesis.Command.sustain(true))); require(piano.send(Synthesis.Command.all_notes_off))
-            require(piano.render(&samples[0:samples.count()])); piano.reset(); phase()
+            require((try piano.send(Synthesis.Command.sustain(true)))); require((try piano.send(Synthesis.Command.all_notes_off)))
+            require((try piano.render(&samples[0:samples.count()]))); piano.reset(); phase()
             assert(piano.active_voices() == 0)
         }
     }

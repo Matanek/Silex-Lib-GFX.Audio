@@ -70,16 +70,16 @@ test "owned MIDI feed renders beyond capacity without gaps and follows the tempo
 test "pause resume stop and independent players keep ownership and progress separate" {
     var audio = offline(); var first = Witness(); var second = Witness()
     var a = player(audio, first, capacity:3); var b = player(audio, second, capacity:7)
-    start(a); start(b); require(a.pause())
+    start(a); start(b); require((try a.pause()))
     let before = first.frames; let before_position = position(a)
     render(audio, 11)
     assert(first.frames == before && position(a) == before_position && second.frames > 0)
     assert(state(a) == Music.State.paused && state(b) == Music.State.playing)
-    require(a.resume()); render(audio, 7); assert(position(a) > before_position)
+    require((try a.resume())); render(audio, 7); assert(position(a) > before_position)
     a.stop(); let stopped = first.frames; render(audio, 80)
     assert(state(a) == Music.State.stopped && first.frames == stopped && state(b) == Music.State.playing)
     a.stop()
-    match a.play() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("restarted stopped player") } }
+    match (try a.play()) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("restarted stopped player") } }
 }
 
 test "a render failure is observable and stops the owned source" {
@@ -128,22 +128,22 @@ test "a three hour partition starts with bounded PCM and stop before start stays
     render(audio, 2_000); assert(witness.frames <= 2_000 + 17 + 64)
     song.stop(); let stopped = witness.frames; render(audio, 200); assert(witness.frames == stopped)
     var unused = player(audio, Witness()); unused.stop(); assert(state(unused) == Music.State.stopped)
-    match unused.play() { failure(error) => {}; success(_) => { panic("stopped ready player started") } }
+    match (try unused.play()) { failure(error) => {}; success(_) => { panic("stopped ready player started") } }
 }
 
 test "player validates configuration and preserves a recoverable startup failure" {
     var audio = offline(); var sheet = score(); var witness = Witness()
     var attempts:Result<Music.Player, Error>[] = [
-        Music.Player.create(audio, sheet, using:witness, capacity_frames:0),
-        Music.Player.create(audio, sheet, using:witness, block_frames:0),
-        Music.Player.create(audio, sheet, using:witness, tail_seconds:-1.0),
-        Music.Player.create(audio, sheet, using:witness, tail_seconds:61.0),
-        Music.Player.create(audio, score(48_000), using:witness),
-        Music.Player.create(audio, sheet, using:Music.Timbre(bits:0))
+        (try Music.Player.create(audio, sheet, using:witness, capacity_frames:0)),
+        (try Music.Player.create(audio, sheet, using:witness, block_frames:0)),
+        (try Music.Player.create(audio, sheet, using:witness, tail_seconds:-1.0)),
+        (try Music.Player.create(audio, sheet, using:witness, tail_seconds:61.0)),
+        (try Music.Player.create(audio, score(48_000), using:witness)),
+        (try Music.Player.create(audio, sheet, using:Music.Timbre(bits:0)))
     ]
     for attempt in attempts { match attempt { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid player accepted") } } }
     var song = player(audio, witness); witness.fail_after = 0
-    match song.play() { failure(error) => { assert(error.kind == Kind.other()) }; success(_) => { panic("failing source started") } }
+    match (try song.play()) { failure(error) => { assert(error.kind == Kind.other()) }; success(_) => { panic("failing source started") } }
     assert(state(song) == Music.State.failed && song.error() != null)
     render(audio, 10); assert(witness.frames == 0)
 }
@@ -164,7 +164,7 @@ test "replay resets the owned state and rejects settings before disturbing the p
     var audio = offline(); var witness = Witness(); var song = player(audio, witness)
     let original = start(song); render(audio, 100)
     let before = position(song)
-    match song.replay(Audio.Playback(repeat:Audio.Repeat.forever())) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid replay settings") } }
+    match (try song.replay(Audio.Playback(repeat:Audio.Repeat.forever()))) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("invalid replay settings") } }
     assert(position(song) == before && audio.is_playing(original))
     let repeated = try song.replay() else error { panic(error.detail) }
     assert(witness.resets == 2 && witness.frames == 64 && !audio.is_playing(original))
@@ -195,9 +195,9 @@ test "effects render the chosen tail reset on replay and reject incompatible or 
     assert(effect.frames == 16_016 && effect.resets == 1 && witness.release == 16_000)
     assert(state(song) == Music.State.finished && Math.abs(samples[100] - 0.052) < 0.00001)
     let repeated = try song.replay() else error { panic(error.detail) }; assert(effect.resets == 2); song.stop()
-    match Music.Player.create(audio, sheet, using:Witness(), effects:[Treatment(rate:48_000)]) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("incompatible effect accepted") } }
+    match (try Music.Player.create(audio, sheet, using:Witness(), effects:[Treatment(rate:48_000)])) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("incompatible effect accepted") } }
     var loud = try Music.Player.create(audio, sheet, using:Witness(), effects:[Treatment(gain:128.0)]) else error { panic(error.detail) }
-    match loud.play() { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("output silently clipped") } }
+    match (try loud.play()) { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success(_) => { panic("output silently clipped") } }
     assert(state(loud) == Music.State.failed)
 }
 
@@ -212,7 +212,7 @@ test "offline wait refuses blocking and standard format zero and one play with t
     for var sheet in scores {
         var song = try Music.Player.create(audio, sheet, using:Music.Timbre.soft(), tail_seconds:0.1) else error { panic(error.detail) }
         start(song)
-        match song.wait() { failure(error) => { assert(error.kind == Kind.resource_busy()) }; success => { panic("offline wait accepted") } }
+        match (try song.wait()) { failure(error) => { assert(error.kind == Kind.resource_busy()) }; success => { panic("offline wait accepted") } }
         let samples = render(audio, 100_810)
         assert(state(song) == Music.State.finished && song.ignored_messages() == 3)
         var peak:float32 = 0.0; for sample in samples { if Math.abs(sample) > peak { peak = Math.abs(sample) } }

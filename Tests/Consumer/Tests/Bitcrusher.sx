@@ -7,7 +7,7 @@ use STD.Math
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.process") }; success => { panic("invalid accepted") } } }
 func crusher(channels:int = 1, bits:int = 8, hold:int = 1, wet:float32 = 1.0) Processing.Bitcrusher {
-    match Processing.Bitcrusher.create(Processing.Format(sample_rate:48_000, channels:channels), bits, hold, wet) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Processing.Bitcrusher.create(Processing.Format(sample_rate:48_000, channels:channels), bits, hold, wet)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func compare(samples:@float32[..], expected:float32[]) {
     assert(samples.count() == expected.count()); var i = 0
@@ -27,91 +27,91 @@ test "eight bit grid contains exactly 256 signed codes including silence" {
     var effect = crusher()
     var grid:float32[] = []; var code = -128
     while code < 128 { grid.append(code as float32 / 128.0); code++ }
-    require(effect.process(&grid[0:256]))
+    require((try effect.process(&grid[0:256])))
     code = -128
     while code < 128 { assert(grid[code + 128] == code as float32 / 128.0); code++ }
     var ramp:float32[] = []; var i = 0
     while i < 256 { ramp.append((i - 128) as float32 / 128.0 + 0.25 / 128.0); i++ }
-    require(effect.process(&ramp[0:256])); i = 0
+    require((try effect.process(&ramp[0:256]))); i = 0
     while i < 256 { assert(ramp[i] == (i - 128) as float32 / 128.0); i++ }
     var bounds:float32[] = [-2.0 as float32, -1.0 as float32, 0.0 as float32, 1.0 as float32, 2.0 as float32]
-    require(effect.process(&bounds[0:5]))
+    require((try effect.process(&bounds[0:5])))
     compare(@bounds[0:5], [-1.0 as float32, -1.0 as float32, 0.0 as float32, 0.9921875 as float32, 0.9921875 as float32])
     var ties:float32[] = [-3.5 as float32 / 128.0, -2.5 as float32 / 128.0, -1.5 as float32 / 128.0, -0.5 as float32 / 128.0, 0.5 as float32 / 128.0, 1.5 as float32 / 128.0, 2.5 as float32 / 128.0, 3.5 as float32 / 128.0]
-    require(effect.process(&ties[0:8]))
+    require((try effect.process(&ties[0:8])))
     compare(@ties[0:8], [-4.0 as float32 / 128.0, -2.0 as float32 / 128.0, -2.0 as float32 / 128.0, 0.0 as float32, 0.0 as float32, 2.0 as float32 / 128.0, 2.0 as float32 / 128.0, 4.0 as float32 / 128.0])
     var low = crusher(bits:2)
     var coarse:float32[] = [-1.0 as float32, -0.5 as float32, 0.0 as float32, 0.5 as float32, 1.0 as float32]
-    require(low.process(&coarse[0:5])); compare(@coarse[0:5], [-1.0 as float32, -0.5 as float32, 0.0 as float32, 0.5 as float32, 0.5 as float32])
+    require((try low.process(&coarse[0:5]))); compare(@coarse[0:5], [-1.0 as float32, -0.5 as float32, 0.0 as float32, 0.5 as float32, 0.5 as float32])
     var high = crusher(bits:24)
     var precise:float32[] = [1.0 as float32, -1.0 as float32, 0.125 as float32, 0.0 as float32]
-    require(high.process(&precise[0:4])); assert(precise[0] == 1.0 as float32 - 1.0 / 8_388_608.0)
+    require((try high.process(&precise[0:4]))); assert(precise[0] == 1.0 as float32 - 1.0 / 8_388_608.0)
     assert(precise[1] == -1.0 as float32 && precise[2] == 0.125 as float32 && precise[3] == 0.0 as float32)
 }
 
 test "hold uses frames and independent channel values across block boundaries" {
     var effect = crusher(channels:2, bits:24, hold:3)
     var samples:float32[] = [0.125 as float32, -0.125 as float32, 0.25 as float32, -0.25 as float32, 0.375 as float32, -0.375 as float32, 0.5 as float32, -0.5 as float32, 0.625 as float32, -0.625 as float32, 0.75 as float32, -0.75 as float32, 0.875 as float32, -0.875 as float32]
-    require(effect.process(&samples[0:2])); require(effect.process(&samples[2:2])); require(effect.process(&samples[2:10])); require(effect.process(&samples[10:14]))
+    require((try effect.process(&samples[0:2]))); require((try effect.process(&samples[2:2]))); require((try effect.process(&samples[2:10]))); require((try effect.process(&samples[10:14])))
     compare(@samples[0:14], [0.125 as float32, -0.125 as float32, 0.125 as float32, -0.125 as float32, 0.125 as float32, -0.125 as float32, 0.5 as float32, -0.5 as float32, 0.5 as float32, -0.5 as float32, 0.5 as float32, -0.5 as float32, 0.875 as float32, -0.875 as float32])
     let channel_counts:int[] = [1, 2, 8]
     for channels in channel_counts {
         var whole = sequence(1_031, channels); var split = sequence(1_031, channels)
         var unit = crusher(channels, bits:5, hold:7, wet:0.25)
-        require(unit.process(&whole[0:whole.count()])); unit.reset()
-        require(unit.process(&split[0:5 * channels])); require(unit.process(&split[5 * channels:514 * channels])); require(unit.process(&split[514 * channels:split.count()]))
+        require((try unit.process(&whole[0:whole.count()]))); unit.reset()
+        require((try unit.process(&split[0:5 * channels]))); require((try unit.process(&split[5 * channels:514 * channels]))); require((try unit.process(&split[514 * channels:split.count()])))
         compare(@whole[0:whole.count()], split)
         unit.reset(); split = sequence(1_031, channels)
-        require(unit.process(&split[0:split.count()])); compare(@whole[0:whole.count()], split)
+        require((try unit.process(&split[0:split.count()]))); compare(@whole[0:whole.count()], split)
     }
 }
 
 test "dry wet and bypass advance capture without altering dry values" {
     var effect = crusher(hold:3, wet:0.5)
     var samples:float32[] = [0.25 as float32, 0.5 as float32, 0.75 as float32]
-    require(effect.process(&samples[0:3])); compare(@samples[0:3], [0.25 as float32, 0.375 as float32, 0.5 as float32])
-    require(effect.set_wet(0.0)); samples = [2.0 as float32, -2.0 as float32]
-    require(effect.process(&samples[0:2])); compare(@samples[0:2], [2.0 as float32, -2.0 as float32])
-    require(effect.set_wet(1.0)); samples = [0.25 as float32, 0.5 as float32]
-    require(effect.process(&samples[0:2])); compare(@samples[0:2], [0.9921875 as float32, 0.5 as float32])
+    require((try effect.process(&samples[0:3]))); compare(@samples[0:3], [0.25 as float32, 0.375 as float32, 0.5 as float32])
+    require((try effect.set_wet(0.0))); samples = [2.0 as float32, -2.0 as float32]
+    require((try effect.process(&samples[0:2]))); compare(@samples[0:2], [2.0 as float32, -2.0 as float32])
+    require((try effect.set_wet(1.0))); samples = [0.25 as float32, 0.5 as float32]
+    require((try effect.process(&samples[0:2]))); compare(@samples[0:2], [0.9921875 as float32, 0.5 as float32])
     effect.set_bypass(true); samples = [-2.0 as float32, 2.0 as float32, -0.75 as float32]
-    require(effect.process(&samples[0:3])); compare(@samples[0:3], [-2.0 as float32, 2.0 as float32, -0.75 as float32])
+    require((try effect.process(&samples[0:3]))); compare(@samples[0:3], [-2.0 as float32, 2.0 as float32, -0.75 as float32])
     effect.set_bypass(false); samples = [0.0 as float32]
-    require(effect.process(&samples[0:1])); assert(samples[0] == -0.75 as float32)
-    effect.reset(); samples = [0.0 as float32]; require(effect.process(&samples[0:1])); assert(samples[0] == 0.0 as float32)
+    require((try effect.process(&samples[0:1]))); assert(samples[0] == -0.75 as float32)
+    effect.reset(); samples = [0.0 as float32]; require((try effect.process(&samples[0:1]))); assert(samples[0] == 0.0 as float32)
 }
 
 test "resolution and hold updates recapture while reset retains settings" {
     var effect = crusher(hold:7)
-    var samples:float32[] = [0.125 as float32]; require(effect.process(&samples[0:1]))
-    require(effect.set_bits(2)); samples = [0.375 as float32, -0.375 as float32]
-    require(effect.process(&samples[0:2])); compare(@samples[0:2], [0.5 as float32, 0.5 as float32])
-    require(effect.set_hold_frames(2)); samples = [-0.75 as float32, 0.0 as float32, 0.125 as float32]
-    require(effect.process(&samples[0:3])); compare(@samples[0:3], [-1.0 as float32, -1.0 as float32, 0.0 as float32])
+    var samples:float32[] = [0.125 as float32]; require((try effect.process(&samples[0:1])))
+    require((try effect.set_bits(2))); samples = [0.375 as float32, -0.375 as float32]
+    require((try effect.process(&samples[0:2]))); compare(@samples[0:2], [0.5 as float32, 0.5 as float32])
+    require((try effect.set_hold_frames(2))); samples = [-0.75 as float32, 0.0 as float32, 0.125 as float32]
+    require((try effect.process(&samples[0:3]))); compare(@samples[0:3], [-1.0 as float32, -1.0 as float32, 0.0 as float32])
     effect.reset(); samples = [0.375 as float32, -0.375 as float32, -0.375 as float32]
-    require(effect.process(&samples[0:3])); compare(@samples[0:3], [0.5 as float32, 0.5 as float32, -0.5 as float32])
+    require((try effect.process(&samples[0:3]))); compare(@samples[0:3], [0.5 as float32, 0.5 as float32, -0.5 as float32])
     var long = crusher(hold:16_777_216)
-    samples = [0.25 as float32, 0.75 as float32]; require(long.process(&samples[0:2])); assert(samples[1] == 0.25 as float32)
+    samples = [0.25 as float32, 0.75 as float32]; require((try long.process(&samples[0:2]))); assert(samples[1] == 0.25 as float32)
 }
 
 test "invalid parameters and nonfinite blocks leave samples and state unchanged" {
     let format = Processing.Format(sample_rate:48_000, channels:2)
     let bad_bits:int[] = [-1, 1, 25]
-    for bits in bad_bits { match Processing.Bitcrusher.create(format, bits) { success(value) => { panic("bits accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } } }
-    match Processing.Bitcrusher.create(Processing.Format(sample_rate:0, channels:1)) { success(value) => { panic("format accepted") }; failure(error) => {} }
-    match Processing.Bitcrusher.create(Processing.Format(sample_rate:48_000, channels:9)) { success(value) => { panic("channels accepted") }; failure(error) => {} }
-    match Processing.Bitcrusher.create(format, hold_frames:0) { success(value) => { panic("hold accepted") }; failure(error) => {} }
-    match Processing.Bitcrusher.create(format, hold_frames:16_777_217) { success(value) => { panic("hold accepted") }; failure(error) => {} }
-    match Processing.Bitcrusher.create(format, wet:1.01) { success(value) => { panic("wet accepted") }; failure(error) => {} }
+    for bits in bad_bits { match (try Processing.Bitcrusher.create(format, bits)) { success(value) => { panic("bits accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } } }
+    match (try Processing.Bitcrusher.create(Processing.Format(sample_rate:0, channels:1))) { success(value) => { panic("format accepted") }; failure(error) => {} }
+    match (try Processing.Bitcrusher.create(Processing.Format(sample_rate:48_000, channels:9))) { success(value) => { panic("channels accepted") }; failure(error) => {} }
+    match (try Processing.Bitcrusher.create(format, hold_frames:0)) { success(value) => { panic("hold accepted") }; failure(error) => {} }
+    match (try Processing.Bitcrusher.create(format, hold_frames:16_777_217)) { success(value) => { panic("hold accepted") }; failure(error) => {} }
+    match (try Processing.Bitcrusher.create(format, wet:1.01)) { success(value) => { panic("wet accepted") }; failure(error) => {} }
     var effect = crusher(channels:2, hold:3)
-    invalid(effect.set_bits(25)); invalid(effect.set_hold_frames(0)); invalid(effect.set_wet(-0.1)); invalid(effect.set_wet(Math.sqrt(-1.0)))
+    invalid((try effect.set_bits(25))); invalid((try effect.set_hold_frames(0))); invalid((try effect.set_wet(-0.1))); invalid((try effect.set_wet(Math.sqrt(-1.0))))
     var samples:float32[] = [0.125 as float32, -0.125 as float32, 0.75 as float32]
-    invalid(effect.process(&samples[0:3])); compare(@samples[0:3], [0.125 as float32, -0.125 as float32, 0.75 as float32])
-    require(effect.process(&samples[0:2]))
+    invalid((try effect.process(&samples[0:3]))); compare(@samples[0:3], [0.125 as float32, -0.125 as float32, 0.75 as float32])
+    require((try effect.process(&samples[0:2])))
     var bad:float32[] = [0.75 as float32, 0.25 as float32, Math.sqrt(-1.0) as float32, 0.5 as float32]
-    invalid(effect.process(&bad[0:4])); assert(bad[0] == 0.75 as float32 && bad[1] == 0.25 as float32 && bad[3] == 0.5 as float32 && !Math.is_finite(bad[2]))
+    invalid((try effect.process(&bad[0:4]))); assert(bad[0] == 0.75 as float32 && bad[1] == 0.25 as float32 && bad[3] == 0.5 as float32 && !Math.is_finite(bad[2]))
     samples = [0.5 as float32, -0.5 as float32, 0.75 as float32, -0.75 as float32, 0.25 as float32, -0.25 as float32]
-    require(effect.process(&samples[0:6])); compare(@samples[0:6], [0.125 as float32, -0.125 as float32, 0.125 as float32, -0.125 as float32, 0.25 as float32, -0.25 as float32])
+    require((try effect.process(&samples[0:6]))); compare(@samples[0:6], [0.125 as float32, -0.125 as float32, 0.125 as float32, -0.125 as float32, 0.25 as float32, -0.25 as float32])
 }
 
 class Steps:Synthesis.Generator {
@@ -135,12 +135,12 @@ class Attenuate:Processing.Processor {
 test "consumer generator and custom processor compose with the crusher" {
     let format = Processing.Format(sample_rate:48_000, channels:1)
     var effects:Processing.Processor[] = [crusher(bits:3, hold:2), Attenuate(format)]
-    match Synthesis.Processed.create(Steps(format), effects) {
+    match (try Synthesis.Processed.create(Steps(format), effects)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
-            var samples = sequence(8, 1); require(source.render(&samples[0:8]))
+            var samples = sequence(8, 1); require((try source.render(&samples[0:8])))
             compare(@samples[0:8], [0.0 as float32, 0.0 as float32, 0.125 as float32, 0.125 as float32, 0.25 as float32, 0.25 as float32, 0.375 as float32, 0.375 as float32])
-            source.reset(); require(source.render(&samples[0:3])); require(source.render(&samples[3:8]))
+            source.reset(); require((try source.render(&samples[0:3]))); require((try source.render(&samples[3:8])))
             compare(@samples[0:8], [0.0 as float32, 0.0 as float32, 0.125 as float32, 0.125 as float32, 0.25 as float32, 0.25 as float32, 0.375 as float32, 0.375 as float32])
         }
     }

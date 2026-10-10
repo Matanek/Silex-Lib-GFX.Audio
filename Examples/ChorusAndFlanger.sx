@@ -6,7 +6,7 @@ use STD.Error
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func format() Processing.Format { return Processing.Format(sample_rate:48_000, channels:1) }
 func oscillator(frequency:float32, amplitude:float32, waveform:Synthesis.Waveform) Synthesis.Oscillator {
-    match Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:amplitude, waveform:waveform) {
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:amplitude, waveform:waveform)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
@@ -24,17 +24,17 @@ func example(audio:&Audio, delay:float32, depth:float32, rate:float32, feedback:
         oscillator(220.0, 0.1, Synthesis.Waveform.sawtooth),
     ]
     let gains:float32[] = [1.0 as float32, 1.0 as float32, 1.0 as float32]
-    match Synthesis.Mix.create(sources, gains) {
-        failure(error) => { panic(error.detail) }; success(var source) => { require(source.render(&samples[0:samples.count()])) }
+    match (try Synthesis.Mix.create(sources, gains)) {
+        failure(error) => { panic(error.detail) }; success(var source) => { require((try source.render(&samples[0:samples.count()]))) }
     }
-    match Synthesis.Envelope.create(format(), attack_frames:960, decay_frames:4_800, sustain:0.8, release_frames:9_600) {
+    match (try Synthesis.Envelope.create(format(), attack_frames:960, decay_frames:4_800, sustain:0.8, release_frames:9_600)) {
         failure(error) => { panic(error.detail) }
         success(var envelope) => {
-            envelope.note_on(); require(envelope.process(&samples[0:110_400]))
-            envelope.note_off(); require(envelope.process(&samples[110_400:samples.count()]))
+            envelope.note_on(); require((try envelope.process(&samples[0:110_400])))
+            envelope.note_off(); require((try envelope.process(&samples[110_400:samples.count()])))
         }
     }
-    match Processing.ModulatedDelay.create(format(), max_delay_frames:1_200, delay_frames:delay, depth_frames:depth, rate_hz:rate, feedback:feedback, wet:0.5) {
+    match (try Processing.ModulatedDelay.create(format(), max_delay_frames:1_200, delay_frames:delay, depth_frames:depth, rate_hz:rate, feedback:feedback, wet:0.5)) {
         failure(error) => { panic(error.detail) }
         success(var effect) => {
             effect.set_bypass(bypass)
@@ -42,7 +42,7 @@ func example(audio:&Audio, delay:float32, depth:float32, rate:float32, feedback:
             var start = 0
             while start < samples.count() {
                 var end = start + 512; if end > samples.count() { end = samples.count() }
-                require(effect.process(&samples[start:end])); start = end
+                require((try effect.process(&samples[start:end]))); start = end
             }
         }
     }

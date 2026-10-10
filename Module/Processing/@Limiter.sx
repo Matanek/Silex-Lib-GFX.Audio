@@ -33,7 +33,7 @@ public class Limiter:Processor {
     }
     func set_bypass(bypass:bool) { self.bypass = bypass }
     func process(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var frame = 0
         while frame < samples.count() {
             var peak:float32 = 0.0; var channel = 0

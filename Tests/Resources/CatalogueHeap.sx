@@ -36,22 +36,22 @@ func main() {
                 phase()
                 var hz:float32 = 220.0; if kind == 2 { hz = try MIDI.frequency(Music.Drum.snare) else error { panic(error.detail) } }
                 print("strike commands"); phase()
-                for id in 0...voices { require(instrument.send(Synthesis.Command.note_on(id, hz, 0.5 / voices as float32))) }
+                for id in 0...voices { require((try instrument.send(Synthesis.Command.note_on(id, hz, 0.5 / voices as float32)))) }
                 phase()
-                print("first instrument block"); phase(); require(instrument.render(&samples[0:samples.count()])); phase()
+                print("first instrument block"); phase(); require((try instrument.render(&samples[0:samples.count()]))); phase()
                 print("100 instrument blocks and control changes"); phase()
                 for i in 0...100 {
-                    require(instrument.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128)))
-                    require(instrument.send(Synthesis.Command.gain_to(0.75, 128)))
-                    require(instrument.render(&samples[0:samples.count()]))
-                    if i % 10 == 0 { require(instrument.send(Synthesis.Command.note_on(voices + i, hz, 0.1))); require(instrument.send(Synthesis.Command.note_off(voices + i))) }
+                    require((try instrument.send(Synthesis.Command.pitch_bend_to((i % 3) as float32, 128))))
+                    require((try instrument.send(Synthesis.Command.gain_to(0.75, 128))))
+                    require((try instrument.render(&samples[0:samples.count()])))
+                    if i % 10 == 0 { require((try instrument.send(Synthesis.Command.note_on(voices + i, hz, 0.1)))); require((try instrument.send(Synthesis.Command.note_off(voices + i)))) }
                 }
                 phase()
                 for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) < 1.0) }
                 print("pedal release reset"); phase()
-                require(instrument.send(Synthesis.Command.sustain(true))); require(instrument.send(Synthesis.Command.all_notes_off))
-                require(instrument.render(&samples[0:samples.count()])); instrument.reset(); phase()
-                require(instrument.render(&samples[0:samples.count()])); for sample in samples { assert(sample == 0.0 as float32) }
+                require((try instrument.send(Synthesis.Command.sustain(true)))); require((try instrument.send(Synthesis.Command.all_notes_off)))
+                require((try instrument.render(&samples[0:samples.count()]))); instrument.reset(); phase()
+                require((try instrument.render(&samples[0:samples.count()]))); for sample in samples { assert(sample == 0.0 as float32) }
             }
         }
     }

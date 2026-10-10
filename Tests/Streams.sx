@@ -6,25 +6,25 @@ use STD.Error.Kind
 use STD.Math
 let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
 func stream(audio:&Audio, capacity:int, channels:int = 1, rate:int = 48_000) Audio.Stream {
-    match audio.stream(sample_rate:rate, channels:channels, capacity_frames:capacity) {
+    match (try audio.stream(sample_rate:rate, channels:channels, capacity_frames:capacity)) {
         failure(error) => { panic(error.detail) }
         success(value) => { return value }
     }
 }
 func write(audio:&Audio, stream:Audio.Stream, samples:@float32[..]) int {
-    match audio.write(stream, samples) {
+    match (try audio.write(stream, samples)) {
         failure(error) => { panic(error.detail) }
         success(count) => { return count }
     }
 }
 func info(audio:&Audio, stream:Audio.Stream) Audio.StreamInfo {
-    match audio.stream_info(stream) {
+    match (try audio.stream_info(stream)) {
         failure(error) => { panic(error.detail) }
         success(value) => { return value }
     }
 }
 func close(audio:&Audio, stream:Audio.Stream) {
-    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.close(stream)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 test "stream copies blocks applies backpressure and resumes one PCM timeline" {
     Native.initialize()
@@ -34,7 +34,7 @@ test "stream copies blocks applies backpressure and resumes one PCM timeline" {
     var block:float32[] = [0.25 as float32, 0.5 as float32, -0.5 as float32, 1.0 as float32]
     assert(write(audio, source, @block[0:4]) == 3)
     block[0] = 0.0 as float32
-    match audio.write(source, @block[3:4]) {
+    match (try audio.write(source, @block[3:4])) {
         success(count) => { panic("full queue accepted input") }
         failure(error) => { assert(error.kind == Kind.would_block()) }
     }
@@ -47,7 +47,7 @@ test "stream copies blocks applies backpressure and resumes one PCM timeline" {
     assert(C.load<float32>(out, 4 as uint) == 0.5 as float32)
     assert(info(audio, source).consumed_frames == 2)
     audio.pause(playing)
-    match audio.wait_writable(source, minimum_frames:3) {
+    match (try audio.wait_writable(source, minimum_frames:3)) {
         success => { panic("paused full stream waited forever") }
         failure(error) => { assert(error.kind == Kind.resource_busy()) }
     }
@@ -78,7 +78,7 @@ test "stereo short blocks reject partial frames and preserve channel order" {
     var audio = Audio(native_mixer:mixer)
     let source = stream(audio, 2, channels:2, rate:24_000)
     var samples:float32[] = [0.25 as float32, -0.25 as float32, 0.5 as float32, -0.5 as float32]
-    match audio.write(source, @samples[0:1]) {
+    match (try audio.write(source, @samples[0:1])) {
         success(count) => { panic("partial stereo frame accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
@@ -114,14 +114,14 @@ test "stream stop discards pending frames and stale identities never target a re
     assert(!stopped.drained)
     assert(audio.release(source))
     let next = stream(audio, 4)
-    match audio.write(source, @samples[0:1]) {
+    match (try audio.write(source, @samples[0:1])) {
         success(count) => { panic("stale stream accepted input") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
     assert(write(audio, next, @samples[0:1]) == 1)
     assert(!audio.release(source))
     var other = Audio()
-    match other.stream_info(next) {
+    match (try other.stream_info(next)) {
         success(value) => { panic("foreign owner accepted stream") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
@@ -134,7 +134,7 @@ test "closed input rejects writes and empty close terminates after start" {
     close(audio, source)
     close(audio, source)
     var samples:float32[] = [0.0 as float32]
-    match audio.write(source, @samples[0:1]) {
+    match (try audio.write(source, @samples[0:1])) {
         success(count) => { panic("closed stream accepted input") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
@@ -183,31 +183,31 @@ test "closed blocks match a complete source across sample rate conversion" {
 
 test "invalid stream configuration samples and waits return recoverable errors" {
     var audio = Audio()
-    match audio.stream(sample_rate:0) {
+    match (try audio.stream(sample_rate:0)) {
         success(value) => { panic("invalid sample rate accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
-    match audio.stream(sample_rate:48_000, channels:9) {
+    match (try audio.stream(sample_rate:48_000, channels:9)) {
         success(value) => { panic("invalid channel count accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
-    match audio.stream(sample_rate:48_000, capacity_frames:2_147_483_647) {
+    match (try audio.stream(sample_rate:48_000, capacity_frames:2_147_483_647)) {
         success(value) => { panic("overflowing capacity accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
     let source = stream(audio, 1)
     var bad:float32[] = [2.0 as float32]
-    match audio.write(source, @bad[0:1]) {
+    match (try audio.write(source, @bad[0:1])) {
         success(count) => { panic("invalid amplitude accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
     bad[0] = Math.sqrt(-1.0) as float32
-    match audio.write(source, @bad[0:1]) {
+    match (try audio.write(source, @bad[0:1])) {
         success(count) => { panic("NaN accepted by stream") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
     bad[0] = Math.exp(1_000.0) as float32
-    match audio.write(source, @bad[0:1]) {
+    match (try audio.write(source, @bad[0:1])) {
         success(count) => { panic("infinity accepted by stream") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
@@ -215,11 +215,11 @@ test "invalid stream configuration samples and waits return recoverable errors" 
     assert(write(audio, source, @empty[0:0]) == 0)
     var valid:float32[] = [0.0 as float32]
     assert(write(audio, source, @valid[0:1]) == 1)
-    match audio.wait_writable(source) {
+    match (try audio.wait_writable(source)) {
         success => { panic("unstarted full stream waited forever") }
         failure(error) => { assert(error.kind == Kind.resource_busy()) }
     }
-    match audio.wait_writable(source, minimum_frames:2) {
+    match (try audio.wait_writable(source, minimum_frames:2)) {
         success => { panic("impossible space accepted") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }

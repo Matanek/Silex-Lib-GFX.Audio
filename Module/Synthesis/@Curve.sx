@@ -16,7 +16,7 @@ public class Curve:Generator {
         return Result<Curve, Error>.success(Curve(format, start, end, duration_frames))
     }
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var i = 0
         while i < samples.count() {
             var value = self.end

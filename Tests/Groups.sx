@@ -13,7 +13,7 @@ func frame(mixer:uint) float {
 }
 func near(actual:float, expected:float) { assert(Math.abs(actual - expected) < 0.00001) }
 func assign(audio:&Audio, playing:Audio.PlayingSound, group:Audio.Group?) {
-    match audio.assign_group(playing, group) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.assign_group(playing, group)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 test "group master and individual gains compose and remain independent" {
     Native.initialize()
@@ -38,10 +38,10 @@ test "group master and individual gains compose and remain independent" {
     assert(!audio.contains(effects))
     let fresh = audio.group()
     assert(audio.contains(fresh) && !audio.contains(effects))
-    match audio.assign_group(a, effects) { success => { panic("stale group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try audio.assign_group(a, effects)) { success => { panic("stale group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     var other = Audio()
-    match other.assign_group(a, fresh) { success => { panic("foreign playback accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match audio.assign_group(a, other.group()) { success => { panic("foreign group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try other.assign_group(a, fresh)) { success => { panic("foreign playback accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try audio.assign_group(a, other.group())) { success => { panic("foreign group accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     assert(!other.destroy_group(fresh))
     audio.stop(music)
     audio.stop(a)
@@ -89,8 +89,8 @@ test "new group members inherit current gain and group stop reports each end" {
     let a = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:group))
     let b = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever(), group:group))
     near(frame(mixer), 0.25)
-    match audio.watch_end(a) { failure(error) => { panic(error.detail) }; success => {} }
-    match audio.watch_end(b) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.watch_end(a)) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.watch_end(b)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.stop(group)
     var events = audio.drain_end_events()
     assert(events.count() == 2)

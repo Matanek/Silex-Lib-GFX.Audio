@@ -17,7 +17,7 @@ class Channel {
         let gain = (self.volume as float32 / 127.0) * (self.expression as float32 / 127.0)
         var left = gain; var right = gain
         if self.pan < 0.0 { right *= 1.0 + self.pan } else { left *= 1.0 - self.pan }
-        try self.left.set(left, frames); try self.right.set(right, frames)
+        try self.left.set(left, frames) else error { return Result<void,Error>.failure(error) }; try self.right.set(right, frames) else error { return Result<void,Error>.failure(error) }
         return Result<void, Error>.success()
     }
     var program:int = 0
@@ -56,11 +56,11 @@ public class Synthesizer:Synthesis.Generator {
         var i = 0; while i < 1_024 { self.samples.append(0.0); self.weights.append(0.0); i++ }
     }
     static func create(bindings:Binding[], note_capacity:int = 256, bend_range:float32 = 2.0, gain:float32 = 0.2, controller_ramp_frames:int = 0) Result<Synthesizer, Error> {
-        return Synthesizer.build(bindings, note_capacity, bend_range, gain, controller_ramp_frames, false)
+        return (try Synthesizer.build(bindings, note_capacity, bend_range, gain, controller_ramp_frames, false))
     }
     package static func single(instrument:Synthesis.Instrument, note_capacity:int = 256) Result<Synthesizer, Error> {
         var bindings:Binding[] = [Binding(channel:0, program:0, instrument:instrument)]
-        return Synthesizer.build(bindings, note_capacity, 2.0, 1.0, 0, true)
+        return (try Synthesizer.build(bindings, note_capacity, 2.0, 1.0, 0, true))
     }
     private static func build(bindings:Binding[], note_capacity:int, bend_range:float32, gain:float32, controller_ramp_frames:int, merged:bool) Result<Synthesizer, Error> {
         if controller_ramp_frames < 0 || controller_ramp_frames > 16_777_216 { return Result<Synthesizer, Error>.failure(invalid("MIDI controller ramp requires 0..16777216 frames")) }
@@ -77,8 +77,8 @@ public class Synthesizer:Synthesis.Generator {
         }
         var channels:Channel[] = []; i = 0
         while i < 16 {
-            var left = try Synthesis.Control.create(format.sample_rate, 1.0)
-            var right = try Synthesis.Control.create(format.sample_rate, 1.0)
+            var left = try Synthesis.Control.create(format.sample_rate, 1.0) else error { return Result<Synthesizer,Error>.failure(error) }
+            var right = try Synthesis.Control.create(format.sample_rate, 1.0) else error { return Result<Synthesizer,Error>.failure(error) }
             channels.append(Channel(left, right)); i++
         }
         for binding in bindings { var state = channels[binding.channel]; state.used = true }
@@ -92,7 +92,7 @@ public class Synthesizer:Synthesis.Generator {
         return Result<int, Error>.failure(unsupported("MIDI channel/program has no application-selected instrument"))
     }
     private func broadcast(channel:int, command:Synthesis.Command) Result<void, Error> {
-        for var binding in self.bindings { if binding.channel == channel { try binding.instrument.send(command) } }
+        for var binding in self.bindings { if binding.channel == channel { try binding.instrument.send(command) else error { return Result<void,Error>.failure(error) } } }
         return Result<void, Error>.success()
     }
     private func release(channel:int, number:int) Result<void, Error> {
@@ -104,19 +104,19 @@ public class Synthesizer:Synthesis.Generator {
         }
         if oldest >= 0 {
             var note = self.notes[oldest]; var binding = self.bindings[note.binding]
-            try binding.instrument.send(Synthesis.Command.note_off(note.id)); note.active = false
+            try binding.instrument.send(Synthesis.Command.note_off(note.id)) else error { return Result<void,Error>.failure(error) }; note.active = false
         }
         return Result<void, Error>.success()
     }
     private func release_channel(channel:int) Result<void, Error> {
         for var note in self.notes {
-            if note.active && note.channel == channel { var binding = self.bindings[note.binding]; try binding.instrument.send(Synthesis.Command.note_off(note.id)); note.active = false }
+            if note.active && note.channel == channel { var binding = self.bindings[note.binding]; try binding.instrument.send(Synthesis.Command.note_off(note.id)) else error { return Result<void,Error>.failure(error) }; note.active = false }
         }
         return Result<void, Error>.success()
     }
     // true: translated; false: documented unsupported controller/pressure, unchanged.
     func send(channel:int, message:Message) Result<bool, Error> {
-        try validate(channel, message)
+        try validate(channel, message) else error { return Result<bool,Error>.failure(error) }
         var state = self.channels[channel]
         if self.merged {
             // Per-note identities retain the original channel; channel-wide controls need explicit routing.
@@ -124,7 +124,7 @@ public class Synthesizer:Synthesis.Generator {
                 note_on(number, velocity) => {}
                 note_off(number, velocity) => {}
                 control_change(controller, value) => {
-                    if controller == 123 { try self.release_channel(channel); return Result<bool, Error>.success(true) }
+                    if controller == 123 { try self.release_channel(channel) else error { return Result<bool,Error>.failure(error) }; return Result<bool, Error>.success(true) }
                     return Result<bool, Error>.success(false)
                 }
                 else => { return Result<bool, Error>.success(false) }
@@ -132,36 +132,36 @@ public class Synthesizer:Synthesis.Generator {
         }
         match message {
             note_on(number, velocity) => {
-                if velocity == 0 { try self.release(channel, number); return Result<bool, Error>.success(true) }
-                let index = try self.selected(channel, state.program)
+                if velocity == 0 { try self.release(channel, number) else error { return Result<bool,Error>.failure(error) }; return Result<bool, Error>.success(true) }
+                let index = try self.selected(channel, state.program) else error { return Result<bool,Error>.failure(error) }
                 var slot = -1; var i = 0; while i < self.notes.count() { if !self.notes[i].active && slot < 0 { slot = i }
             i++ }
                 if slot < 0 { return Result<bool, Error>.failure(limit("MIDI held-note capacity reached")) }
                 if self.serial == 9_223_372_036_854_775_807 { return Result<bool, Error>.failure(limit("MIDI note identity counter exhausted; reset")) }
-                let id = self.serial + 1; let hz = try frequency(number); var binding = self.bindings[index]
-                try binding.instrument.send(Synthesis.Command.note_on(id, hz, velocity as float32 / 127.0))
+                let id = self.serial + 1; let hz = try frequency(number) else error { return Result<bool,Error>.failure(error) }; var binding = self.bindings[index]
+                try binding.instrument.send(Synthesis.Command.note_on(id, hz, velocity as float32 / 127.0)) else error { return Result<bool,Error>.failure(error) }
                 var note = self.notes[slot]; note.channel = channel; note.number = number; note.binding = index; note.id = id; note.active = true; self.serial = id
             }
-            note_off(number, velocity) => { try self.release(channel, number) }
-            program_change(program) => { let index = try self.selected(channel, program); state.program = program }
+            note_off(number, velocity) => { try self.release(channel, number) else error { return Result<bool,Error>.failure(error) } }
+            program_change(program) => { let index = try self.selected(channel, program) else error { return Result<bool,Error>.failure(error) }; state.program = program }
             pitch_bend(value) => {
                 let bend = (value - 8_192) as float32 / 8_192.0 * self.bend_range
-                try self.broadcast(channel, Synthesis.Command.pitch_bend(bend)); state.bend = bend
+                try self.broadcast(channel, Synthesis.Command.pitch_bend(bend)) else error { return Result<bool,Error>.failure(error) }; state.bend = bend
             }
             control_change(controller, value) => {
                 match controller {
-                    7 => { state.volume = value; try state.update(self.controller_ramp_frames) }
-                    11 => { state.expression = value; try state.update(self.controller_ramp_frames) }
+                    7 => { state.volume = value; try state.update(self.controller_ramp_frames) else error { return Result<bool,Error>.failure(error) } }
+                    11 => { state.expression = value; try state.update(self.controller_ramp_frames) else error { return Result<bool,Error>.failure(error) } }
                     10 => {
                         if value <= 64 { state.pan = (value - 64) as float32 / 64.0 }
                         else { state.pan = (value - 64) as float32 / 63.0 }
-                        try state.update(self.controller_ramp_frames)
+                        try state.update(self.controller_ramp_frames) else error { return Result<bool,Error>.failure(error) }
                     }
-                    64 => { try self.broadcast(channel, Synthesis.Command.sustain(value >= 64)); state.sustain = value >= 64 }
-                    123 => { try self.release_channel(channel) }
+                    64 => { try self.broadcast(channel, Synthesis.Command.sustain(value >= 64)) else error { return Result<bool,Error>.failure(error) }; state.sustain = value >= 64 }
+                    123 => { try self.release_channel(channel) else error { return Result<bool,Error>.failure(error) } }
                     120 => {
                         for var binding in self.bindings {
-                            if binding.channel == channel { binding.instrument.reset(); try binding.instrument.send(Synthesis.Command.pitch_bend(state.bend)); try binding.instrument.send(Synthesis.Command.sustain(state.sustain)) }
+                            if binding.channel == channel { binding.instrument.reset(); try binding.instrument.send(Synthesis.Command.pitch_bend(state.bend)) else error { return Result<bool,Error>.failure(error) }; try binding.instrument.send(Synthesis.Command.sustain(state.sustain)) else error { return Result<bool,Error>.failure(error) } }
                         }
                         for var note in self.notes { if note.channel == channel { note.active = false } }
                     }
@@ -177,18 +177,18 @@ public class Synthesizer:Synthesis.Generator {
     func finish() Result<void, Error> {
         if self.merged {
             var instrument = self.bindings[0].instrument
-            try instrument.send(Synthesis.Command.sustain(false))
-            try instrument.send(Synthesis.Command.all_notes_off)
+            try instrument.send(Synthesis.Command.sustain(false)) else error { return Result<void,Error>.failure(error) }
+            try instrument.send(Synthesis.Command.all_notes_off) else error { return Result<void,Error>.failure(error) }
             for var note in self.notes { note.active = false }
             return Result<void, Error>.success()
         }
         var channel = 0
-        while channel < 16 { try self.broadcast(channel, Synthesis.Command.sustain(false)); self.channels[channel].sustain = false; try self.broadcast(channel, Synthesis.Command.all_notes_off); channel++ }
+        while channel < 16 { try self.broadcast(channel, Synthesis.Command.sustain(false)) else error { return Result<void,Error>.failure(error) }; self.channels[channel].sustain = false; try self.broadcast(channel, Synthesis.Command.all_notes_off) else error { return Result<void,Error>.failure(error) }; channel++ }
         for var note in self.notes { note.active = false }
         return Result<void, Error>.success()
     }
     func render(samples:&float32[..]) Result<void, Error> {
-        if self.merged { var instrument = self.bindings[0].instrument; return instrument.render(samples) }
+        if self.merged { var instrument = self.bindings[0].instrument; return (try instrument.render(samples)) }
         if samples.count() % 2 != 0 { return Result<void, Error>.failure(invalid("MIDI output requires complete stereo frames")) }
         var start = 0
         while start < samples.count() {
@@ -200,11 +200,11 @@ public class Synthesizer:Synthesis.Generator {
             while channel < 16 {
                 var state = self.channels[channel]
                 if state.used {
-                    try state.left.render(&self.weights[0:frames])
-                    try state.right.render(&self.weights[512:512 + frames])
+                    try state.left.render(&self.weights[0:frames]) else error { return Result<void,Error>.failure(error) }
+                    try state.right.render(&self.weights[512:512 + frames]) else error { return Result<void,Error>.failure(error) }
                     for var binding in self.bindings {
                         if binding.channel == channel {
-                            try binding.instrument.render(&self.samples[0:count])
+                            try binding.instrument.render(&self.samples[0:count]) else error { return Result<void,Error>.failure(error) }
                             var frame = 0
                             while frame < frames {
                                 samples[start + frame * 2] += self.samples[frame * 2] * (self.gain * self.weights[frame])

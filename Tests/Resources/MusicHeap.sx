@@ -25,20 +25,20 @@ class Probe:Synthesis.Instrument {
     init(voice:Synthesis.SineInstrument,processed:Synthesis.Processed) { self.voice = voice; self.processed = processed }
     static func create() Result<Probe,Error> {
         let format = Processing.Format(sample_rate:48_000,channels:2)
-        var voice = try Music.Instruments.sine(amplitude:0.025,format:format)
-        var low = try Processing.LowPass.create(format,cutoff_hz:8_000.0)
-        var chorus = try Processing.ModulatedDelay.create(format,max_delay_frames:2_400,delay_frames:960.0,depth_frames:240.0,rate_hz:0.7,feedback:0.1,wet:0.25)
-        var room = try Processing.Reverb.create(format,room_size:0.5,decay_seconds:1.5,damping:0.5,wet:0.3)
-        var compressor = try Processing.Compressor.create(format)
-        var limiter = try Processing.Limiter.create(format,ceiling_db:-3.0)
-        var processed = try Synthesis.Processed.create(voice,[low,chorus,room,compressor,limiter])
+        var voice = try Music.Instruments.sine(amplitude:0.025,format:format) else error { return Result<Probe,Error>.failure(error) }
+        var low = try Processing.LowPass.create(format,cutoff_hz:8_000.0) else error { return Result<Probe,Error>.failure(error) }
+        var chorus = try Processing.ModulatedDelay.create(format,max_delay_frames:2_400,delay_frames:960.0,depth_frames:240.0,rate_hz:0.7,feedback:0.1,wet:0.25) else error { return Result<Probe,Error>.failure(error) }
+        var room = try Processing.Reverb.create(format,room_size:0.5,decay_seconds:1.5,damping:0.5,wet:0.3) else error { return Result<Probe,Error>.failure(error) }
+        var compressor = try Processing.Compressor.create(format) else error { return Result<Probe,Error>.failure(error) }
+        var limiter = try Processing.Limiter.create(format,ceiling_db:-3.0) else error { return Result<Probe,Error>.failure(error) }
+        var processed = try Synthesis.Processed.create(voice,[low,chorus,room,compressor,limiter]) else error { return Result<Probe,Error>.failure(error) }
         return Result<Probe,Error>.success(Probe(voice,processed))
     }
-    func validate(command:Synthesis.Command) Result<void, Error> { return self.voice.validate(command) }
-    func send(command:Synthesis.Command) Result<void, Error> { return self.voice.send(command) }
+    func validate(command:Synthesis.Command) Result<void, Error> { return (try self.voice.validate(command)) }
+    func send(command:Synthesis.Command) Result<void, Error> { return (try self.voice.send(command)) }
     func render(samples:&float32[..]) Result<void, Error> {
         if self.capture { print("DSP block"); phase() }
-        var result = self.processed.render(samples)
+        var result = (try self.processed.render(samples))
         if self.capture { phase() }
         self.frames += samples.count() / 2
         return result
@@ -76,7 +76,7 @@ func main() {
     phase(); assert(witness.frames == 0)
     print("player start and prefill"); phase(); let playing = try player.play() else error { panic(error.detail) }; phase()
     assert(witness.frames <= 4_800 + 512)
-    print("player controls"); phase(); require(player.pause()); require(player.resume()); phase()
+    print("player controls"); phase(); require((try player.pause())); require((try player.resume())); phase()
     print("100 owned feed and offline outputs"); phase()
     for i in 0...100 { output(audio,512) }
     phase(); assert(witness.frames <= 51_200 + 4_800 + 512)

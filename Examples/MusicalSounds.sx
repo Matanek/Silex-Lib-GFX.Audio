@@ -11,17 +11,17 @@ class SoftAccent:Synthesis.Instrument {
     private init(source:Synthesis.SineInstrument) { self.source = source; self.format = source.format }
     static func create() Result<SoftAccent, Error> {
         var source = try Music.Instruments.sine(amplitude:0.22,
-            attack_seconds:0.003, decay_seconds:0.03, sustain:0.3, release_seconds:0.1)
+            attack_seconds:0.003, decay_seconds:0.03, sustain:0.3, release_seconds:0.1) else error { return Result<SoftAccent,Error>.failure(error) }
         return Result<SoftAccent, Error>.success(SoftAccent(source))
     }
-    func validate(command:Synthesis.Command) Result<void, Error> { return self.source.validate(command) }
+    func validate(command:Synthesis.Command) Result<void, Error> { return (try self.source.validate(command)) }
     func send(command:Synthesis.Command) Result<void, Error> {
         match command {
-            note_on(id, frequency, velocity) => { return self.source.send(Synthesis.Command.note_on(id, frequency, velocity * velocity)) }
-            else => { return self.source.send(command) }
+            note_on(id, frequency, velocity) => { return (try self.source.send(Synthesis.Command.note_on(id, frequency, velocity * velocity))) }
+            else => { return (try self.source.send(command)) }
         }
     }
-    func render(samples:&float32[..]) Result<void, Error> { return self.source.render(samples) }
+    func render(samples:&float32[..]) Result<void, Error> { return (try self.source.render(samples)) }
     func reset() { self.source.reset() }
 }
 

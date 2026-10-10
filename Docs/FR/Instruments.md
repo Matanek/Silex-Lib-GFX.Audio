@@ -27,7 +27,7 @@ Fragment avec un `format` mono à 48 kHz et un buffer `samples` de 48 000 sample
 préparés, et un helper `require(Result<void, Error>)` qui traite les erreurs :
 
 ```sx
-match Synthesis.SineInstrument.create(format, max_voices:8) {
+match try Synthesis.SineInstrument.create(format, max_voices:8) {
     failure(error) => { panic(error.detail) }
     success(var instrument) => {
         let events:Synthesis.Event[] = [
@@ -35,10 +35,10 @@ match Synthesis.SineInstrument.create(format, max_voices:8) {
             Synthesis.Event(frame:0, command:Synthesis.Command.note_on(2, 329.6276, 0.3)),
             Synthesis.Event(frame:24_000, command:Synthesis.Command.all_notes_off),
         ]
-        match Synthesis.Sequence.create(instrument, events) {
+        match try Synthesis.Sequence.create(instrument, events) {
             failure(error) => { panic(error.detail) }
             success(var source) => {
-                require(source.render(&samples[0:samples.count()]))
+                require(try source.render(&samples[0:samples.count()]))
             }
         }
     }

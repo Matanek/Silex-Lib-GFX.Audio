@@ -24,13 +24,13 @@ Fragment avec un helper `require(Result<void, Error>)` et un buffer mono
 `samples` de 1 000 frames préparé :
 
 ```sx
-match Synthesis.Control.create(48_000, value:-1.0) {
+match try Synthesis.Control.create(48_000, value:-1.0) {
     failure(error) => { panic(error.detail) }
     success(var pitch) => {
-        require(pitch.set(1.0, duration_frames:24_000))
-        require(pitch.render(&samples[0:samples.count()]))
+        require(try pitch.set(1.0, duration_frames:24_000))
+        require(try pitch.render(&samples[0:samples.count()]))
         // Retarget from the next frame's current value, without resetting phase.
-        require(pitch.set(0.0, duration_frames:12_000))
+        require(try pitch.set(0.0, duration_frames:12_000))
     }
 }
 ```

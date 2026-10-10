@@ -18,7 +18,8 @@ d’échantillons. Le package s’utilise directement ou avec son plugin
 silex install GFX.Audio
 ```
 
-GFX.Audio demande Silex 0.47.1 ou une version plus récente. Pour `Processing`,
+Cette révision en développement requiert la toolchain avec capture
+`try` des opérations `Result` et extraction lors de l’appel ordinaire. Pour `Processing`,
 utiliser la toolchain locale intégrant la correction des vues mutables par méthode
 décrite dans [Traitement des blocs](Processing.md), jusqu’à sa publication.
 
@@ -59,10 +60,11 @@ fichier.
 
 ## Charger depuis la mémoire et traiter un échec
 
-`Audio.try_decode(bytes:@uint8[..])` décode des octets encodés, par exemple
-un WAV embarqué. `Audio.try_load(path:str)` charge un fichier. Ces deux
-opérations retournent `Result<Sound, STD.Error.Error>` ; `load(path)` conserve
-son `panic` sur échec.
+`Audio.decode(bytes:@uint8[..])` décode des octets encodés, par exemple
+un WAV embarqué. `Audio.load(path:str)` charge un fichier. Chaque opération
+a une seule déclaration `Result<Sound, STD.Error.Error>`. Un appel ordinaire
+rend le `Sound` ou arrête le programme sur erreur. `try audio.load(path)` et
+`try audio.decode(bytes)` conservent le `Result` pour traiter l’échec.
 
 Le [programme complet](../../Examples/MemorySound.sx) charge un WAV sans fichier temporaire :
 
@@ -72,7 +74,7 @@ use GFX.Audio
 func main() {
     var audio = Audio()
     let bytes = embed_bytes("../../Assets/Audio/SpatialTone.wav")
-    match audio.try_decode(@bytes[0:bytes.count()]) {
+    match try audio.decode(@bytes[0:bytes.count()]) {
         failure(error) => { panic(error.detail) }
         success(sound) => { audio.wait(audio.play(sound)) }
     }
@@ -105,13 +107,13 @@ use GFX.Audio.Synthesis
 
 func main() {
     let format = Processing.Format(sample_rate:48_000, channels:1)
-    match Synthesis.Oscillator.create(format, frequency_hz:440.0, amplitude:0.1) {
+    match (try Synthesis.Oscillator.create(format, frequency_hz:440.0, amplitude:0.1)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
             var samples:float32[] = []
             var frame = 0
             while frame < 12_000 { samples.append(0.0); frame++ }
-            match source.render(&samples[0:samples.count()]) {
+            match (try source.render(&samples[0:samples.count()])) {
                 failure(error) => { panic(error.detail) }; success => {}
             }
             var audio = Audio()

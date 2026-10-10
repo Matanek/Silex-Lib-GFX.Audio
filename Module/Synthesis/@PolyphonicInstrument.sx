@@ -59,7 +59,7 @@ class PolyphonicInstrument {
         return Math.is_finite(step) && step > 0.0 && step < 0.5
     }
     func send(command:Command) Result<void, Error> {
-        try self.validate(command)
+        try self.validate(command) else error { return Result<void,Error>.failure(error) }
         match command {
             note_on(id, frequency, velocity) => {
                 if !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.value / 12.0)) || !self.valid_pitch(frequency, Math.pow(2.0 as float32, self.bend.target / 12.0)) { return Result<void, Error>.failure(invalid("bent frequency must remain positive and below Nyquist through the current ramp")) }
@@ -92,9 +92,9 @@ class PolyphonicInstrument {
                 if !down { for var voice in self.voices { if !voice.held { voice.release() } } }
             }
             pitch_bend(semitones) => {
-                try self.set_bend(semitones, 0)
+                try self.set_bend(semitones, 0) else error { return Result<void,Error>.failure(error) }
             }
-            pitch_bend_to(semitones, frames) => { try self.set_bend(semitones, frames) }
+            pitch_bend_to(semitones, frames) => { try self.set_bend(semitones, frames) else error { return Result<void,Error>.failure(error) } }
             gain_to(gain, frames) => { self.gain.set(gain, frames) }
             all_notes_off => { for var voice in self.voices { voice.held = false; voice.release() } }
         }
@@ -108,7 +108,7 @@ class PolyphonicInstrument {
     }
     func active_voices() int { var count = 0; for var voice in self.voices { if voice.occupied() { count++ } } return count }
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var start = 0
         while start < samples.count() {
             var frames = (samples.count() - start) / self.format.channels
@@ -124,7 +124,7 @@ class PolyphonicInstrument {
             }
             for var voice in self.voices {
                 if voice.occupied() {
-                    try voice.render(&self.temporary[0:frames], @self.ratios[0:frames])
+                    try voice.render(&self.temporary[0:frames], @self.ratios[0:frames]) else error { return Result<void,Error>.failure(error) }
                     var frame = 0
                     while frame < frames {
                         var channel = 0

@@ -1,14 +1,14 @@
 use GFX.Audio
 test "public offline render produces owned PCM and a finished event" {
-    match Audio.offline(sample_rate:48_000, channels:1) {
+    match (try Audio.offline(sample_rate:48_000, channels:1)) {
         failure(error) => { panic(error.detail) }
         success(var audio) => {
             var samples:float32[] = [0.5 as float32, -0.5 as float32]
             let sound = audio.create(@samples[0:2], sample_rate:48_000)
             let group = audio.group(volume:0.5)
             let playing = audio.play(sound, Audio.Playback(group:group))
-            match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
-            match audio.render(frames:4) {
+            match (try audio.watch_end(playing)) { failure(error) => { panic(error.detail) }; success => {} }
+            match (try audio.render(frames:4)) {
                 failure(error) => { panic(error.detail) }
                 success(output) => { assert(output.count() == 4); assert(output[0] == 0.25 as float32 && output[1] == -0.25 as float32); assert(output[2] == 0.0 as float32 && output[3] == 0.0 as float32) }
             }
@@ -20,15 +20,15 @@ test "public offline render produces owned PCM and a finished event" {
 }
 
 test "loaded WAV is rendered without a playback device" {
-    match Audio.offline(sample_rate:48_000, channels:2) {
+    match (try Audio.offline(sample_rate:48_000, channels:2)) {
         failure(error) => { panic(error.detail) }
         success(var audio) => {
             let bytes = embed_bytes("../../../Assets/Audio/SpatialTone.wav")
-            match audio.try_decode(@bytes[0:bytes.count()]) {
+            match (try audio.decode(@bytes[0:bytes.count()])) {
                 failure(error) => { panic(error.detail) }
                 success(sound) => {
                     let playing = audio.play(sound)
-                    match audio.render(128) {
+                    match (try audio.render(128)) {
                         failure(error) => { panic(error.detail) }
                         success(output) => {
                             assert(output.count() == 256)

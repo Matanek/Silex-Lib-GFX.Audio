@@ -16,7 +16,7 @@ class Producer {
     }
 }
 func source(audio:&Audio) Audio.Stream {
-    match audio.stream(sample_rate:48_000, capacity_frames:512) {
+    match (try audio.stream(sample_rate:48_000, capacity_frames:512)) {
         failure(error) => { panic(error.detail) }
         success(value) => { return value }
     }
@@ -26,7 +26,7 @@ func orphaned_stream() Audio.Stream {
     let stream = source(audio)
     var producer = Producer()
     var block = producer.next()
-    match audio.write(stream, @block[0:block.count()]) { failure(error) => { panic(error.detail) }; success(count) => {} }
+    match (try audio.write(stream, @block[0:block.count()])) { failure(error) => { panic(error.detail) }; success(count) => {} }
     let playing = audio.play(stream)
     return stream
 }
@@ -38,17 +38,17 @@ test "independent producer writes copied blocks and drains one device playback" 
     var index = 0
     while index < 6 {
         var block = producer.next()
-        match audio.wait_writable(stream, minimum_frames:256) { failure(error) => { panic(error.detail) }; success => {} }
-        match audio.write(stream, @block[0:block.count()]) {
+        match (try audio.wait_writable(stream, minimum_frames:256)) { failure(error) => { panic(error.detail) }; success => {} }
+        match (try audio.write(stream, @block[0:block.count()])) {
             failure(error) => { panic(error.detail) }
             success(count) => { assert(count == 256) }
         }
         block.clear()
         index++
     }
-    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.close(stream)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.wait(playing)
-    match audio.stream_info(stream) {
+    match (try audio.stream_info(stream)) {
         failure(error) => { panic(error.detail) }
         success(info) => { assert(info.drained && info.written_frames == 1536 && info.consumed_frames == 1536 && info.discarded_frames == 0) }
     }
@@ -59,14 +59,14 @@ test "destroy producer owner safely and fade out a starved stream" {
     var audio = Audio()
     let current = source(audio)
     var block:float32[] = [0.25 as float32]
-    match audio.write(stale, @block[0:1]) {
+    match (try audio.write(stale, @block[0:1])) {
         success(count) => { panic("destroyed owner's stream targeted another stream") }
         failure(error) => { assert(error.kind == Kind.invalid_input()) }
     }
     let playing = audio.play(current)
     audio.stop(playing, fade_out_seconds:0.01)
     audio.wait(playing)
-    match audio.stream_info(current) {
+    match (try audio.stream_info(current)) {
         failure(error) => { panic(error.detail) }
         success(info) => { assert(info.stopped && !info.drained && info.queued_frames == 0) }
     }

@@ -12,8 +12,8 @@ class FiniteSource:Synthesis.Generator {
         self.clock = clock; self.processed = processed; self.duration = duration; self.format = clock.format
     }
     func render(samples:&float32[..]) Result<void, Error> {
-        try self.processed.render(samples)
-        if self.clock.rendered_frames() == self.duration { try self.clock.complete() }
+        try self.processed.render(samples) else error { return Result<void,Error>.failure(error) }
+        if self.clock.rendered_frames() == self.duration { try self.clock.complete() else error { return Result<void,Error>.failure(error) } }
         return Result<void, Error>.success()
     }
     func reset() { self.processed.reset() }

@@ -21,7 +21,7 @@ Fragment du parcours, après création d’`audio`, de `stream` et du producteur
 
 ```sx
 var block = producer.next(256)
-match audio.write(stream, @block[0:block.count()]) {
+match try audio.write(stream, @block[0:block.count()]) {
     failure(error) => { panic(error.detail) }
     success(frames) => { assert(frames == 256) }
 }

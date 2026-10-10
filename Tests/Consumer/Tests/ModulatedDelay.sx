@@ -7,7 +7,7 @@ use STD.Math
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("invalid accepted") } } }
 func effect(channels:int = 1, delay:float32 = 2.5, depth:float32 = 0.0, rate:float32 = 0.0, feedback:float32 = 0.0, wet:float32 = 1.0, sample_rate:int = 48_000) Processing.ModulatedDelay {
-    match Processing.ModulatedDelay.create(Processing.Format(sample_rate:sample_rate, channels:channels), max_delay_frames:8, delay_frames:delay, depth_frames:depth, rate_hz:rate, feedback:feedback, wet:wet) {
+    match (try Processing.ModulatedDelay.create(Processing.Format(sample_rate:sample_rate, channels:channels), max_delay_frames:8, delay_frames:delay, depth_frames:depth, rate_hz:rate, feedback:feedback, wet:wet)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
@@ -21,18 +21,18 @@ func sequence(channels:int) float32[] { var values:float32[] = []; var i = 0; wh
 test "fractional delay splits an impulse between two causal frames and wraps" {
     var delay = effect()
     var impulse = zeros(25); impulse[0] = 1.0; impulse[12] = -0.5
-    require(delay.process(&impulse[0:25]))
+    require((try delay.process(&impulse[0:25])))
     var expected = zeros(25); expected[2] = 0.5; expected[3] = 0.5; expected[14] = -0.25; expected[15] = -0.25
     close(@impulse[0:25], expected)
-    delay.reset(); require(delay.set_delay(8.0, 0.0))
-    impulse = zeros(20); impulse[0] = 1.0; require(delay.process(&impulse[0:20]))
+    delay.reset(); require((try delay.set_delay(8.0, 0.0)))
+    impulse = zeros(20); impulse[0] = 1.0; require((try delay.process(&impulse[0:20])))
     expected = zeros(20); expected[8] = 1.0; close(@impulse[0:20], expected)
 }
 test "feedback produces known positive and negative geometric echoes" {
     let feedbacks:float32[] = [0.5 as float32, -0.5 as float32]
     for feedback in feedbacks {
         var delay = effect(delay:2.0, feedback:feedback)
-        var impulse = zeros(12); impulse[0] = 1.0; require(delay.process(&impulse[0:12]))
+        var impulse = zeros(12); impulse[0] = 1.0; require((try delay.process(&impulse[0:12])))
         var expected = zeros(12); expected[2] = 1.0; expected[4] = feedback; expected[6] = 0.25; expected[8] = feedback * 0.25; expected[10] = 0.0625
         close(@impulse[0:12], expected)
     }
@@ -40,70 +40,70 @@ test "feedback produces known positive and negative geometric echoes" {
 test "shared frame LFO follows quarter cycle delays without cross channel mixing" {
     var delay = effect(channels:2, delay:2.0, depth:1.0, rate:4.0, sample_rate:16)
     var values:float32[] = [0.0625 as float32, -0.125 as float32, 0.125 as float32, -0.25 as float32, 0.1875 as float32, -0.375 as float32, 0.25 as float32, -0.5 as float32, 0.3125 as float32, -0.625 as float32, 0.375 as float32, -0.75 as float32]
-    require(delay.process(&values[0:12]))
+    require((try delay.process(&values[0:12])))
     close(@values[0:12], [0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0625 as float32, -0.125 as float32, 0.1875 as float32, -0.375 as float32, 0.1875 as float32, -0.375 as float32, 0.1875 as float32, -0.375 as float32])
 }
 test "modulated delay matches exact chunks and reset for one two and eight channels" {
     for channels in [1, 2, 8] {
         var delay = effect(channels, delay:4.0, depth:2.75, rate:3.5, feedback:0.625, wet:0.375)
         var whole = sequence(channels); var split = sequence(channels)
-        require(delay.process(&whole[0:whole.count()])); delay.reset()
-        require(delay.process(&split[0:0])); require(delay.process(&split[0:channels])); require(delay.process(&split[channels:513 * channels])); require(delay.process(&split[513 * channels:split.count()]))
+        require((try delay.process(&whole[0:whole.count()]))); delay.reset()
+        require((try delay.process(&split[0:0]))); require((try delay.process(&split[0:channels]))); require((try delay.process(&split[channels:513 * channels]))); require((try delay.process(&split[513 * channels:split.count()])))
         var i = 0; while i < whole.count() { assert(whole[i] == split[i]); i++ }
-        delay.reset(); var again = sequence(channels); require(delay.process(&again[0:again.count()]))
+        delay.reset(); var again = sequence(channels); require((try delay.process(&again[0:again.count()])))
         i = 0; while i < whole.count() { assert(whole[i] == again[i]); i++ }
     }
 }
 test "bypass and dry wet preserve input while history and phase continue" {
     var delay = effect(delay:1.0, wet:0.0)
     var values:float32[] = [0.25 as float32, 0.5 as float32]
-    require(delay.process(&values[0:2])); close(@values[0:2], [0.25 as float32, 0.5 as float32])
-    require(delay.set_wet(1.0)); values = [0.0 as float32]; require(delay.process(&values[0:1])); assert(values[0] == 0.5 as float32)
-    delay.set_bypass(true); values = [0.75 as float32]; require(delay.process(&values[0:1])); assert(values[0] == 0.75 as float32)
-    delay.set_bypass(false); values = [0.0 as float32]; require(delay.process(&values[0:1])); assert(values[0] == 0.75 as float32)
-    require(delay.set_delay(2.5, 0.5)); require(delay.set_rate(1.0)); require(delay.set_feedback(-0.25))
-    delay.reset(); values = zeros(8); require(delay.process(&values[0:8])); close(@values[0:8], zeros(8))
+    require((try delay.process(&values[0:2]))); close(@values[0:2], [0.25 as float32, 0.5 as float32])
+    require((try delay.set_wet(1.0))); values = [0.0 as float32]; require((try delay.process(&values[0:1]))); assert(values[0] == 0.5 as float32)
+    delay.set_bypass(true); values = [0.75 as float32]; require((try delay.process(&values[0:1]))); assert(values[0] == 0.75 as float32)
+    delay.set_bypass(false); values = [0.0 as float32]; require((try delay.process(&values[0:1]))); assert(values[0] == 0.75 as float32)
+    require((try delay.set_delay(2.5, 0.5))); require((try delay.set_rate(1.0))); require((try delay.set_feedback(-0.25)))
+    delay.reset(); values = zeros(8); require((try delay.process(&values[0:8]))); close(@values[0:8], zeros(8))
     var moving = effect(delay:2.0, depth:1.0, rate:4.0, sample_rate:16)
     moving.set_bypass(true); values = [0.25 as float32, 0.5 as float32, 0.75 as float32]
-    require(moving.process(&values[0:3])); moving.set_bypass(false)
-    require(moving.set_rate(0.0))
-    values = [1.0 as float32]; require(moving.process(&values[0:1])); assert(Math.abs(values[0] - 0.75) < 0.00001)
-    values = [0.5 as float32]; require(moving.process(&values[0:1])); assert(Math.abs(values[0] - 1.0) < 0.00001)
-    require(moving.set_delay(3.0, 1.0))
-    values = [0.0 as float32]; require(moving.process(&values[0:1])); assert(Math.abs(values[0] - 1.0) < 0.00001)
+    require((try moving.process(&values[0:3]))); moving.set_bypass(false)
+    require((try moving.set_rate(0.0)))
+    values = [1.0 as float32]; require((try moving.process(&values[0:1]))); assert(Math.abs(values[0] - 0.75) < 0.00001)
+    values = [0.5 as float32]; require((try moving.process(&values[0:1]))); assert(Math.abs(values[0] - 1.0) < 0.00001)
+    require((try moving.set_delay(3.0, 1.0)))
+    values = [0.0 as float32]; require((try moving.process(&values[0:1]))); assert(Math.abs(values[0] - 1.0) < 0.00001)
     moving.reset(); values = [1.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32]
-    require(moving.process(&values[0:4])); close(@values[0:4], [0.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32])
+    require((try moving.process(&values[0:4]))); close(@values[0:4], [0.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32])
 }
 test "invalid settings and whole blocks fail before advancing delay state" {
     let format = Processing.Format(sample_rate:48_000, channels:2)
     for maximum in [0, 524_288] {
-        match Processing.ModulatedDelay.create(format, maximum, delay_frames:2.0) { success(value) => { panic("capacity accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+        match (try Processing.ModulatedDelay.create(format, maximum, delay_frames:2.0)) { success(value) => { panic("capacity accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     }
-    match Processing.ModulatedDelay.create(Processing.Format(sample_rate:16_777_217, channels:1), 8, 2.0) { success(value) => { panic("rate accepted") }; failure(error) => {} }
-    match Processing.ModulatedDelay.create(format, 8, 0.5) { success(value) => { panic("delay accepted") }; failure(error) => {} }
-    match Processing.ModulatedDelay.create(format, 8, 2.0, depth_frames:-1.0) { success(value) => { panic("depth accepted") }; failure(error) => {} }
-    match Processing.ModulatedDelay.create(format, 8, 2.0, rate_hz:24_000.0) { success(value) => { panic("LFO rate accepted") }; failure(error) => {} }
-    match Processing.ModulatedDelay.create(format, 8, 2.0, feedback:1.0) { success(value) => { panic("feedback accepted") }; failure(error) => {} }
-    match Processing.ModulatedDelay.create(format, 8, 2.0, wet:-0.01) { success(value) => { panic("wet accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(Processing.Format(sample_rate:16_777_217, channels:1), 8, 2.0)) { success(value) => { panic("rate accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(format, 8, 0.5)) { success(value) => { panic("delay accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(format, 8, 2.0, depth_frames:-1.0)) { success(value) => { panic("depth accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(format, 8, 2.0, rate_hz:24_000.0)) { success(value) => { panic("LFO rate accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(format, 8, 2.0, feedback:1.0)) { success(value) => { panic("feedback accepted") }; failure(error) => {} }
+    match (try Processing.ModulatedDelay.create(format, 8, 2.0, wet:-0.01)) { success(value) => { panic("wet accepted") }; failure(error) => {} }
     var delay = effect(channels:2, delay:1.0)
-    invalid(delay.set_delay(1.0, 0.5)); invalid(delay.set_delay(8.0, 0.01)); invalid(delay.set_delay(Math.sqrt(-1.0), 0.0))
-    invalid(delay.set_rate(-1.0)); invalid(delay.set_rate(24_000.0)); invalid(delay.set_rate(Math.exp(1000.0)))
-    invalid(delay.set_feedback(1.0)); invalid(delay.set_feedback(-1.0)); invalid(delay.set_wet(1.01)); invalid(delay.set_wet(Math.sqrt(-1.0)))
+    invalid((try delay.set_delay(1.0, 0.5))); invalid((try delay.set_delay(8.0, 0.01))); invalid((try delay.set_delay(Math.sqrt(-1.0), 0.0)))
+    invalid((try delay.set_rate(-1.0))); invalid((try delay.set_rate(24_000.0))); invalid((try delay.set_rate(Math.exp(1000.0))))
+    invalid((try delay.set_feedback(1.0))); invalid((try delay.set_feedback(-1.0))); invalid((try delay.set_wet(1.01))); invalid((try delay.set_wet(Math.sqrt(-1.0))))
     var bad:float32[] = [0.25 as float32, 0.5 as float32, Math.sqrt(-1.0) as float32, 0.0 as float32]
-    invalid(delay.process(&bad[0:4])); assert(bad[0] == 0.25 as float32 && bad[1] == 0.5 as float32)
+    invalid((try delay.process(&bad[0:4]))); assert(bad[0] == 0.25 as float32 && bad[1] == 0.5 as float32)
     var values:float32[] = [0.25 as float32, 0.5 as float32, 0.75 as float32]
-    invalid(delay.process(&values[0:3])); assert(values[0] == 0.25 as float32 && values[2] == 0.75 as float32)
-    require(delay.process(&values[0:2])); close(@values[0:2], [0.0 as float32, 0.0 as float32])
-    require(delay.set_delay(8.0, 0.0)); require(delay.set_delay(1.0, 0.0))
-    values = [0.0 as float32, 0.0 as float32]; require(delay.process(&values[0:2])); close(@values[0:2], [0.25 as float32, 0.5 as float32])
+    invalid((try delay.process(&values[0:3]))); assert(values[0] == 0.25 as float32 && values[2] == 0.75 as float32)
+    require((try delay.process(&values[0:2]))); close(@values[0:2], [0.0 as float32, 0.0 as float32])
+    require((try delay.set_delay(8.0, 0.0))); require((try delay.set_delay(1.0, 0.0)))
+    values = [0.0 as float32, 0.0 as float32]; require((try delay.process(&values[0:2]))); close(@values[0:2], [0.25 as float32, 0.5 as float32])
 }
 test "overflow preserves the failing frame and reset clears retained feedback" {
     var delay = effect(channels:2, delay:1.0, feedback:0.5)
     var values:float32[] = [0.25 as float32, 3.402823466e38 as float32, 0.5 as float32, 3.402823466e38 as float32]
-    match delay.process(&values[0:4]) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
+    match (try delay.process(&values[0:4])) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
     assert(values[0] == 0.0 as float32 && values[1] == 0.0 as float32)
     assert(values[2] == 0.5 as float32 && values[3] == 3.402823466e38 as float32)
-    delay.reset(); values = zeros(4); require(delay.process(&values[0:4])); close(@values[0:4], zeros(4))
+    delay.reset(); values = zeros(4); require((try delay.process(&values[0:4]))); close(@values[0:4], zeros(4))
 }
 class Pulse:Synthesis.Generator {
     let format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1)
@@ -117,20 +117,20 @@ class Pulse:Synthesis.Generator {
 test "static flanger cancels a known tone and dry wet keeps its explicit level" {
     var delay = effect(delay:2.0, wet:0.5)
     var values:float32[] = [0.0 as float32, 0.5 as float32, 0.0 as float32, -0.5 as float32, 0.0 as float32, 0.5 as float32, 0.0 as float32, -0.5 as float32]
-    require(delay.process(&values[0:8]))
+    require((try delay.process(&values[0:8])))
     close(@values[0:8], [0.0 as float32, 0.25 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32])
-    require(delay.set_wet(0.25)); delay.reset()
+    require((try delay.set_wet(0.25))); delay.reset()
     values = [0.0 as float32, 0.5 as float32, 0.0 as float32, -0.5 as float32]
-    require(delay.process(&values[0:4])); assert(values[1] == 0.375 as float32 && values[3] == -0.25 as float32)
+    require((try delay.process(&values[0:4]))); assert(values[1] == 0.375 as float32 && values[3] == -0.25 as float32)
 }
 test "modulation feedback stays bounded and its silence tail decays" {
     var delay = effect(delay:4.0, depth:2.5, rate:7.0, feedback:0.875)
     var values:float32[] = []; var i = 0
     while i < 4_096 { values.append(0.125); i++ }
-    require(delay.process(&values[0:values.count()]))
+    require((try delay.process(&values[0:values.count()])))
     for value in values { assert(Math.is_finite(value) && value >= 0.0 && value <= 1.0) }
     assert(values[values.count() - 1] > 0.99 as float32)
-    values = zeros(4_096); require(delay.process(&values[0:values.count()]))
+    values = zeros(4_096); require((try delay.process(&values[0:values.count()])))
     assert(values[0] > 0.9 as float32 && values[values.count() - 1] < 0.000001 as float32)
 }
 class Double:Processing.Processor {
@@ -140,11 +140,11 @@ class Double:Processing.Processor {
 }
 test "consumer generator composes a modulated delay and custom processor" {
     let effects:Processing.Processor[] = [effect(), Double()]
-    match Synthesis.Processed.create(Pulse(), effects) {
+    match (try Synthesis.Processed.create(Pulse(), effects)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
-            var values = zeros(6); require(source.render(&values[0:6])); close(@values[0:6], [0.0 as float32, 0.0 as float32, 1.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32])
-            source.reset(); values = zeros(6); require(source.render(&values[0:3])); require(source.render(&values[3:6])); assert(values[2] == 1.0 as float32 && values[3] == 1.0 as float32)
+            var values = zeros(6); require((try source.render(&values[0:6]))); close(@values[0:6], [0.0 as float32, 0.0 as float32, 1.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32])
+            source.reset(); values = zeros(6); require((try source.render(&values[0:3]))); require((try source.render(&values[3:6]))); assert(values[2] == 1.0 as float32 && values[3] == 1.0 as float32)
         }
     }
 }

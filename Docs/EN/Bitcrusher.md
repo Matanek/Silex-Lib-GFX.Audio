@@ -27,10 +27,10 @@ mutable view on the application thread and can join a
 Use this fragment once `format` and `samples` are prepared:
 
 ```sx
-match Processing.Bitcrusher.create(format, bits:8, hold_frames:6, wet:0.75) {
+match try Processing.Bitcrusher.create(format, bits:8, hold_frames:6, wet:0.75) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

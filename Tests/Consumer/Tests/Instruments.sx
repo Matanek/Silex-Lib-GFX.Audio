@@ -6,30 +6,30 @@ use STD.Math
 
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func instrument(channels:int = 1, voices:int = 4, policy:Synthesis.VoicePolicy = Synthesis.VoicePolicy.steal_oldest, attack:int = 0, decay:int = 0, sustain:float32 = 1.0, release:int = 4, fade:int = 0) Synthesis.SineInstrument {
-    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:channels), voices, policy, attack, decay, sustain, release, fade) {
+    match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:channels), voices, policy, attack, decay, sustain, release, fade)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
 func zeros(count:int) float32[] { var samples:float32[] = []; var i = 0; while i < count { samples.append(0.0); i++ } return samples }
 func sequence(source:Synthesis.Instrument, events:Synthesis.Event[], capacity:int = 4_096) Synthesis.Sequence {
-    match Synthesis.Sequence.create(source, events, capacity) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Synthesis.Sequence.create(source, events, capacity)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func invalid(result:Result<void, Error>, kind:Kind = Kind.invalid_input()) { match result { failure(error) => { assert(error.kind == kind && error.operation == "audio.synthesis") }; success => { panic("invalid command accepted") } } }
 func near(actual:float32, expected:float64) { assert(Math.abs(actual as float64 - expected) < 0.00001) }
 test "polyphonic instrument renders independent sine voices with velocity and linear release" {
     var source = instrument(channels:2)
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 0.5)))
-    require(source.send(Synthesis.Command.note_on(2, 250.0, 0.25)))
-    var samples = zeros(8); require(source.render(&samples[0:8]))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 0.5))))
+    require((try source.send(Synthesis.Command.note_on(2, 250.0, 0.25))))
+    var samples = zeros(8); require((try source.render(&samples[0:8])))
     var frame = 0; while frame < 4 { near(samples[frame * 2], 0.5 * Math.sin(frame as float64 * Math.pi<float64>() / 4.0) + 0.25 * Math.sin(frame as float64 * Math.pi<float64>() / 2.0)); assert(samples[frame * 2] == samples[frame * 2 + 1]); frame++ }
-    require(source.send(Synthesis.Command.all_notes_off)); require(source.render(&samples[0:8]))
+    require((try source.send(Synthesis.Command.all_notes_off))); require((try source.render(&samples[0:8])))
     frame = 0; while frame < 4 { near(samples[frame * 2], (1.0 - frame as float64 / 4.0) * (0.5 * Math.sin((frame + 4) as float64 * Math.pi<float64>() / 4.0) + 0.25 * Math.sin((frame + 4) as float64 * Math.pi<float64>() / 2.0))); frame++ }
-    assert(source.active_voices() == 0); require(source.render(&samples[0:8])); for sample in samples { assert(sample == 0.0 as float32) }
+    assert(source.active_voices() == 0); require((try source.render(&samples[0:8]))); for sample in samples { assert(sample == 0.0 as float32) }
 }
 test "instrument ADSR follows an independent per-frame envelope" {
     var source = instrument(attack:4, decay:4, sustain:0.5, release:4)
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 1.0)))
-    var samples = zeros(12); require(source.render(&samples[0:12]))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 1.0))))
+    var samples = zeros(12); require((try source.render(&samples[0:12])))
     var frame = 0
     while frame < 12 {
         var gain:float64 = 0.5
@@ -37,89 +37,89 @@ test "instrument ADSR follows an independent per-frame envelope" {
         else if frame < 8 { gain = 1.0 - 0.5 * (frame - 4) as float64 / 4.0 }
         near(samples[frame], gain * Math.sin(frame as float64 * Math.pi<float64>() / 4.0)); frame++
     }
-    require(source.send(Synthesis.Command.note_off(1))); samples = zeros(5); require(source.render(&samples[0:5]))
+    require((try source.send(Synthesis.Command.note_off(1)))); samples = zeros(5); require((try source.render(&samples[0:5])))
     frame = 0; while frame < 4 { near(samples[frame], 0.5 * (1.0 - frame as float64 / 4.0) * Math.sin((frame + 12) as float64 * Math.pi<float64>() / 4.0)); frame++ }
     assert(samples[4] == 0.0 as float32 && source.active_voices() == 0)
 }
 test "repeated pitches have distinct identities and duplicate identities reject without mutation" {
     var source = instrument(); var reference = instrument()
-    for id in [1, 2] { require(source.send(Synthesis.Command.note_on(id, 125.0, 0.25))); require(reference.send(Synthesis.Command.note_on(id, 125.0, 0.25))) }
-    invalid(source.send(Synthesis.Command.note_on(1, 250.0, 0.5)))
-    require(source.send(Synthesis.Command.note_off(1))); require(reference.send(Synthesis.Command.note_off(1)))
-    invalid(source.send(Synthesis.Command.note_on(1, 250.0, 0.5)))
+    for id in [1, 2] { require((try source.send(Synthesis.Command.note_on(id, 125.0, 0.25)))); require((try reference.send(Synthesis.Command.note_on(id, 125.0, 0.25)))) }
+    invalid((try source.send(Synthesis.Command.note_on(1, 250.0, 0.5))))
+    require((try source.send(Synthesis.Command.note_off(1)))); require((try reference.send(Synthesis.Command.note_off(1))))
+    invalid((try source.send(Synthesis.Command.note_on(1, 250.0, 0.5))))
     var samples = zeros(5); var expected = samples
-    require(source.render(&samples[0:5])); require(reference.render(&expected[0:5])); assert(source.active_voices() == 1)
+    require((try source.render(&samples[0:5]))); require((try reference.render(&expected[0:5]))); assert(source.active_voices() == 1)
     var i = 0; while i < 5 { assert(samples[i] == expected[i]); i++ }
-    require(source.send(Synthesis.Command.note_on(1, 250.0, 0.5))); assert(source.active_voices() == 2)
+    require((try source.send(Synthesis.Command.note_on(1, 250.0, 0.5)))); assert(source.active_voices() == 2)
 }
 test "voice capacity rejection preserves existing voices and stealing selects the oldest start" {
     var rejecting = instrument(voices:1, policy:Synthesis.VoicePolicy.reject)
-    require(rejecting.send(Synthesis.Command.note_on(1, 125.0, 1.0)))
-    invalid(rejecting.send(Synthesis.Command.note_on(2, 250.0, 1.0)), Kind.limit_exceeded())
-    var samples = zeros(4); require(rejecting.render(&samples[0:4])); near(samples[1], Math.sqrt(0.5))
+    require((try rejecting.send(Synthesis.Command.note_on(1, 125.0, 1.0))))
+    invalid((try rejecting.send(Synthesis.Command.note_on(2, 250.0, 1.0))), Kind.limit_exceeded())
+    var samples = zeros(4); require((try rejecting.render(&samples[0:4]))); near(samples[1], Math.sqrt(0.5))
     var stealing = instrument(voices:2)
-    require(stealing.send(Synthesis.Command.note_on(1, 125.0, 0.5)))
-    require(stealing.send(Synthesis.Command.note_on(2, 250.0, 0.25)))
-    require(stealing.render(&samples[0:3])); require(stealing.send(Synthesis.Command.note_on(3, 62.5, 0.5)))
-    require(stealing.send(Synthesis.Command.note_off(1)))
-    require(stealing.render(&samples[0:4]))
+    require((try stealing.send(Synthesis.Command.note_on(1, 125.0, 0.5))))
+    require((try stealing.send(Synthesis.Command.note_on(2, 250.0, 0.25))))
+    require((try stealing.render(&samples[0:3]))); require((try stealing.send(Synthesis.Command.note_on(3, 62.5, 0.5))))
+    require((try stealing.send(Synthesis.Command.note_off(1))))
+    require((try stealing.render(&samples[0:4])))
     var i = 0; while i < 4 { near(samples[i], 0.25 * Math.sin((i + 3) as float64 * Math.pi<float64>() / 2.0) + 0.5 * Math.sin(i as float64 * Math.pi<float64>() / 8.0)); i++ }
     assert(stealing.active_voices() == 2)
 }
 test "stolen voice fades from its last sample and repeated replacement remains continuous" {
     var source = instrument(voices:1, fade:4)
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 1.0)))
-    var samples = zeros(4); require(source.render(&samples[0:3])); let previous = samples[2]
-    require(source.send(Synthesis.Command.note_on(2, 250.0, 0.5))); require(source.render(&samples[0:2]))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 1.0))))
+    var samples = zeros(4); require((try source.render(&samples[0:3]))); let previous = samples[2]
+    require((try source.send(Synthesis.Command.note_on(2, 250.0, 0.5)))); require((try source.render(&samples[0:2])))
     assert(samples[0] == previous); near(samples[1], previous as float64 * 0.75 + 0.5 * 0.25)
-    let another = samples[1]; require(source.send(Synthesis.Command.note_on(3, 125.0, 0.5)))
-    require(source.render(&samples[0:4])); assert(samples[0] == another)
-    require(source.send(Synthesis.Command.all_notes_off)); require(source.render(&samples[0:4])); assert(source.active_voices() == 0)
-    require(source.render(&samples[0:4])); for sample in samples { assert(sample == 0.0 as float32) }
+    let another = samples[1]; require((try source.send(Synthesis.Command.note_on(3, 125.0, 0.5))))
+    require((try source.render(&samples[0:4]))); assert(samples[0] == another)
+    require((try source.send(Synthesis.Command.all_notes_off))); require((try source.render(&samples[0:4]))); assert(source.active_voices() == 0)
+    require((try source.render(&samples[0:4]))); for sample in samples { assert(sample == 0.0 as float32) }
 }
 test "sustain retains only released keys and all notes off overrides a down pedal" {
     var source = instrument(); var samples = zeros(8)
-    require(source.send(Synthesis.Command.sustain(true)))
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 0.5)))
-    require(source.send(Synthesis.Command.note_on(2, 250.0, 0.5)))
-    require(source.send(Synthesis.Command.note_off(1))); require(source.render(&samples[0:8])); assert(source.active_voices() == 2)
-    require(source.send(Synthesis.Command.sustain(false))); require(source.render(&samples[0:4])); assert(source.active_voices() == 1)
-    require(source.send(Synthesis.Command.sustain(true))); require(source.send(Synthesis.Command.all_notes_off))
-    require(source.render(&samples[0:4])); assert(source.active_voices() == 0)
-    source.reset(); require(source.send(Synthesis.Command.note_on(1, 125.0, 0.5))); require(source.send(Synthesis.Command.note_off(1)))
-    require(source.render(&samples[0:4])); assert(source.active_voices() == 0)
+    require((try source.send(Synthesis.Command.sustain(true))))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 0.5))))
+    require((try source.send(Synthesis.Command.note_on(2, 250.0, 0.5))))
+    require((try source.send(Synthesis.Command.note_off(1)))); require((try source.render(&samples[0:8]))); assert(source.active_voices() == 2)
+    require((try source.send(Synthesis.Command.sustain(false)))); require((try source.render(&samples[0:4]))); assert(source.active_voices() == 1)
+    require((try source.send(Synthesis.Command.sustain(true)))); require((try source.send(Synthesis.Command.all_notes_off)))
+    require((try source.render(&samples[0:4]))); assert(source.active_voices() == 0)
+    source.reset(); require((try source.send(Synthesis.Command.note_on(1, 125.0, 0.5)))); require((try source.send(Synthesis.Command.note_off(1))))
+    require((try source.render(&samples[0:4]))); assert(source.active_voices() == 0)
 }
 test "pitch bend preserves phase applies to future notes and rejects unsafe moves atomically" {
     var source = instrument(voices:2); var samples = zeros(4)
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 0.5))); require(source.render(&samples[0:1]))
-    require(source.send(Synthesis.Command.pitch_bend(12.0))); require(source.render(&samples[0:4]))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 0.5)))); require((try source.render(&samples[0:1])))
+    require((try source.send(Synthesis.Command.pitch_bend(12.0)))); require((try source.render(&samples[0:4])))
     var i = 0; while i < 4 { near(samples[i], 0.5 * Math.sin(Math.pi<float64>() / 4.0 + i as float64 * Math.pi<float64>() / 2.0)); i++ }
-    require(source.send(Synthesis.Command.note_on(2, 125.0, 0.25)))
-    invalid(source.send(Synthesis.Command.pitch_bend(24.0)))
-    invalid(source.send(Synthesis.Command.note_on(3, 300.0, 0.5)))
-    require(source.render(&samples[0:4]))
+    require((try source.send(Synthesis.Command.note_on(2, 125.0, 0.25))))
+    invalid((try source.send(Synthesis.Command.pitch_bend(24.0))))
+    invalid((try source.send(Synthesis.Command.note_on(3, 300.0, 0.5))))
+    require((try source.render(&samples[0:4])))
     i = 0; while i < 4 { near(samples[i], 0.5 * Math.sin(Math.pi<float64>() / 4.0 + (i + 4) as float64 * Math.pi<float64>() / 2.0) + 0.25 * Math.sin(i as float64 * Math.pi<float64>() / 2.0)); i++ }
-    source.reset(); require(source.send(Synthesis.Command.note_on(1, 125.0, 1.0))); require(source.render(&samples[0:4])); near(samples[1], Math.sqrt(0.5))
+    source.reset(); require((try source.send(Synthesis.Command.note_on(1, 125.0, 1.0)))); require((try source.render(&samples[0:4]))); near(samples[1], Math.sqrt(0.5))
 }
 test "invalid notes controls formats and incomplete frames preserve instrument state" {
     var source = instrument(channels:2); var baseline = instrument(channels:2)
     let frequencies:float32[] = [0.0 as float32, -1.0 as float32, 500.0 as float32, Math.sqrt(-1.0) as float32, Math.exp(1_000.0) as float32, 1.0e-44 as float32]
-    for frequency in frequencies { invalid(source.send(Synthesis.Command.note_on(1, frequency, 1.0))) }
-    invalid(source.send(Synthesis.Command.note_on(-1, 125.0, 1.0)))
-    invalid(source.send(Synthesis.Command.note_on(1, 125.0, 1.1)))
-    invalid(source.send(Synthesis.Command.note_off(-1)))
-    invalid(source.send(Synthesis.Command.pitch_bend(Math.sqrt(-1.0))))
-    invalid(source.send(Synthesis.Command.pitch_bend(-25.0)))
-    require(source.send(Synthesis.Command.note_on(1, 125.0, 1.0))); require(baseline.send(Synthesis.Command.note_on(1, 125.0, 1.0)))
+    for frequency in frequencies { invalid((try source.send(Synthesis.Command.note_on(1, frequency, 1.0)))) }
+    invalid((try source.send(Synthesis.Command.note_on(-1, 125.0, 1.0))))
+    invalid((try source.send(Synthesis.Command.note_on(1, 125.0, 1.1))))
+    invalid((try source.send(Synthesis.Command.note_off(-1))))
+    invalid((try source.send(Synthesis.Command.pitch_bend(Math.sqrt(-1.0)))))
+    invalid((try source.send(Synthesis.Command.pitch_bend(-25.0))))
+    require((try source.send(Synthesis.Command.note_on(1, 125.0, 1.0)))); require((try baseline.send(Synthesis.Command.note_on(1, 125.0, 1.0))))
     var samples = zeros(8); var expected = samples; samples[0] = 9.0
-    invalid(source.render(&samples[0:3])); assert(samples[0] == 9.0 as float32)
-    require(source.render(&samples[0:0])); require(source.render(&samples[0:8])); require(baseline.render(&expected[0:8]))
+    invalid((try source.render(&samples[0:3]))); assert(samples[0] == 9.0 as float32)
+    require((try source.render(&samples[0:0]))); require((try source.render(&samples[0:8]))); require((try baseline.render(&expected[0:8])))
     var i = 0; while i < 8 { assert(samples[i] == expected[i]); i++ }
-    for voices in [0, 65] { match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), max_voices:voices) { failure(error) => {}; success(value) => { panic("bad capacity accepted") } } }
-    for rate in [0, 16_777_217] { match Synthesis.SineInstrument.create(Processing.Format(sample_rate:rate, channels:1)) { failure(error) => {}; success(value) => { panic("bad rate accepted") } } }
-    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:0)) { failure(error) => {}; success(value) => { panic("bad channels accepted") } }
-    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), attack_frames:-1) { failure(error) => {}; success(value) => { panic("bad envelope accepted") } }
-    match Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), steal_fade_frames:4_097) { failure(error) => {}; success(value) => { panic("bad fade accepted") } }
+    for voices in [0, 65] { match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), max_voices:voices)) { failure(error) => {}; success(value) => { panic("bad capacity accepted") } } }
+    for rate in [0, 16_777_217] { match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:rate, channels:1))) { failure(error) => {}; success(value) => { panic("bad rate accepted") } } }
+    match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:0))) { failure(error) => {}; success(value) => { panic("bad channels accepted") } }
+    match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), attack_frames:-1)) { failure(error) => {}; success(value) => { panic("bad envelope accepted") } }
+    match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:1_000, channels:1), steal_fade_frames:4_097)) { failure(error) => {}; success(value) => { panic("bad fade accepted") } }
 }
 class Counter:Synthesis.Instrument {
     let format:Processing.Format = Processing.Format(sample_rate:1_000, channels:1)
@@ -140,11 +140,11 @@ test "simultaneous commands keep insertion order and a boundary event waits for 
     var voice = Counter()
     var source = sequence(voice, [Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, 100.0, 1.0)), Synthesis.Event(frame:2, command:Synthesis.Command.note_on(2, 100.0, 0.5)), Synthesis.Event(frame:2, command:Synthesis.Command.note_off(1)), Synthesis.Event(frame:2, command:Synthesis.Command.note_on(3, 100.0, 0.25)), Synthesis.Event(frame:4, command:Synthesis.Command.note_off(3))])
     var samples = zeros(5)
-    require(source.render(&samples[0:0])); assert(voice.last_event == -1)
-    require(source.render(&samples[0:2])); assert(voice.order_code == 1 && voice.last_event == 0 && source.rendered_frames() == 2)
-    require(source.render(&samples[2:2])); assert(voice.order_code == 1)
-    require(source.render(&samples[2:4])); assert(voice.order_code == 123 && voice.last_event == 2)
-    require(source.render(&samples[4:5])); assert(voice.last_event == 4)
+    require((try source.render(&samples[0:0]))); assert(voice.last_event == -1)
+    require((try source.render(&samples[0:2]))); assert(voice.order_code == 1 && voice.last_event == 0 && source.rendered_frames() == 2)
+    require((try source.render(&samples[2:2]))); assert(voice.order_code == 1)
+    require((try source.render(&samples[2:4]))); assert(voice.order_code == 123 && voice.last_event == 2)
+    require((try source.render(&samples[4:5]))); assert(voice.last_event == 4)
     assert(samples[0] == 1.0 as float32 && samples[1] == 1.0 as float32 && samples[2] == 0.25 as float32 && samples[3] == 0.25 as float32 && samples[4] == 0.0 as float32)
 }
 func score() Synthesis.Event[] {
@@ -154,11 +154,11 @@ test "polyphonic score is bit exact across chunks channels and reset including f
     for channels in [1, 2, 8] {
         var source = sequence(instrument(channels:channels, voices:2, attack:4, decay:8, release:17, fade:32), score())
         var samples = zeros(3_100 * channels); var split = samples
-        require(source.render(&samples[0:samples.count()])); source.reset()
+        require((try source.render(&samples[0:samples.count()]))); source.reset()
         var start = 0
         for frames in [1, 16, 495, 1, 487, 1, 512, 777, 810] {
-            let end = start + frames * channels; require(source.render(&split[start:end])); start = end
-            require(source.render(&split[start:start]))
+            let end = start + frames * channels; require((try source.render(&split[start:end]))); start = end
+            require((try source.render(&split[start:start])))
         }
         assert(start == split.count() && source.rendered_frames() == 3_100)
         var i = 0; while i < split.count() { assert(samples[i] == split[i]); i++ }
@@ -168,36 +168,36 @@ test "polyphonic score is bit exact across chunks channels and reset including f
 test "sequence rejects past unordered invalid and excess events and owns its score" {
     var voice = instrument(); var events:Synthesis.Event[] = [Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, 125.0, 1.0))]
     var source = sequence(voice, events, capacity:3); events[0] = Synthesis.Event(frame:0, command:Synthesis.Command.note_on(2, 250.0, 1.0))
-    var samples = zeros(5); require(source.render(&samples[0:5])); near(samples[1], Math.sqrt(0.5))
-    invalid(source.schedule(Synthesis.Event(frame:4, command:Synthesis.Command.note_off(1))))
-    require(source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.note_off(1))))
-    invalid(source.schedule(Synthesis.Event(frame:9, command:Synthesis.Command.all_notes_off)))
-    invalid(source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.note_on(2, 500.0, 1.0))))
-    require(source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.all_notes_off)))
-    invalid(source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.sustain(true))), Kind.limit_exceeded())
-    source.reset(); var expected = zeros(5); require(source.render(&expected[0:5])); var i = 0; while i < 5 { assert(samples[i] == expected[i]); i++ }
-    match Synthesis.Sequence.create(voice, [], capacity:0) { failure(error) => {}; success(value) => { panic("zero capacity accepted") } }
-    match Synthesis.Sequence.create(voice, [Synthesis.Event(frame:-1, command:Synthesis.Command.all_notes_off)]) { failure(error) => {}; success(value) => { panic("negative frame accepted") } }
-    match Synthesis.Sequence.create(voice, [Synthesis.Event(frame:2, command:Synthesis.Command.all_notes_off), Synthesis.Event(frame:1, command:Synthesis.Command.all_notes_off)]) { failure(error) => {}; success(value) => { panic("unordered score accepted") } }
+    var samples = zeros(5); require((try source.render(&samples[0:5]))); near(samples[1], Math.sqrt(0.5))
+    invalid((try source.schedule(Synthesis.Event(frame:4, command:Synthesis.Command.note_off(1)))))
+    require((try source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.note_off(1)))))
+    invalid((try source.schedule(Synthesis.Event(frame:9, command:Synthesis.Command.all_notes_off))))
+    invalid((try source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.note_on(2, 500.0, 1.0)))))
+    require((try source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.all_notes_off))))
+    invalid((try source.schedule(Synthesis.Event(frame:10, command:Synthesis.Command.sustain(true)))), Kind.limit_exceeded())
+    source.reset(); var expected = zeros(5); require((try source.render(&expected[0:5]))); var i = 0; while i < 5 { assert(samples[i] == expected[i]); i++ }
+    match (try Synthesis.Sequence.create(voice, [], capacity:0)) { failure(error) => {}; success(value) => { panic("zero capacity accepted") } }
+    match (try Synthesis.Sequence.create(voice, [Synthesis.Event(frame:-1, command:Synthesis.Command.all_notes_off)])) { failure(error) => {}; success(value) => { panic("negative frame accepted") } }
+    match (try Synthesis.Sequence.create(voice, [Synthesis.Event(frame:2, command:Synthesis.Command.all_notes_off), Synthesis.Event(frame:1, command:Synthesis.Command.all_notes_off)])) { failure(error) => {}; success(value) => { panic("unordered score accepted") } }
 }
 test "a rejected scheduled command preserves its frame and the unrendered suffix" {
     var source = sequence(instrument(), [Synthesis.Event(frame:0, command:Synthesis.Command.note_on(1, 125.0, 0.5)), Synthesis.Event(frame:2, command:Synthesis.Command.note_on(1, 250.0, 1.0))])
     var samples = zeros(4); samples[2] = 9.0; samples[3] = 9.0
-    invalid(source.render(&samples[0:4])); assert(source.rendered_frames() == 2 && samples[2] == 9.0 as float32 && samples[3] == 9.0 as float32)
+    invalid((try source.render(&samples[0:4]))); assert(source.rendered_frames() == 2 && samples[2] == 9.0 as float32 && samples[3] == 9.0 as float32)
     near(samples[0], 0.0); near(samples[1], 0.5 * Math.sqrt(0.5))
-    invalid(source.render(&samples[2:4])); assert(source.rendered_frames() == 2 && samples[2] == 9.0 as float32)
+    invalid((try source.render(&samples[2:4]))); assert(source.rendered_frames() == 2 && samples[2] == 9.0 as float32)
 }
 test "custom instruments compose with processors through a scheduled generator" {
     var voice = Counter(); var scheduled = sequence(voice, [Synthesis.Event(frame:1, command:Synthesis.Command.note_on(1, 100.0, 1.0)), Synthesis.Event(frame:3, command:Synthesis.Command.note_off(1))])
-    match Processing.Limiter.create(voice.format, ceiling_db:-6.020599913, release_seconds:0.0) {
+    match (try Processing.Limiter.create(voice.format, ceiling_db:-6.020599913, release_seconds:0.0)) {
         failure(error) => { panic(error.detail) }
         success(var limit) => {
-            match Synthesis.Processed.create(scheduled, [limit]) {
+            match (try Synthesis.Processed.create(scheduled, [limit])) {
                 failure(error) => { panic(error.detail) }
                 success(var source) => {
-                    var samples = zeros(5); require(source.render(&samples[0:5]))
+                    var samples = zeros(5); require((try source.render(&samples[0:5])))
                     near(samples[0], 0.0); near(samples[1], 0.5); near(samples[2], 0.5); near(samples[3], 0.0); near(samples[4], 0.0)
-                    source.reset(); assert(voice.position == 0); require(source.render(&samples[0:5])); near(samples[1], 0.5)
+                    source.reset(); assert(voice.position == 0); require((try source.render(&samples[0:5]))); near(samples[1], 0.5)
                 }
             }
         }
@@ -206,19 +206,19 @@ test "custom instruments compose with processors through a scheduled generator" 
 test "frame clock retains adjacent event positions beyond float32 integer precision" {
     var voice = Counter(); var source = sequence(voice, [Synthesis.Event(frame:16_777_217, command:Synthesis.Command.note_on(1, 100.0, 0.5)), Synthesis.Event(frame:16_777_218, command:Synthesis.Command.note_off(1))])
     var samples = zeros(512)
-    while source.rendered_frames() < 16_777_216 { require(source.render(&samples[0:512])) }
+    while source.rendered_frames() < 16_777_216 { require((try source.render(&samples[0:512]))) }
     assert(voice.last_event == -1)
-    require(source.render(&samples[0:1])); assert(voice.last_event == -1 && source.rendered_frames() == 16_777_217)
-    require(source.render(&samples[0:1])); assert(voice.last_event == 16_777_217 && samples[0] == 0.5 as float32)
-    require(source.render(&samples[0:1])); assert(voice.last_event == 16_777_218 && samples[0] == 0.0 as float32)
+    require((try source.render(&samples[0:1]))); assert(voice.last_event == -1 && source.rendered_frames() == 16_777_217)
+    require((try source.render(&samples[0:1]))); assert(voice.last_event == 16_777_217 && samples[0] == 0.5 as float32)
+    require((try source.render(&samples[0:1]))); assert(voice.last_event == 16_777_218 && samples[0] == 0.0 as float32)
 }
 test "maximum voice and channel capacities and extreme rates render finite samples" {
     for rate in [1, 16_777_216] {
-        match Synthesis.SineInstrument.create(Processing.Format(sample_rate:rate, channels:8), max_voices:64, attack_frames:16_777_216, decay_frames:16_777_216, release_frames:16_777_216, steal_fade_frames:4_096) {
+        match (try Synthesis.SineInstrument.create(Processing.Format(sample_rate:rate, channels:8), max_voices:64, attack_frames:16_777_216, decay_frames:16_777_216, release_frames:16_777_216, steal_fade_frames:4_096)) {
             failure(error) => { panic(error.detail) }
             success(var source) => {
-                var id = 0; while id < 64 { require(source.send(Synthesis.Command.note_on(id, rate as float32 * 0.125, 1.0))); id++ }
-                var samples = zeros(8 * 9); require(source.render(&samples[0:samples.count()])); for sample in samples { assert(Math.is_finite(sample)) }
+                var id = 0; while id < 64 { require((try source.send(Synthesis.Command.note_on(id, rate as float32 * 0.125, 1.0)))); id++ }
+                var samples = zeros(8 * 9); require((try source.render(&samples[0:samples.count()]))); for sample in samples { assert(Math.is_finite(sample)) }
                 assert(source.active_voices() == 64); source.reset(); assert(source.active_voices() == 0)
             }
         }
@@ -228,9 +228,9 @@ test "absolute seconds convert once with explicit rounding and exact integer bou
     let seconds:float64[] = [0.0 as float64, 0.00049 as float64, 0.0005 as float64, 1.5 as float64, 16_777.217 as float64]
     let frames:int[] = [0, 0, 1, 1_500, 16_777_217]
     var i = 0
-    while i < seconds.count() { match Synthesis.frame_at(seconds[i], 1_000) { failure(error) => { panic(error.detail) }; success(frame) => { assert(frame == frames[i]) } }; i++ }
+    while i < seconds.count() { match (try Synthesis.frame_at(seconds[i], 1_000)) { failure(error) => { panic(error.detail) }; success(frame) => { assert(frame == frames[i]) } }; i++ }
     let bad:float64[] = [-1.0 as float64, Math.sqrt(-1.0 as float64), Math.exp(1_000.0 as float64), 9_007_199_254_740_992.0 as float64]
-    for time in bad { match Synthesis.frame_at(time, 1) { failure(error) => {}; success(frame) => { panic("invalid time accepted") } } }
-    match Synthesis.frame_at(1.0, 0) { failure(error) => {}; success(frame) => { panic("invalid rate accepted") } }
-    match Synthesis.frame_at(9_007_199_254_740_991.0, 1) { failure(error) => { panic(error.detail) }; success(frame) => { assert(frame == 9_007_199_254_740_991) } }
+    for time in bad { match (try Synthesis.frame_at(time, 1)) { failure(error) => {}; success(frame) => { panic("invalid time accepted") } } }
+    match (try Synthesis.frame_at(1.0, 0)) { failure(error) => {}; success(frame) => { panic("invalid rate accepted") } }
+    match (try Synthesis.frame_at(9_007_199_254_740_991.0, 1)) { failure(error) => { panic(error.detail) }; success(frame) => { assert(frame == 9_007_199_254_740_991) } }
 }

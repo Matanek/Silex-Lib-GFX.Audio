@@ -22,14 +22,14 @@ Fragment with a `score:MIDI.Score` read at 48 kHz and a prepared stereo
 `lead:Synthesis.Instrument` at the same rate:
 
 ```sx
-match MIDI.Synthesizer.create([
+match try MIDI.Synthesizer.create([
     MIDI.Binding(channel:0, program:0, instrument:lead),
 ], gain:0.25, controller_ramp_frames:240) {
     failure(error) => { panic(error.detail) }
     success(var synth) => {
-        match MIDI.Player.create(score, synth) {
+        match try MIDI.Player.create(score, synth) {
             failure(error) => { panic(error.detail) }
-            success(var player) => { require(player.render(&samples[0:samples.count()])) }
+            success(var player) => { require(try player.render(&samples[0:samples.count()])) }
         }
     }
 }

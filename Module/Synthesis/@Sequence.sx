@@ -16,32 +16,32 @@ public class Sequence:Generator {
     static func create(instrument:Instrument, events:Event[], capacity:int = 4_096) Result<Sequence, Error> {
         if !valid_format(instrument.format) || capacity < 1 || capacity > 65_536 || events.count() > capacity { return Result<Sequence, Error>.failure(invalid("sequence requires a valid format and 1 to 65536 event capacity")) }
         var source = Sequence(instrument, capacity)
-        for event in events { try source.schedule(event) }
+        for event in events { try source.schedule(event) else error { return Result<Sequence,Error>.failure(error) } }
         return Result<Sequence, Error>.success(source)
     }
     func schedule(event:Event) Result<void, Error> {
         if event.frame < self.position || (self.events.count() > 0 && event.frame < self.events[self.events.count() - 1].frame) { return Result<void, Error>.failure(invalid("event must not precede the current frame or the last scheduled event")) }
-        try self.instrument.validate(event.command)
+        try self.instrument.validate(event.command) else error { return Result<void,Error>.failure(error) }
         if self.events.count() == self.capacity { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.synthesis", subject:null, detail:"sequence event capacity reached")) }
         self.events.append(event)
         return Result<void, Error>.success()
     }
     func rendered_frames() int { return self.position }
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         let frames = samples.count() / self.format.channels
         if self.position > 9_223_372_036_854_775_807 - frames { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.synthesis", subject:null, detail:"sequence frame counter exhausted")) }
         let end = self.position + frames
         var offset = 0
         while self.position < end {
             while self.next < self.events.count() && self.events[self.next].frame == self.position {
-                try self.instrument.send(self.events[self.next].command)
+                try self.instrument.send(self.events[self.next].command) else error { return Result<void,Error>.failure(error) }
                 self.next++
             }
             var until = end
             if self.next < self.events.count() && self.events[self.next].frame < until { until = self.events[self.next].frame }
             let count = (until - self.position) * self.format.channels
-            try self.instrument.render(&samples[offset:offset + count])
+            try self.instrument.render(&samples[offset:offset + count]) else error { return Result<void,Error>.failure(error) }
             self.position = until; offset += count
         }
         return Result<void, Error>.success()

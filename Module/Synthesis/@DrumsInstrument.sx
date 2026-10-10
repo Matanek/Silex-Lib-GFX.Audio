@@ -156,12 +156,12 @@ public class DrumsInstrument:Generator, Instrument {
         return Result<DrumsInstrument, Error>.success(DrumsInstrument(pool, brightness, decay_frames, release_frames))
     }
     func validate(command:Command) Result<void, Error> {
-        try self.pool.validate(command)
+        try self.pool.validate(command) else error { return Result<void,Error>.failure(error) }
         match command { note_on(_, frequency, _) => { if drum_index(frequency) < 0 { return Result<void, Error>.failure(invalid("drums support MIDI keys 36, 38, 42, 45, 46, 49 and 50; use Music.Drum")) } }; else => {} }
         return Result<void, Error>.success()
     }
-    func send(command:Command) Result<void, Error> { try self.validate(command); return self.pool.send(command) }
+    func send(command:Command) Result<void, Error> { try self.validate(command) else error { return Result<void,Error>.failure(error) }; return (try self.pool.send(command)) }
     func active_voices() int { return self.pool.active_voices() }
-    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func render(samples:&float32[..]) Result<void, Error> { return (try self.pool.render(samples)) }
     func reset() { self.pool.reset() }
 }

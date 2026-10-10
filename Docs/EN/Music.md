@@ -54,28 +54,28 @@ spaces, double accidentals and Unicode symbols are not accepted. The resulting
 pitch must remain within 0..127: C-1 and B#-2 are 0, while Cb-1 and G#9 are
 rejected. Tuning is unchanged.
 
-`key` returns `int` and `keys` returns `int[]`. Invalid input triggers `panic`
-with the offending name. For entered or loaded names, choose `try_key` or
-`try_keys` and inspect their `Result`:
+An ordinary call to `key` yields `int`, and to `keys` yields `int[]`. Invalid
+input triggers `panic`. For entered or loaded names, add `try` to the same
+call and inspect the `Result`:
 
 ```sx
-let candidate = Music.try_key("C#5") // Result<int, Error>
+let candidate = (try Music.key("C#5")) // Result<int, Error>
 match candidate {
     success(number) => { print(number) }
     failure(error) => { print(error.detail) }
 }
-let notes = try Music.try_keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+let notes = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
 ```
 
-`try_key` returns `Result<int, Error>` and `try_keys` returns `Result<int[], Error>`.
+`key` returns `Result<int, Error>` and `keys` returns `Result<int[], Error>`.
 Errors preserve `invalid_input`, operation `audio.music.key` and the name in
 `subject`. Both list conversions preserve order and duplicates and accept an
 empty list; the recoverable variant returns no partial result. These conversions
 happen when describing notes, outside DSP rendering. MIDI numbers remain directly usable.
 
-Previous `try Music.key(...)` and `try Music.keys(...)` calls become
-`try Music.try_key(...)` and `try Music.try_keys(...)` to preserve error handling
-with the current language.
+In a recoverable function, previous propagation becomes explicit:
+`try Music.key(name) else error { return Result<int, Error>.failure(error) }`.
+Without an `else` block, `try Music.key(name)` now keeps the result.
 
 ## Change the sound
 

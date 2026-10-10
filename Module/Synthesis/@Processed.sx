@@ -17,11 +17,11 @@ public class Processed:Generator {
         return Result<Processed, Error>.success(Processed(source, effects))
     }
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         if samples.count() == 0 { return Result<void, Error>.success() }
-        try self.source.render(samples)
-        try finite_block(@samples[0:samples.count()])
-        for var effect in self.effects { try effect.process(samples); try finite_block(@samples[0:samples.count()]) }
+        try self.source.render(samples) else error { return Result<void,Error>.failure(error) }
+        try finite_block(@samples[0:samples.count()]) else error { return Result<void,Error>.failure(error) }
+        for var effect in self.effects { try effect.process(samples) else error { return Result<void,Error>.failure(error) }; try finite_block(@samples[0:samples.count()]) else error { return Result<void,Error>.failure(error) } }
         return Result<void, Error>.success()
     }
     func reset() { self.source.reset(); for var effect in self.effects { effect.reset() } }

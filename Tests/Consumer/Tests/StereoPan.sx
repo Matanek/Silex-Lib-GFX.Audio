@@ -7,7 +7,7 @@ use STD.Math
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.process") }; success => { panic("invalid accepted") } } }
 func effect(pan:float32 = 0.0, wet:float32 = 1.0) Processing.StereoPan {
-    match Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), pan, wet) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), pan, wet)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func compare(actual:@float32[..], expected:float32[]) {
     assert(actual.count() == expected.count()); var i = 0
@@ -18,60 +18,60 @@ func sequence() float32[] { var values:float32[] = []; var i = 0; while i < 2_06
 test "stereo pan preserves center and routes both channel bases at the poles" {
     var pan = effect()
     var values:float32[] = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32, 0.25 as float32, -0.25 as float32]
-    require(pan.process(&values[0:6])); compare(@values[0:6], [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32, 0.25 as float32, -0.25 as float32])
-    require(pan.set_pan(-1.0)); require(pan.process(&values[0:6])); compare(@values[0:6], [1.0 as float32, 0.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32])
-    require(pan.set_pan(1.0)); values = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32, 0.25 as float32, -0.25 as float32]
-    require(pan.process(&values[0:6])); compare(@values[0:6], [0.0 as float32, 1.0 as float32, 0.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32])
-    values = [0.75 as float32, 0.75 as float32]; require(pan.process(&values[0:2])); compare(@values[0:2], [0.0 as float32, 1.5 as float32])
+    require((try pan.process(&values[0:6]))); compare(@values[0:6], [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32, 0.25 as float32, -0.25 as float32])
+    require((try pan.set_pan(-1.0))); require((try pan.process(&values[0:6]))); compare(@values[0:6], [1.0 as float32, 0.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32, 0.0 as float32])
+    require((try pan.set_pan(1.0))); values = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32, 0.25 as float32, -0.25 as float32]
+    require((try pan.process(&values[0:6]))); compare(@values[0:6], [0.0 as float32, 1.0 as float32, 0.0 as float32, 1.0 as float32, 0.0 as float32, 0.0 as float32])
+    values = [0.75 as float32, 0.75 as float32]; require((try pan.process(&values[0:2]))); compare(@values[0:2], [0.0 as float32, 1.5 as float32])
 }
 
 test "intermediate pan transfers with sine cosine gains and dry wet matrix" {
     let root_half:float32 = 0.70710677
     var pan = effect(-0.5)
     var values:float32[] = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32]
-    require(pan.process(&values[0:4])); compare(@values[0:4], [1.0 as float32, 0.0 as float32, root_half, root_half])
+    require((try pan.process(&values[0:4]))); compare(@values[0:4], [1.0 as float32, 0.0 as float32, root_half, root_half])
     assert(Math.abs(values[2] * values[2] + values[3] * values[3] - 1.0) < 0.000001)
-    require(pan.set_pan(0.5)); values = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32]
-    require(pan.process(&values[0:4])); compare(@values[0:4], [root_half, root_half, 0.0 as float32, 1.0 as float32])
-    require(pan.set_pan(-1.0)); require(pan.set_wet(0.5)); values = [0.25 as float32, 0.5 as float32]
-    require(pan.process(&values[0:2])); compare(@values[0:2], [0.5 as float32, 0.25 as float32])
+    require((try pan.set_pan(0.5))); values = [1.0 as float32, 0.0 as float32, 0.0 as float32, 1.0 as float32]
+    require((try pan.process(&values[0:4]))); compare(@values[0:4], [root_half, root_half, 0.0 as float32, 1.0 as float32])
+    require((try pan.set_pan(-1.0))); require((try pan.set_wet(0.5))); values = [0.25 as float32, 0.5 as float32]
+    require((try pan.process(&values[0:2]))); compare(@values[0:2], [0.5 as float32, 0.25 as float32])
 }
 
 test "pan changes bypass and reset retain settings with exact chunk equivalence" {
     var pan = effect(0.375, wet:0.75)
     var whole = sequence(); var split = sequence()
-    require(pan.process(&whole[0:whole.count()])); pan.reset()
-    require(pan.process(&split[0:0])); require(pan.process(&split[0:10])); require(pan.process(&split[10:1_028])); require(pan.process(&split[1_028:split.count()]))
+    require((try pan.process(&whole[0:whole.count()]))); pan.reset()
+    require((try pan.process(&split[0:0]))); require((try pan.process(&split[0:10]))); require((try pan.process(&split[10:1_028]))); require((try pan.process(&split[1_028:split.count()])))
     var i = 0; while i < whole.count() { assert(whole[i] == split[i]); i++ }
-    pan.set_bypass(true); split = sequence(); pan.reset(); require(pan.process(&split[0:split.count()])); compare(@split[0:split.count()], sequence())
-    pan.set_bypass(false); require(pan.set_wet(0.0)); require(pan.process(&split[0:split.count()])); compare(@split[0:split.count()], sequence())
-    require(pan.set_wet(1.0)); require(pan.set_pan(1.0)); split = [0.25 as float32, 0.5 as float32]; pan.reset()
-    require(pan.process(&split[0:2])); compare(@split[0:2], [0.0 as float32, 0.75 as float32])
+    pan.set_bypass(true); split = sequence(); pan.reset(); require((try pan.process(&split[0:split.count()]))); compare(@split[0:split.count()], sequence())
+    pan.set_bypass(false); require((try pan.set_wet(0.0))); require((try pan.process(&split[0:split.count()]))); compare(@split[0:split.count()], sequence())
+    require((try pan.set_wet(1.0))); require((try pan.set_pan(1.0))); split = [0.25 as float32, 0.5 as float32]; pan.reset()
+    require((try pan.process(&split[0:2]))); compare(@split[0:2], [0.0 as float32, 0.75 as float32])
 }
 
 test "pan rejects wrong formats nonfinite controls and blocks before mutation" {
     let mono = Processing.Format(sample_rate:48_000, channels:1)
-    match Processing.StereoPan.create(mono) { success(value) => { panic("mono accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Processing.StereoPan.create(Processing.Format(sample_rate:0, channels:2)) { success(value) => { panic("rate accepted") }; failure(error) => {} }
-    match Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), pan:1.01) { success(value) => { panic("pan accepted") }; failure(error) => {} }
-    match Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), wet:-0.01) { success(value) => { panic("wet accepted") }; failure(error) => {} }
+    match (try Processing.StereoPan.create(mono)) { success(value) => { panic("mono accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Processing.StereoPan.create(Processing.Format(sample_rate:0, channels:2))) { success(value) => { panic("rate accepted") }; failure(error) => {} }
+    match (try Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), pan:1.01)) { success(value) => { panic("pan accepted") }; failure(error) => {} }
+    match (try Processing.StereoPan.create(Processing.Format(sample_rate:48_000, channels:2), wet:-0.01)) { success(value) => { panic("wet accepted") }; failure(error) => {} }
     var pan = effect(-1.0)
-    invalid(pan.set_pan(Math.sqrt(-1.0))); invalid(pan.set_wet(Math.exp(1000.0)))
+    invalid((try pan.set_pan(Math.sqrt(-1.0)))); invalid((try pan.set_wet(Math.exp(1000.0))))
     var values:float32[] = [0.25 as float32, 0.5 as float32, 0.75 as float32]
-    invalid(pan.process(&values[0:3])); compare(@values[0:3], [0.25 as float32, 0.5 as float32, 0.75 as float32])
+    invalid((try pan.process(&values[0:3]))); compare(@values[0:3], [0.25 as float32, 0.5 as float32, 0.75 as float32])
     var bad:float32[] = [0.25 as float32, 0.5 as float32, Math.sqrt(-1.0) as float32, 0.75 as float32]
-    invalid(pan.process(&bad[0:4])); assert(bad[0] == 0.25 as float32 && bad[1] == 0.5 as float32 && bad[3] == 0.75 as float32)
-    pan.set_bypass(true); invalid(pan.process(&bad[0:4])); pan.set_bypass(false)
-    require(pan.process(&values[0:2])); compare(@values[0:2], [0.75 as float32, 0.0 as float32])
+    invalid((try pan.process(&bad[0:4]))); assert(bad[0] == 0.25 as float32 && bad[1] == 0.5 as float32 && bad[3] == 0.75 as float32)
+    pan.set_bypass(true); invalid((try pan.process(&bad[0:4]))); pan.set_bypass(false)
+    require((try pan.process(&values[0:2]))); compare(@values[0:2], [0.75 as float32, 0.0 as float32])
 }
 
 test "pan overflow is explicit and preserves the failing stereo frame" {
     var pan = effect(-1.0)
     var values:float32[] = [0.25 as float32, 0.5 as float32, 3.402823466e38 as float32, 3.402823466e38 as float32]
-    match pan.process(&values[0:4]) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
+    match (try pan.process(&values[0:4])) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
     assert(values[0] == 0.75 as float32 && values[1] == 0.0 as float32)
     assert(values[2] == 3.402823466e38 as float32 && values[3] == 3.402823466e38 as float32)
-    require(pan.set_pan(0.0)); require(pan.process(&values[2:4])); assert(Math.is_finite(values[2]) && Math.is_finite(values[3]))
+    require((try pan.set_pan(0.0))); require((try pan.process(&values[2:4]))); assert(Math.is_finite(values[2]) && Math.is_finite(values[3]))
 }
 
 class Pair:Synthesis.Generator {
@@ -88,12 +88,12 @@ class LeftGain:Processing.Processor {
 test "pan composes with a consumer stereo generator and ordered processor" {
     var before:Processing.Processor[] = [LeftGain(), effect(-1.0)]
     var after:Processing.Processor[] = [effect(-1.0), LeftGain()]
-    match Synthesis.Processed.create(Pair(), before) {
+    match (try Synthesis.Processed.create(Pair(), before)) {
         failure(error) => { panic(error.detail) }
-        success(var source) => { var values:float32[] = [0.0 as float32, 0.0 as float32]; require(source.render(&values[0:2])); compare(@values[0:2], [1.0 as float32, 0.0 as float32]) }
+        success(var source) => { var values:float32[] = [0.0 as float32, 0.0 as float32]; require((try source.render(&values[0:2]))); compare(@values[0:2], [1.0 as float32, 0.0 as float32]) }
     }
-    match Synthesis.Processed.create(Pair(), after) {
+    match (try Synthesis.Processed.create(Pair(), after)) {
         failure(error) => { panic(error.detail) }
-        success(var source) => { var values:float32[] = [0.0 as float32, 0.0 as float32]; require(source.render(&values[0:2])); compare(@values[0:2], [1.5 as float32, 0.0 as float32]); source.reset() }
+        success(var source) => { var values:float32[] = [0.0 as float32, 0.0 as float32]; require((try source.render(&values[0:2]))); compare(@values[0:2], [1.5 as float32, 0.0 as float32]); source.reset() }
     }
 }

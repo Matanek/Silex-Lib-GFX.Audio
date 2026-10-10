@@ -37,16 +37,16 @@ func score() Synthesis.Event[] {
 func phrase(max_voices:int) float32[] {
     let format = Processing.Format(sample_rate:48_000, channels:1)
     var samples:float32[] = []; var i = 0; while i < 408_000 { samples.append(0.0); i++ }
-    match Synthesis.SineInstrument.create(format, max_voices:max_voices, attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800) {
+    match (try Synthesis.SineInstrument.create(format, max_voices:max_voices, attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800)) {
         failure(error) => { panic(error.detail) }
         success(var instrument) => {
-            match Synthesis.Sequence.create(instrument, score()) {
+            match (try Synthesis.Sequence.create(instrument, score())) {
                 failure(error) => { panic(error.detail) }
                 success(var source) => {
                     var start = 0
                     while start < samples.count() {
                         var end = start + 512; if end > samples.count() { end = samples.count() }
-                        require(source.render(&samples[start:end])); start = end
+                        require((try source.render(&samples[start:end]))); start = end
                     }
                     assert(source.rendered_frames() == 408_000 && instrument.active_voices() == 0)
                 }

@@ -34,13 +34,13 @@ use GFX.Audio.Synthesis
 
 func main() {
     let format = Processing.Format(sample_rate:48_000, channels:1)
-    match Synthesis.Oscillator.create(format, frequency_hz:440.0, amplitude:0.1) {
+    match (try Synthesis.Oscillator.create(format, frequency_hz:440.0, amplitude:0.1)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
             var samples:float32[] = []
             var frame = 0
             while frame < 12_000 { samples.append(0.0); frame++ }
-            match source.render(&samples[0:samples.count()]) {
+            match (try source.render(&samples[0:samples.count()])) {
                 failure(error) => { panic(error.detail) }; success => {}
             }
             var audio = Audio()

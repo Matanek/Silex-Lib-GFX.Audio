@@ -7,7 +7,7 @@ use STD.Math
 func require(result:Result<void, Error>) { match result { failure(error) => { panic(error.detail) }; success => {} } }
 func invalid(result:Result<void, Error>) { match result { failure(error) => { assert(error.kind == Kind.invalid_input() && error.operation == "audio.process") }; success => { panic("invalid accepted") } } }
 func effect(channels:int = 1, decay:float32 = 1.5, damping:float32 = 0.0, wet:float32 = 1.0) Processing.Reverb {
-    match Processing.Reverb.create(Processing.Format(sample_rate:48_000, channels:channels), room_size:1.0, decay_seconds:decay, damping:damping, wet:wet) {
+    match (try Processing.Reverb.create(Processing.Format(sample_rate:48_000, channels:channels), room_size:1.0, decay_seconds:decay, damping:damping, wet:wet)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
@@ -26,7 +26,7 @@ func sequence(channels:int) float32[] {
 }
 test "reverb first impulse echoes match causal comb and true allpass delays" {
     var reverb = effect()
-    var values = impulse(4_300); require(reverb.process(&values[0:values.count()]))
+    var values = impulse(4_300); require((try reverb.process(&values[0:values.count()])))
     var i = 0; while i < 2_858 { assert(values[i] == 0.0 as float32); i++ }
     assert(values[2_858] == 0.0625 as float32)
     assert(values[3_024] == -0.09375 as float32)
@@ -38,7 +38,7 @@ test "reverb first impulse echoes match causal comb and true allpass delays" {
 }
 test "damped feedback second return follows independently computed decay and pole" {
     var reverb = effect(decay:0.75, damping:0.5)
-    var values = impulse(5_720); require(reverb.process(&values[0:values.count()]))
+    var values = impulse(5_720); require((try reverb.process(&values[0:values.count()])))
     let gain:float64 = Math.exp(-6.907755278982137 * 2_858.0 / (48_000.0 * 0.75))
     let first = 0.0625 * gain * (1.0 - 0.475)
     assert(Math.abs(values[5_716] as float64 - first) < 0.000001)
@@ -48,73 +48,73 @@ test "reverb preserves exact chunk and reset output on one two and eight channel
     for channels in [1, 2, 8] {
         var reverb = effect(channels, decay:0.8, damping:0.6, wet:0.4)
         var whole = sequence(channels); var split = sequence(channels)
-        require(reverb.process(&whole[0:whole.count()])); reverb.reset()
-        require(reverb.process(&split[0:0])); require(reverb.process(&split[0:channels]))
-        require(reverb.process(&split[channels:2_857 * channels])); require(reverb.process(&split[2_857 * channels:6_013 * channels])); require(reverb.process(&split[6_013 * channels:split.count()]))
+        require((try reverb.process(&whole[0:whole.count()]))); reverb.reset()
+        require((try reverb.process(&split[0:0]))); require((try reverb.process(&split[0:channels])))
+        require((try reverb.process(&split[channels:2_857 * channels]))); require((try reverb.process(&split[2_857 * channels:6_013 * channels]))); require((try reverb.process(&split[6_013 * channels:split.count()])))
         var i = 0; while i < whole.count() { assert(whole[i] == split[i]); i++ }
     }
 }
 test "reverb histories stay independent with silent and identical stereo inputs" {
     var reverb = effect(channels:2)
-    var values = impulse(14_000); require(reverb.process(&values[0:values.count()]))
+    var values = impulse(14_000); require((try reverb.process(&values[0:values.count()])))
     var frame = 0; while frame < 7_000 { assert(values[frame * 2 + 1] == 0.0 as float32); frame++ }
     assert(values[2_858 * 2] == 0.0625 as float32)
     reverb.reset(); values = zeros(14_000); values[0] = 1.0; values[1] = 1.0
-    require(reverb.process(&values[0:values.count()]))
+    require((try reverb.process(&values[0:values.count()])))
     frame = 0; while frame < 7_000 { assert(values[frame * 2] == values[frame * 2 + 1]); frame++ }
 }
 test "dry mix and bypass continue history and reveal the same delayed tail" {
     var reverb = effect(wet:0.0)
-    var values = impulse(2_858); require(reverb.process(&values[0:values.count()])); assert(values[0] == 1.0 as float32)
-    require(reverb.set_wet(1.0)); values = zeros(1); require(reverb.process(&values[0:1])); assert(values[0] == 0.0625 as float32)
+    var values = impulse(2_858); require((try reverb.process(&values[0:values.count()]))); assert(values[0] == 1.0 as float32)
+    require((try reverb.set_wet(1.0))); values = zeros(1); require((try reverb.process(&values[0:1]))); assert(values[0] == 0.0625 as float32)
     reverb.reset(); reverb.set_bypass(true); values = impulse(2_858)
-    require(reverb.process(&values[0:values.count()])); assert(values[0] == 1.0 as float32)
-    reverb.set_bypass(false); values = zeros(1); require(reverb.process(&values[0:1])); assert(values[0] == 0.0625 as float32)
-    reverb.reset(); require(reverb.set_wet(0.5)); values = impulse(4_300); require(reverb.process(&values[0:values.count()]))
+    require((try reverb.process(&values[0:values.count()]))); assert(values[0] == 1.0 as float32)
+    reverb.set_bypass(false); values = zeros(1); require((try reverb.process(&values[0:1]))); assert(values[0] == 0.0625 as float32)
+    reverb.reset(); require((try reverb.set_wet(0.5))); values = impulse(4_300); require((try reverb.process(&values[0:values.count()])))
     assert(values[0] == 0.5 as float32 && values[2_858] == 0.03125 as float32)
 }
 test "settings retain history while reset retains the chosen configuration" {
     var reverb = effect(decay:0.2)
-    var values = impulse(2_858); require(reverb.process(&values[0:values.count()]))
-    require(reverb.set_decay(0.8)); require(reverb.set_damping(0.6)); require(reverb.set_wet(0.4))
-    values = zeros(1); require(reverb.process(&values[0:1])); assert(values[0] == 0.025 as float32)
+    var values = impulse(2_858); require((try reverb.process(&values[0:values.count()])))
+    require((try reverb.set_decay(0.8))); require((try reverb.set_damping(0.6))); require((try reverb.set_wet(0.4)))
+    values = zeros(1); require((try reverb.process(&values[0:1]))); assert(values[0] == 0.025 as float32)
     reverb.reset(); var expected_effect = effect(decay:0.8, damping:0.6, wet:0.4)
     values = sequence(1); var expected = sequence(1)
-    require(reverb.process(&values[0:values.count()])); require(expected_effect.process(&expected[0:expected.count()]))
+    require((try reverb.process(&values[0:values.count()]))); require((try expected_effect.process(&expected[0:expected.count()])))
     var i = 0; while i < values.count() { assert(values[i] == expected[i]); i++ }
 }
 test "reverb rejects controls formats and whole blocks before state changes" {
     for rate in [0, 384_001] {
-        match Processing.Reverb.create(Processing.Format(sample_rate:rate, channels:1)) { success(value) => { panic("rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+        match (try Processing.Reverb.create(Processing.Format(sample_rate:rate, channels:1))) { success(value) => { panic("rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     }
     let format = Processing.Format(sample_rate:48_000, channels:2)
-    match Processing.Reverb.create(format, room_size:1.01) { success(value) => { panic("size accepted") }; failure(error) => {} }
-    match Processing.Reverb.create(format, decay_seconds:0.04) { success(value) => { panic("decay accepted") }; failure(error) => {} }
-    match Processing.Reverb.create(format, damping:-0.01) { success(value) => { panic("damping accepted") }; failure(error) => {} }
-    match Processing.Reverb.create(format, wet:Math.sqrt(-1.0)) { success(value) => { panic("wet accepted") }; failure(error) => {} }
+    match (try Processing.Reverb.create(format, room_size:1.01)) { success(value) => { panic("size accepted") }; failure(error) => {} }
+    match (try Processing.Reverb.create(format, decay_seconds:0.04)) { success(value) => { panic("decay accepted") }; failure(error) => {} }
+    match (try Processing.Reverb.create(format, damping:-0.01)) { success(value) => { panic("damping accepted") }; failure(error) => {} }
+    match (try Processing.Reverb.create(format, wet:Math.sqrt(-1.0))) { success(value) => { panic("wet accepted") }; failure(error) => {} }
     var reverb = effect(channels:2)
-    invalid(reverb.set_decay(20.1)); invalid(reverb.set_decay(Math.exp(1000.0)))
-    invalid(reverb.set_damping(-0.01)); invalid(reverb.set_damping(Math.sqrt(-1.0))); invalid(reverb.set_wet(1.01))
+    invalid((try reverb.set_decay(20.1))); invalid((try reverb.set_decay(Math.exp(1000.0))))
+    invalid((try reverb.set_damping(-0.01))); invalid((try reverb.set_damping(Math.sqrt(-1.0)))); invalid((try reverb.set_wet(1.01)))
     var bad:float32[] = [1.0 as float32, 0.0 as float32, Math.sqrt(-1.0) as float32, 0.0 as float32]
-    invalid(reverb.process(&bad[0:4])); assert(bad[0] == 1.0 as float32)
+    invalid((try reverb.process(&bad[0:4]))); assert(bad[0] == 1.0 as float32)
     var incomplete:float32[] = [1.0 as float32, 0.0 as float32, 0.0 as float32]
-    invalid(reverb.process(&incomplete[0:3])); assert(incomplete[0] == 1.0 as float32)
-    var values = impulse(6_000); require(reverb.process(&values[0:values.count()])); assert(values[2_858 * 2] == 0.0625 as float32)
+    invalid((try reverb.process(&incomplete[0:3]))); assert(incomplete[0] == 1.0 as float32)
+    var values = impulse(6_000); require((try reverb.process(&values[0:values.count()]))); assert(values[2_858 * 2] == 0.0625 as float32)
 }
 test "feedback overflow preserves the failing frame and reset restores silence" {
     var reverb = effect(channels:2)
     var values:float32[] = []; var i = 0
     while i < 2_859 { values.append(0.25); values.append(3.402823466e38); i++ }
-    match reverb.process(&values[0:values.count()]) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
+    match (try reverb.process(&values[0:values.count()])) { success => { panic("overflow accepted") }; failure(error) => { assert(error.kind == Kind.limit_exceeded() && error.operation == "audio.process") } }
     assert(values[0] == 0.0 as float32 && values[1] == 0.0 as float32)
     assert(values[2_858 * 2] == 0.25 as float32 && values[2_858 * 2 + 1] == 3.402823466e38 as float32)
-    reverb.reset(); values = zeros(12_000); require(reverb.process(&values[0:values.count()]))
+    reverb.reset(); values = zeros(12_000); require((try reverb.process(&values[0:values.count()])))
     assert(energy(@values[0:values.count()]) == 0.0)
 }
 test "longer decay retains more late energy and shorter tails return to silence" {
     var short = effect(decay:0.2); var long = effect(decay:1.5)
     var a = impulse(144_000); var b = impulse(144_000)
-    require(short.process(&a[0:a.count()])); require(long.process(&b[0:b.count()]))
+    require((try short.process(&a[0:a.count()]))); require((try long.process(&b[0:b.count()])))
     assert(energy(@b[24_000:48_000]) > 100.0 * energy(@a[24_000:48_000]))
     assert(energy(@a[96_000:144_000]) < 0.000000000001)
     assert(energy(@b[96_000:144_000]) < energy(@b[24_000:48_000]))
@@ -123,7 +123,7 @@ test "longer decay retains more late energy and shorter tails return to silence"
 test "damping reduces normalized high frequency variation in the late impulse tail" {
     var bright = effect(damping:0.0); var dark = effect(damping:1.0)
     var a = impulse(48_000); var b = impulse(48_000)
-    require(bright.process(&a[0:a.count()])); require(dark.process(&b[0:b.count()]))
+    require((try bright.process(&a[0:a.count()]))); require((try dark.process(&b[0:b.count()])))
     assert(roughness(@b[12_000:48_000]) < 0.5 * roughness(@a[12_000:48_000]))
 }
 class Pulse:Synthesis.Generator {
@@ -136,14 +136,14 @@ class Pulse:Synthesis.Generator {
     func reset() { self.first = true }
 }
 test "reverb prepares the maximum format and keeps minimum rate causal" {
-    match Processing.Reverb.create(Processing.Format(sample_rate:384_000, channels:8), room_size:1.0, decay_seconds:20.0, damping:1.0, wet:1.0) {
+    match (try Processing.Reverb.create(Processing.Format(sample_rate:384_000, channels:8), room_size:1.0, decay_seconds:20.0, damping:1.0, wet:1.0)) {
         failure(error) => { panic(error.detail) }
-        success(var reverb) => { var values = impulse(16); require(reverb.process(&values[0:16])); assert(energy(@values[0:16]) == 0.0) }
+        success(var reverb) => { var values = impulse(16); require((try reverb.process(&values[0:16]))); assert(energy(@values[0:16]) == 0.0) }
     }
-    match Processing.Reverb.create(Processing.Format(sample_rate:1, channels:1), room_size:0.0, decay_seconds:0.05, damping:0.0, wet:1.0) {
+    match (try Processing.Reverb.create(Processing.Format(sample_rate:1, channels:1), room_size:0.0, decay_seconds:0.05, damping:0.0, wet:1.0)) {
         failure(error) => { panic(error.detail) }
         success(var reverb) => {
-            var values = impulse(4); require(reverb.process(&values[0:4]))
+            var values = impulse(4); require((try reverb.process(&values[0:4])))
             assert(values[0] == 0.0 as float32 && values[1] == 0.25 as float32 && values[2] == -0.75 as float32 && values[3] == 0.1875 as float32)
         }
     }
@@ -155,12 +155,12 @@ class Double:Processing.Processor {
 }
 test "consumer source and custom processor compose with reverb across blocks" {
     let effects:Processing.Processor[] = [effect(), Double()]
-    match Synthesis.Processed.create(Pulse(), effects) {
+    match (try Synthesis.Processed.create(Pulse(), effects)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
-            var values = zeros(6_000); require(source.render(&values[0:values.count()])); assert(values[2_858] == 0.125 as float32)
+            var values = zeros(6_000); require((try source.render(&values[0:values.count()]))); assert(values[2_858] == 0.125 as float32)
             source.reset(); var split = zeros(6_000)
-            require(source.render(&split[0:2_857])); require(source.render(&split[2_857:split.count()]))
+            require((try source.render(&split[0:2_857]))); require((try source.render(&split[2_857:split.count()])))
             var i = 0; while i < values.count() { assert(values[i] == split[i]); i++ }
         }
     }

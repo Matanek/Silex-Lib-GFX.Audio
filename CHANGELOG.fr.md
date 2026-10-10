@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
+  ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
+  anciens appels stockant un résultat et propagations deviennent explicites.
+  Cette révision requiert la toolchain de développement avec cette sémantique
+  de `try` ; sa publication doit coordonner les versions du compilateur et des
+  packages.
+  Les variantes récupérables `try_*` et wrappers directs de même signature
+  sont réunis sous le nom ordinaire. Les variantes booléennes, optionnelles ou
+  natives gardent leur contrat.
+
 - Ajoute `Music.Instruments.guitar`, `violin` et `drums` : cordes pincées à décroissance naturelle, violon tenu avec vibrato et kit de sept percussions `Music.Drum`. Polyphonie/commandes communes, réglages propres, exemples hors Docs, guides FR/EN et oracles numériques/ressources.
 
 - Ajoute `Music.Instruments.piano` et `Synthesis.PianoInstrument` : piano procédural polyphonique, dynamique de frappe, déclin naturel, brillance et pédale. Partage le pool de commandes du sinus sans changer son PCM ; exemples piano/MIDI, guides FR/EN et preuves numériques.
@@ -59,7 +69,7 @@
 
 - Flux PCM bornés : alimentation par blocs copiés, saturation récupérable, pause/reprise, fermeture avec vidage du filtre, compteurs de consommation et d’abandon. Provider privé reconstruit pour les six cibles ; coordonnées 3D et inversion stéréo multicanal corrigées.
 
-- `Audio.try_decode` charge des octets encodés possédés ; `Audio.try_load` permet de traiter les erreurs sans arrêter le programme. Les handles sont protégés entre instances d’Audio.
+- `Audio.decode` charge des octets encodés possédés ; `try audio.load(...)` permet de traiter les erreurs sans arrêter le programme. Les handles sont protégés entre instances d’Audio.
 
 - `Audio.create` crée un son réutilisable depuis des échantillons `float32`
   mono ou entrelacés, avec fréquence et nombre de canaux configurables. Le son

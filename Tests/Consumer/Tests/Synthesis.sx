@@ -18,17 +18,17 @@ func invalid(result:Result<void, Error>) {
     match result { failure(error) => { assert(error.kind == Kind.invalid_input()) }; success => { panic("invalid input accepted") } }
 }
 func oscillator(format:Processing.Format, frequency:float32 = 440.0, phase:float32 = 0.0) Synthesis.Oscillator {
-    match Synthesis.Oscillator.create(format, frequency_hz:frequency, amplitude:0.5, phase:phase) {
+    match (try Synthesis.Oscillator.create(format, frequency_hz:frequency, amplitude:0.5, phase:phase)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
 func noise(format:Processing.Format, seed:int = 42) Synthesis.WhiteNoise {
-    match Synthesis.WhiteNoise.create(format, seed:seed, amplitude:0.5) {
+    match (try Synthesis.WhiteNoise.create(format, seed:seed, amplitude:0.5)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
 func envelope(format:Processing.Format, attack:int = 2, decay:int = 2, sustain:float32 = 0.5, release:int = 2) Synthesis.Envelope {
-    match Synthesis.Envelope.create(format, attack_frames:attack, decay_frames:decay, sustain:sustain, release_frames:release) {
+    match (try Synthesis.Envelope.create(format, attack_frames:attack, decay_frames:decay, sustain:sustain, release_frames:release)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
@@ -38,14 +38,14 @@ func compare(left:@float32[..], right:@float32[..]) {
     while i < left.count() { assert(Math.abs(left[i] as float64 - right[i] as float64) < 0.000001); i++ }
 }
 func offline() Audio {
-    match Audio.offline(sample_rate:48_000) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Audio.offline(sample_rate:48_000)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 
 test "sine has the expected frequency phase and channel order" {
     let format = Processing.Format(sample_rate:32, channels:2)
     var source = oscillator(format, frequency:4.0)
     var samples = buffer(18, 0.75)
-    require(source.render(&samples[1:17]))
+    require((try source.render(&samples[1:17])))
     assert(samples[0] == 0.75 as float32 && samples[17] == 0.75 as float32)
     assert(Math.abs(samples[1]) < 0.000001)
     assert(Math.abs(samples[5] - 0.5) < 0.000001)
@@ -54,7 +54,7 @@ test "sine has the expected frequency phase and channel order" {
     var i = 1
     while i < 17 { assert(samples[i] == samples[i + 1]); i += 2 }
     var shifted = oscillator(format, frequency:0.0, phase:0.25)
-    require(shifted.render(&samples[1:17]))
+    require((try shifted.render(&samples[1:17])))
     i = 1
     while i < 17 { assert(Math.abs(samples[i] - 0.5) < 0.000001); i++ }
 }
@@ -66,19 +66,19 @@ test "generator protocol preserves phase across odd block sizes and reset" {
     var source:Synthesis.Generator = concrete
     var whole = buffer(1_031)
     var split = buffer(1_031)
-    require(direct.render(&whole[0:1_031]))
-    require(source.render(&split[0:0]))
-    require(source.render(&split[0:7]))
-    require(source.render(&split[7:514]))
-    require(source.render(&split[514:1_031]))
+    require((try direct.render(&whole[0:1_031])))
+    require((try source.render(&split[0:0])))
+    require((try source.render(&split[0:7])))
+    require((try source.render(&split[7:514])))
+    require((try source.render(&split[514:1_031])))
     compare(@whole[0:1_031], @split[0:1_031])
     source.reset()
-    require(concrete.render(&split[0:1_031]))
+    require((try concrete.render(&split[0:1_031])))
     compare(@whole[0:1_031], @split[0:1_031])
-    require(concrete.set_frequency(220.0))
-    require(concrete.set_amplitude(0.25))
+    require((try concrete.set_frequency(220.0)))
+    require((try concrete.set_amplitude(0.25)))
     concrete.reset()
-    require(concrete.render(&split[0:1_031]))
+    require((try concrete.render(&split[0:1_031])))
     assert(Math.abs(split[0]) < 0.000001 && Math.abs(split[500]) <= 0.25)
 }
 
@@ -87,23 +87,23 @@ test "invalid oscillator settings and incomplete frames preserve state and desti
     var source = oscillator(format)
     var reference = oscillator(format)
     var samples = buffer(5, 0.75)
-    invalid(source.render(&samples[0:5]))
+    invalid((try source.render(&samples[0:5])))
     for value in samples { assert(value == 0.75 as float32) }
-    invalid(source.set_frequency(24_000.0))
-    invalid(source.set_frequency(-1.0))
-    invalid(source.set_frequency(Math.sqrt(-1.0)))
-    invalid(source.set_amplitude(1.1))
-    invalid(source.set_amplitude(Math.sqrt(-1.0)))
-    require(source.render(&samples[0:4]))
+    invalid((try source.set_frequency(24_000.0)))
+    invalid((try source.set_frequency(-1.0)))
+    invalid((try source.set_frequency(Math.sqrt(-1.0))))
+    invalid((try source.set_amplitude(1.1)))
+    invalid((try source.set_amplitude(Math.sqrt(-1.0))))
+    require((try source.render(&samples[0:4])))
     var expected = buffer(4)
-    require(reference.render(&expected[0:4]))
+    require((try reference.render(&expected[0:4])))
     compare(@samples[0:4], @expected[0:4])
-    match Synthesis.Oscillator.create(Processing.Format(sample_rate:0, channels:1)) { success(value) => { panic("zero rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Oscillator.create(Processing.Format(sample_rate:16_777_217, channels:1)) { success(value) => { panic("inexact DSP rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:9)) { success(value) => { panic("invalid channels accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Oscillator.create(format, phase:1.0) { success(value) => { panic("phase outside cycle accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Oscillator.create(format, amplitude:-0.1) { success(value) => { panic("negative amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Oscillator.create(format, frequency_hz:Math.sqrt(-1.0)) { success(value) => { panic("NaN frequency accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(Processing.Format(sample_rate:0, channels:1))) { success(value) => { panic("zero rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(Processing.Format(sample_rate:16_777_217, channels:1))) { success(value) => { panic("inexact DSP rate accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(Processing.Format(sample_rate:48_000, channels:9))) { success(value) => { panic("invalid channels accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(format, phase:1.0)) { success(value) => { panic("phase outside cycle accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(format, amplitude:-0.1)) { success(value) => { panic("negative amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Oscillator.create(format, frequency_hz:Math.sqrt(-1.0))) { success(value) => { panic("NaN frequency accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
 }
 
 test "white noise is seeded reproducible bounded and statistically useful" {
@@ -112,13 +112,13 @@ test "white noise is seeded reproducible bounded and statistically useful" {
     var other = noise(format, seed:43)
     var whole = buffer(8_192)
     var split = buffer(8_192)
-    require(source.render(&whole[0:8_192]))
+    require((try source.render(&whole[0:8_192])))
     source.reset()
-    require(source.render(&split[0:18]))
-    require(source.render(&split[18:1_026]))
-    require(source.render(&split[1_026:8_192]))
+    require((try source.render(&split[0:18])))
+    require((try source.render(&split[18:1_026])))
+    require((try source.render(&split[1_026:8_192])))
     compare(@whole[0:8_192], @split[0:8_192])
-    require(other.render(&split[0:8_192]))
+    require((try other.render(&split[0:8_192])))
     var mean:float64 = 0.0
     var energy:float64 = 0.0
     var differs = false
@@ -140,16 +140,16 @@ test "noise rejects invalid blocks without consuming its seed and accepts extrem
     var source = noise(format, seed:-9223372036854775808)
     var reference = noise(format, seed:-9223372036854775808)
     var samples = buffer(5, 0.75)
-    invalid(source.render(&samples[0:5]))
-    invalid(source.set_amplitude(-0.1))
-    invalid(source.set_amplitude(Math.sqrt(-1.0)))
+    invalid((try source.render(&samples[0:5])))
+    invalid((try source.set_amplitude(-0.1)))
+    invalid((try source.set_amplitude(Math.sqrt(-1.0))))
     for value in samples { assert(value == 0.75 as float32) }
-    require(source.render(&samples[0:4]))
+    require((try source.render(&samples[0:4])))
     var expected = buffer(4)
-    require(reference.render(&expected[0:4]))
+    require((try reference.render(&expected[0:4])))
     compare(@samples[0:4], @expected[0:4])
-    match Synthesis.WhiteNoise.create(format, seed:0, amplitude:1.1) { success(value) => { panic("amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.WhiteNoise.create(Processing.Format(sample_rate:48_000, channels:0), seed:0) { success(value) => { panic("zero channels accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.WhiteNoise.create(format, seed:0, amplitude:1.1)) { success(value) => { panic("amplitude accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.WhiteNoise.create(Processing.Format(sample_rate:48_000, channels:0), seed:0)) { success(value) => { panic("zero channels accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
 }
 
 test "ADSR gates have analytical levels and advance once per stereo frame" {
@@ -157,13 +157,13 @@ test "ADSR gates have analytical levels and advance once per stereo frame" {
     var effect = envelope(format)
     var samples = buffer(12, 1.0)
     effect.note_on()
-    require(effect.process(&samples[0:12]))
+    require((try effect.process(&samples[0:12])))
     let expected:float32[] = [0.0 as float32, 0.5 as float32, 1.0 as float32, 0.75 as float32, 0.5 as float32, 0.5 as float32]
     var i = 0
     while i < 6 { assert(samples[i * 2] == expected[i] && samples[i * 2 + 1] == expected[i]); i++ }
     effect.note_off()
     samples = buffer(8, 1.0)
-    require(effect.process(&samples[0:8]))
+    require((try effect.process(&samples[0:8])))
     assert(samples[0] == 0.5 as float32 && samples[2] == 0.25 as float32 && samples[4] == 0.0 as float32 && samples[6] == 0.0 as float32)
     assert(!effect.is_active())
 }
@@ -175,22 +175,22 @@ test "ADSR block boundaries early release and repeated note off are stable" {
     var a = buffer(39, 1.0)
     var b = buffer(39, 1.0)
     whole.note_on(); split.note_on()
-    require(whole.process(&a[0:5]))
-    require(split.process(&b[0:0]))
-    require(split.process(&b[0:2]))
-    require(split.process(&b[2:5]))
+    require((try whole.process(&a[0:5])))
+    require((try split.process(&b[0:0])))
+    require((try split.process(&b[0:2])))
+    require((try split.process(&b[2:5])))
     whole.note_off(); split.note_off()
-    require(whole.process(&a[5:39]))
-    require(split.process(&b[5:8]))
+    require((try whole.process(&a[5:39])))
+    require((try split.process(&b[5:8])))
     split.note_off()
-    require(split.process(&b[8:17]))
-    require(split.process(&b[17:39]))
+    require((try split.process(&b[8:17])))
+    require((try split.process(&b[17:39])))
     compare(@a[0:39], @b[0:39])
     assert(!whole.is_active() && !split.is_active() && a[5] > 0.7 as float32)
     whole.reset()
     whole.note_on()
     a = buffer(1, 1.0)
-    require(whole.process(&a[0:1]))
+    require((try whole.process(&a[0:1])))
     assert(a[0] == 0.0 as float32)
 }
 
@@ -198,28 +198,28 @@ test "zero duration envelope stages and invalid input are explicit" {
     let format = Processing.Format(sample_rate:48_000, channels:1)
     var instant = envelope(format, attack:0, decay:0, sustain:0.25, release:0)
     var samples = buffer(3, 1.0)
-    require(instant.process(&samples[0:3]))
+    require((try instant.process(&samples[0:3])))
     assert(samples[0] == 0.0 as float32)
     instant.note_on()
     samples = buffer(3, 1.0)
-    require(instant.process(&samples[0:3]))
+    require((try instant.process(&samples[0:3])))
     assert(samples[0] == 0.25 as float32 && instant.is_active())
     instant.note_off()
     assert(!instant.is_active())
     samples = buffer(3, 1.0)
-    require(instant.process(&samples[0:3]))
+    require((try instant.process(&samples[0:3])))
     assert(samples[0] == 0.0 as float32)
     var early = envelope(format)
     early.note_on()
     var bad:float32[] = [1.0 as float32, Math.sqrt(-1.0) as float32]
-    invalid(early.process(&bad[0:2]))
+    invalid((try early.process(&bad[0:2])))
     assert(bad[0] == 1.0 as float32)
     samples = buffer(2, 1.0)
-    require(early.process(&samples[0:2]))
+    require((try early.process(&samples[0:2])))
     assert(samples[0] == 0.0 as float32 && samples[1] == 0.5 as float32)
-    match Synthesis.Envelope.create(format, attack_frames:-1, decay_frames:0, sustain:0.5, release_frames:0) { success(value) => { panic("negative duration accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Envelope.create(format, attack_frames:16_777_217, decay_frames:0, sustain:0.5, release_frames:0) { success(value) => { panic("inexact duration accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
-    match Synthesis.Envelope.create(format, attack_frames:0, decay_frames:0, sustain:Math.sqrt(-1.0), release_frames:0) { success(value) => { panic("NaN sustain accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Envelope.create(format, attack_frames:-1, decay_frames:0, sustain:0.5, release_frames:0)) { success(value) => { panic("negative duration accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Envelope.create(format, attack_frames:16_777_217, decay_frames:0, sustain:0.5, release_frames:0)) { success(value) => { panic("inexact duration accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try Synthesis.Envelope.create(format, attack_frames:0, decay_frames:0, sustain:Math.sqrt(-1.0), release_frames:0)) { success(value) => { panic("NaN sustain accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
 }
 
 class Constant:Synthesis.Generator {
@@ -240,8 +240,8 @@ test "a consumer generator and ADSR compose through public protocols" {
     var processor:Processing.Processor = concrete
     var samples = buffer(6)
     concrete.note_on()
-    require(generator.render(&samples[0:6]))
-    require(processor.process(&samples[0:6]))
+    require((try generator.render(&samples[0:6])))
+    require((try processor.process(&samples[0:6])))
     assert(samples[0] == 0.0 as float32 && samples[2] == 0.25 as float32 && samples[5] == 0.125 as float32)
     processor.reset()
     assert(!concrete.is_active())
@@ -251,27 +251,27 @@ test "generated complete sound and chunked stream produce the same offline PCM" 
     let format = Processing.Format(sample_rate:48_000, channels:1)
     var source = oscillator(format)
     var complete = buffer(256)
-    require(source.render(&complete[0:256]))
+    require((try source.render(&complete[0:256])))
     var reference = offline()
     var streamed = offline()
     let sound = reference.create(@complete[0:256], sample_rate:48_000)
     let a = reference.play(sound)
     var stream:Audio.Stream
-    match streamed.stream(sample_rate:48_000, capacity_frames:256) { failure(error) => { panic(error.detail) }; success(value) => { stream = value } }
+    match (try streamed.stream(sample_rate:48_000, capacity_frames:256)) { failure(error) => { panic(error.detail) }; success(value) => { stream = value } }
     source.reset()
     var i = 0
     while i < 4 {
         var block = buffer(64)
-        require(source.render(&block[0:64]))
-        match streamed.write(stream, @block[0:64]) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 64) } }
+        require((try source.render(&block[0:64])))
+        match (try streamed.write(stream, @block[0:64])) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 64) } }
         i++
     }
-    require(streamed.close(stream))
+    require((try streamed.close(stream)))
     let b = streamed.play(stream)
     var expected:float32[]
     var actual:float32[]
-    match reference.render(512) { failure(error) => { panic(error.detail) }; success(value) => { expected = value } }
-    match streamed.render(512) { failure(error) => { panic(error.detail) }; success(value) => { actual = value } }
+    match (try reference.render(512)) { failure(error) => { panic(error.detail) }; success(value) => { expected = value } }
+    match (try streamed.render(512)) { failure(error) => { panic(error.detail) }; success(value) => { actual = value } }
     compare(@expected[0:512], @actual[0:512])
     assert(streamed.release(stream))
 }

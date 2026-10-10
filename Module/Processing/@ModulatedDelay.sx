@@ -57,7 +57,7 @@ public class ModulatedDelay:Processor {
     }
     func set_bypass(bypass:bool) { self.bypass = bypass }
     func process(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         let channels = self.format.channels
         let capacity = self.max_delay_frames + 1
         let moving = self.depth_frames > 0.0 && self.phase_step > 0.0

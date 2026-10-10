@@ -10,14 +10,14 @@ func play(audio:&Audio, source:Synthesis.Generator) {
     var samples:float32[] = []
     var i = 0
     while i < 16_800 { samples.append(0.0); i++ }
-    require(source.render(&samples[0:16_800]))
-    match Synthesis.Envelope.create(source.format, attack_frames:240, decay_frames:1_200, sustain:0.8, release_frames:4_800) {
+    require((try source.render(&samples[0:16_800])))
+    match (try Synthesis.Envelope.create(source.format, attack_frames:240, decay_frames:1_200, sustain:0.8, release_frames:4_800)) {
         failure(error) => { panic(error.detail) }
         success(var envelope) => {
             envelope.note_on()
-            require(envelope.process(&samples[0:12_000]))
+            require((try envelope.process(&samples[0:12_000])))
             envelope.note_off()
-            require(envelope.process(&samples[12_000:16_800]))
+            require((try envelope.process(&samples[12_000:16_800])))
             assert(!envelope.is_active())
         }
     }
@@ -33,21 +33,21 @@ func main() {
     var i = 0
     while i < shapes.count() {
         print(names[i])
-        match Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:shapes[i]) {
+        match (try Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:shapes[i])) {
             failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
         }
         i++
     }
     print("Square 25%")
-    match Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:Synthesis.Waveform.square, duty_cycle:0.25) {
+    match (try Synthesis.Oscillator.create(format, frequency_hz:375.0, amplitude:0.15, waveform:Synthesis.Waveform.square, duty_cycle:0.25)) {
         failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
     }
     print("White noise")
-    match Synthesis.WhiteNoise.create(format, seed:42, amplitude:0.15) {
+    match (try Synthesis.WhiteNoise.create(format, seed:42, amplitude:0.15)) {
         failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
     }
     print("Pink noise")
-    match Synthesis.PinkNoise.create(format, seed:42, amplitude:0.5) {
+    match (try Synthesis.PinkNoise.create(format, seed:42, amplitude:0.5)) {
         failure(error) => { panic(error.detail) }; success(value) => { play(audio, value) }
     }
 }

@@ -4,13 +4,13 @@ test "public WAV metadata and playback event survive collection" {
     var audio = Audio()
     let bytes = embed_bytes("../../../Assets/Audio/SpatialTone.wav")
     var sound = Audio.Sound()
-    match audio.try_decode(@bytes[0:bytes.count()]) { failure(error) => { panic(error.detail) }; success(value) => { sound = value } }
-    match audio.sound_info(sound) {
+    match (try audio.decode(@bytes[0:bytes.count()])) { failure(error) => { panic(error.detail) }; success(value) => { sound = value } }
+    match (try audio.sound_info(sound)) {
         failure(error) => { panic(error.detail) }
         success(info) => { assert(info.sample_rate > 0 && info.channels > 0); match info.duration { frames(count) => { assert(count > 0) }; unknown => { panic("WAV unknown") }; infinite => { panic("WAV infinite") } } }
     }
     let playing = audio.play(sound, Audio.Playback(speed:2.0))
-    match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.watch_end(playing)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.stop(playing)
     audio.wait(playing)
     var ends = audio.drain_end_events()

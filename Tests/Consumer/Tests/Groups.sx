@@ -11,7 +11,7 @@ test "public group controls preserve individual pause" {
     audio.pause(playing)
     audio.resume(music)
     assert(audio.is_paused(playing))
-    match audio.assign_group(playing, effects) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.assign_group(playing, effects)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.resume(playing)
     audio.stop(effects)
     audio.wait(playing)

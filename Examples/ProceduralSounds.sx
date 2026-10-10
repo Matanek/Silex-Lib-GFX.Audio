@@ -8,13 +8,13 @@ func require(result:Result<void, Error>) {
 }
 
 func oscillator(format:Processing.Format, frequency:float32, amplitude:float32) Synthesis.Oscillator {
-    match Synthesis.Oscillator.create(format, frequency_hz:frequency, amplitude:amplitude) {
+    match (try Synthesis.Oscillator.create(format, frequency_hz:frequency, amplitude:amplitude)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
 
 func contour(format:Processing.Format, attack:int, decay:int, sustain:float32, release:int) Synthesis.Envelope {
-    match Synthesis.Envelope.create(format, attack_frames:attack, decay_frames:decay, sustain:sustain, release_frames:release) {
+    match (try Synthesis.Envelope.create(format, attack_frames:attack, decay_frames:decay, sustain:sustain, release_frames:release)) {
         failure(error) => { panic(error.detail) }; success(value) => { return value }
     }
 }
@@ -23,11 +23,11 @@ func shaped(source:Synthesis.Generator, envelope:Synthesis.Envelope, frames:int,
     var samples:float32[] = []
     var i = 0
     while i < frames { samples.append(0.0); i++ }
-    require(source.render(&samples[0:frames]))
+    require((try source.render(&samples[0:frames])))
     envelope.note_on()
-    require(envelope.process(&samples[0:gate_frames]))
+    require((try envelope.process(&samples[0:gate_frames])))
     envelope.note_off()
-    require(envelope.process(&samples[gate_frames:frames]))
+    require((try envelope.process(&samples[gate_frames:frames])))
     assert(!envelope.is_active())
     return samples
 }
@@ -42,14 +42,14 @@ func impact(format:Processing.Format) float32[] {
     var bass = oscillator(format, frequency:65.0, amplitude:0.25)
     var bass_envelope = contour(format, attack:48, decay:0, sustain:1.0, release:12_000)
     var samples = shaped(bass, bass_envelope, frames:12_480, gate_frames:480)
-    match Synthesis.WhiteNoise.create(format, seed:42, amplitude:0.15) {
+    match (try Synthesis.WhiteNoise.create(format, seed:42, amplitude:0.15)) {
         failure(error) => { panic(error.detail) }
         success(var noise) => {
             var envelope = contour(format, attack:48, decay:0, sustain:1.0, release:7_200)
             var texture = shaped(noise, envelope, frames:12_480, gate_frames:480)
-            match Processing.LowPass.create(format, cutoff_hz:1_200.0) {
+            match (try Processing.LowPass.create(format, cutoff_hz:1_200.0)) {
                 failure(error) => { panic(error.detail) }
-                success(var filter) => { require(filter.process(&texture[0:texture.count()])) }
+                success(var filter) => { require((try filter.process(&texture[0:texture.count()]))) }
             }
             var i = 0
             while i < samples.count() { samples[i] += texture[i]; i++ }

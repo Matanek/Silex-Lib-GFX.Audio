@@ -18,18 +18,18 @@ class ToneProducer {
 }
 
 func open_stream(audio:&Audio) Audio.Stream {
-    match audio.stream(sample_rate:48_000, capacity_frames:1_024) {
+    match (try audio.stream(sample_rate:48_000, capacity_frames:1_024)) {
         failure(error) => { panic(error.detail) }
         success(stream) => { return stream }
     }
 }
 
 func write_block(audio:&Audio, stream:Audio.Stream, block:@float32[..]) {
-    match audio.wait_writable(stream, minimum_frames:block.count()) {
+    match (try audio.wait_writable(stream, minimum_frames:block.count())) {
         failure(error) => { panic(error.detail) }
         success => {}
     }
-    match audio.write(stream, block) {
+    match (try audio.write(stream, block)) {
         failure(error) => { panic(error.detail) }
         success(count) => { assert(count == block.count()) }
     }
@@ -50,9 +50,9 @@ func main() {
         block.clear()
         block_index++
     }
-    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.close(stream)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.wait(playing)
-    match audio.stream_info(stream) {
+    match (try audio.stream_info(stream)) {
         failure(error) => { panic(error.detail) }
         success(info) => { assert(info.drained && info.written_frames == 11_264 && info.queued_frames == 0) }
     }

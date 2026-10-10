@@ -54,29 +54,29 @@ puis une octave à un chiffre, éventuellement négative. La lettre de note peut
 ne sont pas acceptés. La hauteur résultante doit rester dans 0..127 : C-1 et
 B#-2 valent 0, Cb-1 et G#9 sont rejetés. Aucun accordage n’est changé.
 
-`key` retourne `int` et `keys` retourne `int[]`. Une entrée invalide déclenche
-`panic` avec le nom concerné. Pour des noms saisis ou chargés, choisissez
-`try_key` ou `try_keys` et examinez leur `Result` :
+Un appel ordinaire à `key` donne `int`, et à `keys` donne `int[]`. Une entrée
+invalide déclenche `panic`. Pour des noms saisis ou chargés, ajoutez `try`
+au même appel et examinez le `Result` :
 
 ```sx
-let candidate = Music.try_key("C#5") // Result<int, Error>
+let candidate = (try Music.key("C#5")) // Result<int, Error>
 match candidate {
     success(number) => { print(number) }
     failure(error) => { print(error.detail) }
 }
-let notes = try Music.try_keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
+let notes = try Music.keys(["C5", "E5", "G5", "C6"]) else error { panic(error.detail) }
 ```
 
-`try_key` retourne `Result<int, Error>` et `try_keys` retourne `Result<int[], Error>`.
+`key` retourne `Result<int, Error>` et `keys` retourne `Result<int[], Error>`.
 Une erreur conserve `invalid_input`, l’opération `audio.music.key` et le nom dans
 `subject`. Les deux conversions de listes conservent ordre et répétitions et
 acceptent une liste vide ; la variante récupérable ne retourne aucun résultat
 partiel. Ces conversions interviennent à la description des notes, hors rendu DSP.
 Les numéros MIDI restent utilisables directement.
 
-Les anciens appels `try Music.key(...)` et `try Music.keys(...)` deviennent
-`try Music.try_key(...)` et `try Music.try_keys(...)` pour conserver leur traitement
-d’erreur avec le langage actuel.
+Dans une fonction récupérable, une ancienne propagation devient explicite :
+`try Music.key(name) else error { return Result<int, Error>.failure(error) }`.
+Sans bloc `else`, `try Music.key(name)` conserve désormais le résultat.
 
 ## Changer le son
 

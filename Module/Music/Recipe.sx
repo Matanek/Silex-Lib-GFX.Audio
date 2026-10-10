@@ -19,7 +19,7 @@ class Voice {
         self.tone = tone; self.envelope = envelope; self.crusher = crusher; self.fade_frames = fade_frames
     }
     func start(id:int, frequency:float32, velocity:float32, amplitude:float32, order:int) Result<void, Error> {
-        try self.tone.set_frequency(frequency); try self.tone.set_amplitude(amplitude * velocity)
+        try self.tone.set_frequency(frequency) else error { return Result<void,Error>.failure(error) }; try self.tone.set_amplitude(amplitude * velocity) else error { return Result<void,Error>.failure(error) }
         self.fade = 0; self.tail = 0.0
         if self.envelope.is_active() && self.fade_frames > 0 { self.tail = self.last; self.fade = self.fade_frames }
         self.tone.reset(); self.envelope.reset(); self.crusher.reset(); self.envelope.note_on()
@@ -42,17 +42,17 @@ package class Recipe:Synthesis.Instrument {
     }
     static func create(timbre:Timbre, sample_rate:int) Result<Recipe, Error> {
         let mono = Processing.Format(sample_rate:sample_rate, channels:1)
-        let attack = try Synthesis.frame_at(timbre.attack_seconds, sample_rate)
-        let decay = try Synthesis.frame_at(timbre.decay_seconds, sample_rate)
-        let release = try Synthesis.frame_at(timbre.release_seconds, sample_rate)
-        var hold = try Synthesis.frame_at(timbre.hold_seconds, sample_rate)
+        let attack = try Synthesis.frame_at(timbre.attack_seconds, sample_rate) else error { return Result<Recipe,Error>.failure(error) }
+        let decay = try Synthesis.frame_at(timbre.decay_seconds, sample_rate) else error { return Result<Recipe,Error>.failure(error) }
+        let release = try Synthesis.frame_at(timbre.release_seconds, sample_rate) else error { return Result<Recipe,Error>.failure(error) }
+        var hold = try Synthesis.frame_at(timbre.hold_seconds, sample_rate) else error { return Result<Recipe,Error>.failure(error) }
         if hold < 1 { hold = 1 }
-        let fade = try Synthesis.frame_at(0.001, sample_rate)
+        let fade = try Synthesis.frame_at(0.001, sample_rate) else error { return Result<Recipe,Error>.failure(error) }
         var voices:Voice[] = []; var i = 0
         while i < 16 {
-            var tone = try Synthesis.Oscillator.create(mono, frequency_hz:0.0, amplitude:timbre.amplitude, waveform:timbre.waveform, duty_cycle:timbre.duty_cycle)
-            var envelope = try Synthesis.Envelope.create(mono, attack, decay, timbre.sustain, release)
-            var crusher = try Processing.Bitcrusher.create(mono, bits:timbre.bits, hold_frames:hold)
+            var tone = try Synthesis.Oscillator.create(mono, frequency_hz:0.0, amplitude:timbre.amplitude, waveform:timbre.waveform, duty_cycle:timbre.duty_cycle) else error { return Result<Recipe,Error>.failure(error) }
+            var envelope = try Synthesis.Envelope.create(mono, attack, decay, timbre.sustain, release) else error { return Result<Recipe,Error>.failure(error) }
+            var crusher = try Processing.Bitcrusher.create(mono, bits:timbre.bits, hold_frames:hold) else error { return Result<Recipe,Error>.failure(error) }
             voices.append(Voice(tone, envelope, crusher, fade)); i++
         }
         return Result<Recipe, Error>.success(Recipe(Processing.Format(sample_rate:sample_rate, channels:2), timbre.amplitude, voices))
@@ -70,7 +70,7 @@ package class Recipe:Synthesis.Instrument {
         return Result<void, Error>.success()
     }
     func send(command:Synthesis.Command) Result<void, Error> {
-        try self.validate(command)
+        try self.validate(command) else error { return Result<void,Error>.failure(error) }
         match command {
             note_on(id, frequency, velocity) => {
 
@@ -85,7 +85,7 @@ package class Recipe:Synthesis.Instrument {
                 if slot < 0 { slot = oldest }
                 if self.serial == 9_223_372_036_854_775_807 { return Result<void, Error>.failure(Error(kind:Kind.limit_exceeded(), operation:"audio.music.recipe", subject:null, detail:"note counter exhausted")) }
                 self.serial++
-                try self.voices[slot].start(id, frequency, velocity, self.amplitude, self.serial)
+                try self.voices[slot].start(id, frequency, velocity, self.amplitude, self.serial) else error { return Result<void,Error>.failure(error) }
             }
             note_off(id) => { for var voice in self.voices { if voice.id == id { voice.envelope.note_off() } } }
             all_notes_off => { for var voice in self.voices { voice.envelope.note_off() } }
@@ -102,7 +102,7 @@ package class Recipe:Synthesis.Instrument {
             var i = start; while i < start + frames * 2 { samples[i] = 0.0; i++ }
             for var voice in self.voices {
                 if voice.envelope.is_active() || voice.fade > 0 {
-                    try voice.tone.render(&self.scratch[0:frames]); try voice.crusher.process(&self.scratch[0:frames]); try voice.envelope.process(&self.scratch[0:frames])
+                    try voice.tone.render(&self.scratch[0:frames]) else error { return Result<void,Error>.failure(error) }; try voice.crusher.process(&self.scratch[0:frames]) else error { return Result<void,Error>.failure(error) }; try voice.envelope.process(&self.scratch[0:frames]) else error { return Result<void,Error>.failure(error) }
                     var frame = 0
                     while frame < frames {
                         var value = self.scratch[frame]

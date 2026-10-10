@@ -28,9 +28,9 @@ public class ViolinInstrument:Generator, Instrument {
         var pool = PolyphonicInstrument(format, voices, voice_policy, steal_fade_frames, amplitude)
         return Result<ViolinInstrument, Error>.success(ViolinInstrument(pool, brightness, attack_frames, release_frames, vibrato_cents, vibrato_hz))
     }
-    func validate(command:Command) Result<void, Error> { return self.pool.validate(command) }
-    func send(command:Command) Result<void, Error> { return self.pool.send(command) }
+    func validate(command:Command) Result<void, Error> { return (try self.pool.validate(command)) }
+    func send(command:Command) Result<void, Error> { return (try self.pool.send(command)) }
     func active_voices() int { return self.pool.active_voices() }
-    func render(samples:&float32[..]) Result<void, Error> { return self.pool.render(samples) }
+    func render(samples:&float32[..]) Result<void, Error> { return (try self.pool.render(samples)) }
     func reset() { self.pool.reset() }
 }

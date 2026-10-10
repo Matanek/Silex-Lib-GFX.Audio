@@ -12,14 +12,14 @@ func play(audio:&Audio, samples:&float32[..], name:str) {
     audio.wait(audio.play(sound)); assert(audio.unload(sound))
 }
 func pluck(samples:&float32[..], frequency:float32) {
-    match Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:0.5, waveform:Synthesis.Waveform.triangle) {
-        failure(error) => { panic(error.detail) }; success(var source) => { require(source.render(samples)) }
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:0.5, waveform:Synthesis.Waveform.triangle)) {
+        failure(error) => { panic(error.detail) }; success(var source) => { require((try source.render(samples))) }
     }
-    match Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:4_800, sustain:0.15, release_frames:2_400) {
+    match (try Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:4_800, sustain:0.15, release_frames:2_400)) {
         failure(error) => { panic(error.detail) }
         success(var envelope) => {
-            envelope.note_on(); require(envelope.process(&samples[0:9_600]))
-            envelope.note_off(); require(envelope.process(&samples[9_600:samples.count()]))
+            envelope.note_on(); require((try envelope.process(&samples[0:9_600])))
+            envelope.note_off(); require((try envelope.process(&samples[9_600:samples.count()])))
         }
     }
 }
@@ -28,14 +28,14 @@ func example(audio:&Audio, decay:float32, damping:float32, bypass:bool, name:str
     pluck(&samples[0:14_400], 261.625)
     pluck(&samples[14_400:28_800], 329.625)
     pluck(&samples[28_800:43_200], 392.0)
-    match Processing.Reverb.create(format(), room_size:0.65, decay_seconds:decay, damping:damping, wet:0.45) {
+    match (try Processing.Reverb.create(format(), room_size:0.65, decay_seconds:decay, damping:damping, wet:0.45)) {
         failure(error) => { panic(error.detail) }
         success(var effect) => {
             effect.set_bypass(bypass)
             var start = 0
             while start < samples.count() {
                 var end = start + 512; if end > samples.count() { end = samples.count() }
-                require(effect.process(&samples[start:end])); start = end
+                require((try effect.process(&samples[start:end]))); start = end
             }
         }
     }

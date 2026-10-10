@@ -8,26 +8,26 @@ func produce(start_frame:int, frames:int) float32[] {
 }
 func main() {
     let format = Processing.Format(sample_rate:48_000, channels:1)
-    match Processing.LowPass.create(format, cutoff_hz:2_000.0) {
+    match (try Processing.LowPass.create(format, cutoff_hz:2_000.0)) {
         failure(error) => { panic(error.detail) }
         success(var filter) => {
             var audio = Audio()
-            match audio.stream(sample_rate:48_000, capacity_frames:256) {
+            match (try audio.stream(sample_rate:48_000, capacity_frames:256)) {
                 failure(error) => { panic(error.detail) }
                 success(stream) => {
                     let playing = audio.play(stream)
                     var frame = 0
                     while frame < 1_024 {
-                        match audio.wait_writable(stream, minimum_frames:256) { failure(error) => { panic(error.detail) }; success => {} }
+                        match (try audio.wait_writable(stream, minimum_frames:256)) { failure(error) => { panic(error.detail) }; success => {} }
                         var samples = produce(frame, 256)
-                        match filter.process(&samples[0:samples.count()]) { failure(error) => { panic(error.detail) }; success => {} }
-                        match Processing.levels(@samples[0:samples.count()], channels:1) { failure(error) => { panic(error.detail) }; success(levels) => { assert(levels[0].peak < 0.5 && levels[0].rms > 0.0) } }
-                        match audio.write(stream, @samples[0:samples.count()]) { failure(error) => { panic(error.detail) }; success(written) => { assert(written == 256) } }
+                        match (try filter.process(&samples[0:samples.count()])) { failure(error) => { panic(error.detail) }; success => {} }
+                        match (try Processing.levels(@samples[0:samples.count()], channels:1)) { failure(error) => { panic(error.detail) }; success(levels) => { assert(levels[0].peak < 0.5 && levels[0].rms > 0.0) } }
+                        match (try audio.write(stream, @samples[0:samples.count()])) { failure(error) => { panic(error.detail) }; success(written) => { assert(written == 256) } }
                         frame += 256
                     }
-                    match audio.close(stream) { failure(error) => { panic(error.detail) }; success => {} }
+                    match (try audio.close(stream)) { failure(error) => { panic(error.detail) }; success => {} }
                     audio.wait(playing)
-                    match audio.stream_info(stream) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.written_frames == 1_024 && info.consumed_frames == 1_024 && info.drained) } }
+                    match (try audio.stream_info(stream)) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.written_frames == 1_024 && info.consumed_frames == 1_024 && info.drained) } }
                     assert(audio.release(stream))
                 }
             }

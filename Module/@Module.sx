@@ -346,7 +346,7 @@ public class Audio {
             while remaining > 0 {
                 self.collect_finished()
                 var count = remaining; if count > quantum { count = quantum }
-                var block = try Native.render(self.mixer, count * self.output_channels)
+                var block = try Native.render(self.mixer, count * self.output_channels) else error { return Result<float32[],Error>.failure(error) }
                 for sample in block { output.append(sample) }
                 self.rendered += count; remaining -= count
             }
@@ -354,7 +354,7 @@ public class Audio {
             return Result<float32[], Error>.success(output)
         }
         self.collect_finished()
-        match Native.render(self.mixer, frames * self.output_channels) {
+        match (try Native.render(self.mixer, frames * self.output_channels)) {
             failure(error) => { return Result<float32[], Error>.failure(error) }
             success(samples) => {
                 self.rendered += frames
@@ -364,28 +364,22 @@ public class Audio {
         }
     }
 
-    func load(path:str) Sound {
-        match self.try_load(path) {
-            failure(error) => { panic("GFX.Audio could not load '" + path + "': " + error.detail) }
-            success(sound) => { return sound }
-        }
-    }
 
-    func try_load(path:str) Result<Sound, Error> {
+    func load(path:str) Result<Sound, Error> {
         let handle = Native.try_load(self.mixer, path)
         if handle != 0 as uint { return Result<Sound, Error>.success(self.add_sound(handle)) }
         let detail = Native.error()
         // Consult the system error only after failure, without reading the file twice.
-        match File.open(path, File.OpenOptions(access:File.Access.read(), creation:File.Creation.open_existing(), append:false)) {
+        match (try File.open(path, File.OpenOptions(access:File.Access.read(), creation:File.Creation.open_existing(), append:false))) {
             failure(error) => {
                 return Result<Sound, Error>.failure(Error(kind:error.kind, operation:"audio.load", subject:path, detail:detail))
             }
-            success(var file) => { let closed = File.close(move file) }
+            success(var file) => { let closed = (try File.close(move file)) }
         }
         return Result<Sound, Error>.failure(Error(kind:Kind.invalid_data(), operation:"audio.load", subject:path, detail:detail))
     }
 
-    func try_decode(bytes:@uint8[..]) Result<Sound, Error> {
+    func decode(bytes:@uint8[..]) Result<Sound, Error> {
         if bytes.is_empty() {
             return Result<Sound, Error>.failure(Error(kind:Kind.invalid_data(), operation:"audio.decode", subject:null, detail:"encoded audio is empty"))
         }
@@ -904,7 +898,7 @@ public class Audio {
 
     package func managed_stream(source:Synthesis.Generator, duration_frames:int, block_frames:int, capacity_frames:int) Result<Stream, Error> {
         if duration_frames < 0 || block_frames < 1 || block_frames > 65_536 { return Result<Stream, Error>.failure(stream_error(Kind.invalid_input(), "audio.music.player", "invalid duration or block size")) }
-        var output = try self.stream(source.format.sample_rate, source.format.channels, capacity_frames)
+        var output = try self.stream(source.format.sample_rate, source.format.channels, capacity_frames) else error { return Result<Stream,Error>.failure(error) }
         var state = self.require_stream(output)
         state.feed = ManagedFeed(source, duration_frames, block_frames)
         return Result<Stream, Error>.success(output)
@@ -918,7 +912,7 @@ public class Audio {
         var state = self.require_stream(stream)
         if state.started || state.stopped { return Result<PlayingSound, Error>.failure(stream_error(Kind.invalid_input(), "audio.music.play", "player is one-shot; create another playback")) }
         if var feed = state.feed { feed.speed = settings.speed }
-        match self.fill_managed(stream) {
+        match (try self.fill_managed(stream)) {
             failure(error) => {
                 if var feed = state.feed { feed.error = error }
                 self.stop(stream.playback)
@@ -946,15 +940,15 @@ public class Audio {
                 if feed.offset == feed.pending {
                     var frames = feed.duration - feed.produced
                     if frames > feed.block_frames { frames = feed.block_frames }
-                    try feed.source.render(&feed.samples[0:frames * state.channels])
+                    try feed.source.render(&feed.samples[0:frames * state.channels]) else error { return Result<void,Error>.failure(error) }
                     feed.produced += frames; feed.pending = frames; feed.offset = 0
                 }
                 var frames = feed.pending - feed.offset
                 if frames > allowance { frames = allowance }
-                let accepted = try self.write(stream, @feed.samples[feed.offset * state.channels:(feed.offset + frames) * state.channels])
+                let accepted = try self.write(stream, @feed.samples[feed.offset * state.channels:(feed.offset + frames) * state.channels]) else error { return Result<void,Error>.failure(error) }
                 feed.offset += accepted; feed.written += accepted; allowance -= accepted
             }
-            if feed.written == feed.duration { try self.close(stream) }
+            if feed.written == feed.duration { try self.close(stream) else error { return Result<void,Error>.failure(error) } }
         }
         return Result<void, Error>.success()
     }
@@ -966,7 +960,7 @@ public class Audio {
                 if var state = entry.stream {
                     if state.started && state.feed != null && !state.closed && !state.stopped {
                         let stream = Stream(PlayingSound(self.owner, index, entry.generation))
-                        match self.fill_managed(stream) {
+                        match (try self.fill_managed(stream)) {
                             success => {}
                             failure(error) => {
                                 if var feed = state.feed { feed.error = error }

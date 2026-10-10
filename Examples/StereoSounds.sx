@@ -17,27 +17,27 @@ func example(audio:&Audio, position:float32, sweep:bool, name:str) {
     if sweep { frames = 50_400 }
     var samples:float32[] = []; var i = 0
     while i < frames * 2 { samples.append(0.0); i++ }
-    match Synthesis.Oscillator.create(format(), frequency_hz:440.0, amplitude:0.35) {
-        failure(error) => { panic(error.detail) }; success(var source) => { require(source.render(&samples[0:samples.count()])) }
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:440.0, amplitude:0.35)) {
+        failure(error) => { panic(error.detail) }; success(var source) => { require((try source.render(&samples[0:samples.count()]))) }
     }
-    match Processing.StereoPan.create(format(), pan:position) {
+    match (try Processing.StereoPan.create(format(), pan:position)) {
         failure(error) => { panic(error.detail) }
         success(var effect) => {
             if sweep {
                 var step = 0
                 while step < 21 {
-                    require(effect.set_pan(-1.0 + step as float32 * 0.1))
-                    require(effect.process(&samples[step * 4_800:(step + 1) * 4_800]))
+                    require((try effect.set_pan(-1.0 + step as float32 * 0.1)))
+                    require((try effect.process(&samples[step * 4_800:(step + 1) * 4_800])))
                     step++
                 }
-            } else { require(effect.process(&samples[0:samples.count()])) }
+            } else { require((try effect.process(&samples[0:samples.count()]))) }
         }
     }
-    match Synthesis.Envelope.create(format(), attack_frames:480, decay_frames:4_800, sustain:0.7, release_frames:4_800) {
+    match (try Synthesis.Envelope.create(format(), attack_frames:480, decay_frames:4_800, sustain:0.7, release_frames:4_800)) {
         failure(error) => { panic(error.detail) }
         success(var envelope) => {
-            envelope.note_on(); require(envelope.process(&samples[0:(frames - 4_800) * 2]))
-            envelope.note_off(); require(envelope.process(&samples[(frames - 4_800) * 2:samples.count()]))
+            envelope.note_on(); require((try envelope.process(&samples[0:(frames - 4_800) * 2])))
+            envelope.note_off(); require((try envelope.process(&samples[(frames - 4_800) * 2:samples.count()])))
         }
     }
     play(audio, &samples[0:samples.count()], name)

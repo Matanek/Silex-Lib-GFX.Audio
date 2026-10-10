@@ -5,10 +5,10 @@ use Interop.C
 use STD.Error.Kind
 let generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
 func watch(audio:&Audio, playing:Audio.PlayingSound) {
-    match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.watch_end(playing)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 func seek(audio:&Audio, playing:Audio.PlayingSound, frame:int) {
-    match audio.seek_frames(playing, frame) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.seek_frames(playing, frame)) { failure(error) => { panic(error.detail) }; success => {} }
 }
 test "known source format start frame seek pause and stable end identities" {
     Native.initialize()
@@ -16,7 +16,7 @@ test "known source format start frame seek pause and stable end identities" {
     var audio = Audio(native_mixer:mixer)
     var samples:float32[] = [0.0 as float32, 0.1 as float32, 0.2 as float32, 0.3 as float32, 0.4 as float32, 0.5 as float32, 0.6 as float32, 0.7 as float32]
     let sound = audio.create(@samples[0:8], sample_rate:48_000)
-    match audio.sound_info(sound) {
+    match (try audio.sound_info(sound)) {
         failure(error) => { panic(error.detail) }
         success(info) => {
             assert(info.sample_rate == 48_000 && info.channels == 1)
@@ -33,11 +33,11 @@ test "known source format start frame seek pause and stable end identities" {
     assert(C.load<float32>(ptr, 0 as uint) == samples[2])
     audio.pause(playing)
     seek(audio, playing, 5)
-    match audio.playback_info(playing) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.paused && info.position_frames == 5) } }
+    match (try audio.playback_info(playing)) { failure(error) => { panic(error.detail) }; success(info) => { assert(info.paused && info.position_frames == 5) } }
     audio.resume(playing)
     assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4) == 4)
     assert(C.load<float32>(ptr, 0 as uint) == samples[5])
-    match audio.seek_frames(playing, 9) { success => { panic("past end accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try audio.seek_frames(playing, 9)) { success => { panic("past end accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
     seek(audio, playing, 8)
     assert(generate(C.pointer_bits(mixer), C.pointer_bits(ptr), 4) == 0)
     audio.collect_finished()
@@ -78,12 +78,12 @@ test "seek discards prepared resampled output and matches a fresh start" {
 }
 test "watched stops and nonseekable streams report one reason without loss" {
     var audio = Audio()
-    match audio.stream(sample_rate:48_000, capacity_frames:4) {
+    match (try audio.stream(sample_rate:48_000, capacity_frames:4)) {
         failure(error) => { panic(error.detail) }
         success(source) => {
             let playing = audio.play(source)
             watch(audio, playing)
-            match audio.seek_frames(playing, 0) { success => { panic("stream seek accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
+            match (try audio.seek_frames(playing, 0)) { success => { panic("stream seek accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
             audio.stop(playing)
             audio.wait(playing)
             assert(audio.release(source))
@@ -104,7 +104,7 @@ test "event reservations stay bounded and draining permits another watcher" {
     var i = 0
     while i < 256 { let item = audio.play(sound); watch(audio, item); playing.append(item); i++ }
     let extra = audio.play(sound)
-    match audio.watch_end(extra) { success => { panic("event capacity unbounded") }; failure(error) => { assert(error.kind == Kind.would_block()) } }
+    match (try audio.watch_end(extra)) { success => { panic("event capacity unbounded") }; failure(error) => { assert(error.kind == Kind.would_block()) } }
     for item in playing { assert(audio.release(item)) }
     var events = audio.drain_end_events()
     assert(events.count() == 256)

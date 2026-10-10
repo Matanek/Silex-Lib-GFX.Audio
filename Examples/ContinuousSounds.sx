@@ -16,22 +16,22 @@ class Engine:Synthesis.Generator {
         self.format = source.format; self.fundamental = fundamental; self.harmonic = harmonic; self.gain = gain; self.source = source
     }
     static func create() Result<Engine, Error> {
-        var fundamental = try Synthesis.Control.create(48_000, value:-1.0)
-        var harmonic = try Synthesis.Control.create(48_000, value:-1.0)
-        var gain = try Synthesis.Control.create(48_000, value:0.0)
-        var low = try Synthesis.FrequencyModulation.create(format(), fundamental, frequency_hz:140.0, deviation_hz:100.0, amplitude:0.25)
-        var high = try Synthesis.FrequencyModulation.create(format(), harmonic, frequency_hz:280.0, deviation_hz:200.0, amplitude:0.1)
-        var noise = try Synthesis.PinkNoise.create(format(), seed:42, amplitude:0.04)
-        var mix = try Synthesis.Mix.create([low, high, noise], [1.0 as float32, 1.0 as float32, 0.5 as float32])
-        var source = try Synthesis.AmplitudeModulation.create(mix, gain, offset:0.0, depth:1.0)
-        try gain.set(0.55, duration_frames:2_400)
+        var fundamental = try Synthesis.Control.create(48_000, value:-1.0) else error { return Result<Engine,Error>.failure(error) }
+        var harmonic = try Synthesis.Control.create(48_000, value:-1.0) else error { return Result<Engine,Error>.failure(error) }
+        var gain = try Synthesis.Control.create(48_000, value:0.0) else error { return Result<Engine,Error>.failure(error) }
+        var low = try Synthesis.FrequencyModulation.create(format(), fundamental, frequency_hz:140.0, deviation_hz:100.0, amplitude:0.25) else error { return Result<Engine,Error>.failure(error) }
+        var high = try Synthesis.FrequencyModulation.create(format(), harmonic, frequency_hz:280.0, deviation_hz:200.0, amplitude:0.1) else error { return Result<Engine,Error>.failure(error) }
+        var noise = try Synthesis.PinkNoise.create(format(), seed:42, amplitude:0.04) else error { return Result<Engine,Error>.failure(error) }
+        var mix = try Synthesis.Mix.create([low, high, noise], [1.0 as float32, 1.0 as float32, 0.5 as float32]) else error { return Result<Engine,Error>.failure(error) }
+        var source = try Synthesis.AmplitudeModulation.create(mix, gain, offset:0.0, depth:1.0) else error { return Result<Engine,Error>.failure(error) }
+        try gain.set(0.55, duration_frames:2_400) else error { return Result<Engine,Error>.failure(error) }
         return Result<Engine, Error>.success(Engine(fundamental, harmonic, gain, source))
     }
     func regime(value:float32, gain:float32, duration_frames:int) {
-        require(self.fundamental.set(value, duration_frames)); require(self.harmonic.set(value, duration_frames)); require(self.gain.set(gain, duration_frames))
+        require((try self.fundamental.set(value, duration_frames))); require((try self.harmonic.set(value, duration_frames))); require((try self.gain.set(gain, duration_frames)))
     }
-    func render(samples:&float32[..]) Result<void, Error> { return self.source.render(samples) }
-    func reset() { self.source.reset(); require(self.gain.set(0.55, duration_frames:2_400)) }
+    func render(samples:&float32[..]) Result<void, Error> { return (try self.source.render(samples)) }
+    func reset() { self.source.reset(); require((try self.gain.set(0.55, duration_frames:2_400))) }
 }
 func update(engine:Engine, frame:int, next:&int) {
     if next == 0 && frame == 48_000 { engine.regime(1.0, 0.9, 24_000); next++ }
@@ -40,7 +40,7 @@ func update(engine:Engine, frame:int, next:&int) {
     if next == 3 && frame == 192_000 { engine.regime(-1.0, 0.0, 48_000); next++ }
 }
 func melody() Result<Synthesis.Processed, Error> {
-    var voice = try Synthesis.SineInstrument.create(format(), max_voices:8, attack_frames:480, decay_frames:2_400, sustain:0.7, release_frames:4_800)
+    var voice = try Synthesis.SineInstrument.create(format(), max_voices:8, attack_frames:480, decay_frames:2_400, sustain:0.7, release_frames:4_800) else error { return Result<Synthesis.Processed,Error>.failure(error) }
     let events:Synthesis.Event[] = [
         Synthesis.Event(frame:0, command:Synthesis.Command.gain_to(0.0, 0)),
         Synthesis.Event(frame:0, command:Synthesis.Command.gain_to(0.7, 4_800)),
@@ -53,31 +53,31 @@ func melody() Result<Synthesis.Processed, Error> {
         Synthesis.Event(frame:96_000, command:Synthesis.Command.gain_to(0.8, 24_000)),
         Synthesis.Event(frame:144_000, command:Synthesis.Command.all_notes_off),
     ]
-    var sequence = try Synthesis.Sequence.create(voice, events)
-    var delay = try Processing.Delay.create(format(), delay_frames:4_800, feedback:0.4, wet:0.3)
-    return Synthesis.Processed.create(sequence, [delay])
+    var sequence = try Synthesis.Sequence.create(voice, events) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    var delay = try Processing.Delay.create(format(), delay_frames:4_800, feedback:0.4, wet:0.3) else error { return Result<Synthesis.Processed,Error>.failure(error) }
+    return (try Synthesis.Processed.create(sequence, [delay]))
 }
 func play(audio:Audio, source:Synthesis.Generator, duration_frames:int, name:str, engine:Engine? = null) {
     print(name)
-    match Synthesis.StreamProducer.create(audio, source, duration_frames, block_frames:480, capacity_frames:1_440) {
+    match (try Synthesis.StreamProducer.create(audio, source, duration_frames, block_frames:480, capacity_frames:1_440)) {
         failure(error) => { panic(error.detail) }
         success(var producer) => {
             var prefill = 0
-            while prefill < 3 { match producer.pump() { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 480) } }; prefill++ }
+            while prefill < 3 { match (try producer.pump()) { failure(error) => { panic(error.detail) }; success(count) => { assert(count == 480) } }; prefill++ }
             let playing = audio.play(producer.stream())
             var next = 0
             while !producer.input_closed() {
                 if var controller = engine { update(controller, producer.produced_frames(), next) }
-                match producer.pump() {
+                match (try producer.pump()) {
                     failure(error) => {
                         if error.kind != Kind.would_block() { panic(error.detail) }
-                        require(audio.wait_writable(producer.stream()))
+                        require((try audio.wait_writable(producer.stream())))
                     }
                     success(count) => {}
                 }
             }
             audio.wait(playing)
-            match audio.stream_info(producer.stream()) {
+            match (try audio.stream_info(producer.stream())) {
                 failure(error) => { panic(error.detail) }
                 success(info) => { assert(info.drained && info.written_frames == duration_frames && info.consumed_frames == duration_frames && info.discarded_frames == 0) }
             }
@@ -86,6 +86,6 @@ func play(audio:Audio, source:Synthesis.Generator, duration_frames:int, name:str
 }
 func main() {
     var audio = Audio()
-    match Engine.create() { failure(error) => { panic(error.detail) }; success(var engine) => { play(audio, engine, 244_800, "C1 - Continuous engine regimes", engine) } }
-    match melody() { failure(error) => { panic(error.detail) }; success(var source) => { play(audio, source, 240_000, "C2 - Instrument gain and pitch ramps with echo tail") } }
+    match (try Engine.create()) { failure(error) => { panic(error.detail) }; success(var engine) => { play(audio, engine, 244_800, "C1 - Continuous engine regimes", engine) } }
+    match (try melody()) { failure(error) => { panic(error.detail) }; success(var source) => { play(audio, source, 240_000, "C2 - Instrument gain and pitch ramps with echo tail") } }
 }

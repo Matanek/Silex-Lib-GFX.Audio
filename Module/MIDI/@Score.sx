@@ -15,20 +15,20 @@ func byte(data:@uint8[..], position:&int) Result<int, Error> {
 }
 func word(data:@uint8[..], position:&int, count:int) Result<int, Error> {
     var value = 0; var i = 0
-    while i < count { value = value * 256 + try byte(data, position); i++ }
+    while i < count { value = value * 256 + try byte(data, position) else error { return Result<int,Error>.failure(error) }; i++ }
     return Result<int, Error>.success(value)
 }
 func vlq(data:@uint8[..], position:&int) Result<int, Error> {
     var value = 0; var i = 0
     while i < 4 {
-        let next = try byte(data, position); value = value * 128 + next % 128
+        let next = try byte(data, position) else error { return Result<int,Error>.failure(error) }; value = value * 128 + next % 128
         if next < 128 { return Result<int, Error>.success(value) }
         i++
     }
     return Result<int, Error>.failure(invalid("MIDI variable-length quantity exceeds four bytes"))
 }
 func channel_byte(data:@uint8[..], position:&int) Result<int, Error> {
-    let value = try byte(data, position)
+    let value = try byte(data, position) else error { return Result<int,Error>.failure(error) }
     if value > 127 { return Result<int, Error>.failure(invalid("status byte encountered inside MIDI channel data")) }
     return Result<int, Error>.success(value)
 }
@@ -37,19 +37,19 @@ func read_track(data:@uint8[..], track:int, max_events:int, count:&int, ignored:
     while position < data.count() {
         if count == max_events { return Result<void, Error>.failure(limit("MIDI event capacity reached, including metadata and SysEx")) }
         count++
-        let delta = try vlq(data, position)
+        let delta = try vlq(data, position) else error { return Result<void,Error>.failure(error) }
         if tick > 9_223_372_036_854_775_807 - delta { return Result<void, Error>.failure(limit("MIDI tick counter exhausted")) }
         tick += delta
-        let first = try byte(data, position); var status = first
+        let first = try byte(data, position) else error { return Result<void,Error>.failure(error) }; var status = first
         if first < 128 {
             if running == 0 { return Result<void, Error>.failure(invalid("MIDI running status has no preceding channel status")) }
             status = running; position--
         }
         if status >= 128 && status < 240 {
             running = status
-            let a = try channel_byte(data, position); var b = 0
+            let a = try channel_byte(data, position) else error { return Result<void,Error>.failure(error) }; var b = 0
             let kind = status / 16
-            if kind != 12 && kind != 13 { b = try channel_byte(data, position) }
+            if kind != 12 && kind != 13 { b = try channel_byte(data, position) else error { return Result<void,Error>.failure(error) } }
             var message = Message.note_on(a, b)
             match kind {
                 8 => { message = Message.note_off(a, b) }
@@ -64,13 +64,13 @@ func read_track(data:@uint8[..], track:int, max_events:int, count:&int, ignored:
             events.append(RawEvent(tick:tick, channel:status % 16, message:message, tempo:0, ending:false))
         } else if status == 255 || status == 240 || status == 247 {
             running = 0; var kind = -1
-            if status == 255 { kind = try channel_byte(data, position) }
-            let length = try vlq(data, position)
+            if status == 255 { kind = try channel_byte(data, position) else error { return Result<void,Error>.failure(error) } }
+            let length = try vlq(data, position) else error { return Result<void,Error>.failure(error) }
             if length > data.count() - position { return Result<void, Error>.failure(invalid("MIDI metadata or SysEx length exceeds its track")) }
             if kind == 81 {
                 if track != 0 { return Result<void, Error>.failure(invalid("format 1 tempo map must belong to the first track")) }
                 if length < 3 { return Result<void, Error>.failure(invalid("MIDI tempo requires at least three bytes")) }
-                var cursor = position; let tempo = try word(data, cursor, 3)
+                var cursor = position; let tempo = try word(data, cursor, 3) else error { return Result<void,Error>.failure(error) }
                 if tempo == 0 { return Result<void, Error>.failure(invalid("MIDI tempo must be positive")) }
                 events.append(RawEvent(tick:tick, channel:0, message:Message.channel_pressure(0), tempo:tempo, ending:false))
             } else if kind == 47 {
@@ -151,10 +151,10 @@ public class Score {
         if sample_rate < 1 || sample_rate > 16_777_216 || maximum_bytes < 14 || maximum_bytes > 16_777_216 || maximum_tracks < 1 || maximum_tracks > 256 || maximum_events < 1 || maximum_events > 65_536 { return Result<Score, Error>.failure(invalid("MIDI limits require rate1..16777216, bytes14..16777216, tracks1..256 and events1..65536")) }
         if data.count() > maximum_bytes { return Result<Score, Error>.failure(limit("MIDI byte capacity reached")) }
         var position = 0
-        if try word(data, position, 4) != 0x4D546864 { return Result<Score, Error>.failure(invalid("MIDI file must start with MThd")) }
-        let header = try word(data, position, 4)
+        if try word(data, position, 4) else error { return Result<Score,Error>.failure(error) } != 0x4D546864 { return Result<Score, Error>.failure(invalid("MIDI file must start with MThd")) }
+        let header = try word(data, position, 4) else error { return Result<Score,Error>.failure(error) }
         if header < 6 || header > data.count() - position { return Result<Score, Error>.failure(invalid("invalid MIDI header length")) }
-        let format = try word(data, position, 2); let tracks = try word(data, position, 2); let division = try word(data, position, 2)
+        let format = try word(data, position, 2) else error { return Result<Score,Error>.failure(error) }; let tracks = try word(data, position, 2) else error { return Result<Score,Error>.failure(error) }; let division = try word(data, position, 2) else error { return Result<Score,Error>.failure(error) }
         if format > 1 { return Result<Score, Error>.failure(unsupported("only MIDI formats 0 and 1 are supported")) }
         if division >= 32_768 { return Result<Score, Error>.failure(unsupported("MIDI SMPTE division is not supported; use PPQN")) }
         if division == 0 || tracks == 0 || (format == 0 && tracks != 1) { return Result<Score, Error>.failure(invalid("invalid PPQN division or track count")) }
@@ -162,11 +162,11 @@ public class Score {
         position += header - 6
         var raw:RawEvent[] = []; var count = 0; var ignored = 0; var track = 0
         while position < data.count() {
-            let type = try word(data, position, 4); let length = try word(data, position, 4)
+            let type = try word(data, position, 4) else error { return Result<Score,Error>.failure(error) }; let length = try word(data, position, 4) else error { return Result<Score,Error>.failure(error) }
             if length > data.count() - position { return Result<Score, Error>.failure(invalid("MIDI chunk length exceeds remaining bytes")) }
             if type == 0x4D54726B {
                 if track == tracks { return Result<Score, Error>.failure(invalid("MIDI contains more tracks than its header declares")) }
-                try read_track(@data[position:position + length], track, maximum_events, count, ignored, raw); track++
+                try read_track(@data[position:position + length], track, maximum_events, count, ignored, raw) else error { return Result<Score,Error>.failure(error) }; track++
             } else if type == 0x4D546864 { return Result<Score, Error>.failure(invalid("duplicate MIDI header")) }
             position += length
         }
@@ -174,8 +174,8 @@ public class Score {
         sort(&raw[0:raw.count()])
         var clock = Clock(division, sample_rate); var tick = 0; var tempo = 500_000; var end = 0; var events:Event[] = []
         for event in raw {
-            try clock.advance(event.tick - tick, tempo); tick = event.tick
-            let frame = try clock.frame()
+            try clock.advance(event.tick - tick, tempo) else error { return Result<Score,Error>.failure(error) }; tick = event.tick
+            let frame = try clock.frame() else error { return Result<Score,Error>.failure(error) }
             if event.tempo > 0 { tempo = event.tempo }
             else if event.ending { if frame > end { end = frame } }
             else { events.append(Event(frame:frame, channel:event.channel, message:event.message)) }
@@ -184,7 +184,7 @@ public class Score {
     }
     static func read(path:str, sample_rate:int, maximum_bytes:int = 1_048_576, maximum_tracks:int = 64, maximum_events:int = 65_536) Result<Score, Error> {
         if maximum_bytes < 14 || maximum_bytes > 16_777_216 { return Result<Score, Error>.failure(invalid("MIDI byte limit must be in [14, 16777216]")) }
-        let data = try Files.read_all(path, maximum_bytes)
-        return Score.parse(@data[0:data.count()], sample_rate, maximum_bytes, maximum_tracks, maximum_events)
+        let data = try Files.read_all(path, maximum_bytes) else error { return Result<Score,Error>.failure(error) }
+        return (try Score.parse(@data[0:data.count()], sample_rate, maximum_bytes, maximum_tracks, maximum_events))
     }
 }

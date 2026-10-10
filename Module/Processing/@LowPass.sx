@@ -17,7 +17,7 @@ public class LowPass:Processor {
         return Result<void, Error>.success()
     }
     func process(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var i = 0
         while i < samples.count() {
             let channel = i % self.format.channels

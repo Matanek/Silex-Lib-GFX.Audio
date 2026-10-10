@@ -16,10 +16,10 @@ silex run Packages/GFX.Audio/Examples/StereoSounds.sx --release
 Fragment for a prepared stereo `format` and `samples` buffer:
 
 ```sx
-match Processing.StereoPan.create(format, pan:-0.5, wet:1.0) {
+match try Processing.StereoPan.create(format, pan:-0.5, wet:1.0) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

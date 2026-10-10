@@ -14,18 +14,18 @@ func play(audio:&Audio, samples:&float32[..], name:str) {
 func phrase() float32[] {
     var samples:float32[] = []; var i = 0; while i < 144_000 { samples.append(0.0); i++ }
     let amplitudes:float32[] = [0.2 as float32, 1.0 as float32, 0.4 as float32, 1.0 as float32, 0.2 as float32, 0.7 as float32]
-    match Synthesis.Oscillator.create(format(), frequency_hz:220.0, waveform:Synthesis.Waveform.triangle) {
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:220.0, waveform:Synthesis.Waveform.triangle)) {
         failure(error) => { panic(error.detail) }
         success(var source) => {
             var note = 0
             while note < amplitudes.count() {
                 let start = note * 24_000; source.reset()
-                require(source.render(&samples[start:start + 16_800]))
-                match Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800) {
+                require((try source.render(&samples[start:start + 16_800])))
+                match (try Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:2_400, sustain:0.6, release_frames:4_800)) {
                     failure(error) => { panic(error.detail) }
                     success(var envelope) => {
-                        envelope.note_on(); require(envelope.process(&samples[start:start + 12_000]))
-                        envelope.note_off(); require(envelope.process(&samples[start + 12_000:start + 16_800]))
+                        envelope.note_on(); require((try envelope.process(&samples[start:start + 12_000])))
+                        envelope.note_off(); require((try envelope.process(&samples[start + 12_000:start + 16_800])))
                     }
                 }
                 i = start; while i < start + 16_800 { samples[i] *= amplitudes[note]; i++ }
@@ -40,21 +40,21 @@ func process(effect:Processing.Processor, samples:&float32[..]) {
     var start = 0
     while start < samples.count() {
         var end = start + 512; if end > samples.count() { end = samples.count() }
-        require(active.process(&samples[start:end])); start = end
+        require((try active.process(&samples[start:end]))); start = end
     }
 }
 func main() {
     var audio = Audio(); var samples = phrase(); play(audio, &samples[0:samples.count()], "D1 - Dry accents")
-    match Processing.Compressor.create(format(), threshold_db:-18.0, ratio:4.0, attack_seconds:0.008, release_seconds:0.12, makeup_db:9.0) {
+    match (try Processing.Compressor.create(format(), threshold_db:-18.0, ratio:4.0, attack_seconds:0.008, release_seconds:0.12, makeup_db:9.0)) {
         failure(error) => { panic(error.detail) }
         success(var comp) => {
             var effect:Processing.Processor = comp; samples = phrase(); process(effect, &samples[0:samples.count()])
             play(audio, &samples[0:samples.count()], "D2 - Compressed with explicit makeup")
-            comp.reset(); require(comp.set_wet(0.5)); samples = phrase(); process(effect, &samples[0:samples.count()])
+            comp.reset(); require((try comp.set_wet(0.5))); samples = phrase(); process(effect, &samples[0:samples.count()])
             play(audio, &samples[0:samples.count()], "D3 - Half dry half compressed")
         }
     }
-    match Processing.Limiter.create(format(), ceiling_db:-12.0, release_seconds:0.08) {
+    match (try Processing.Limiter.create(format(), ceiling_db:-12.0, release_seconds:0.08)) {
         failure(error) => { panic(error.detail) }
         success(var limit) => {
             var effect:Processing.Processor = limit; samples = phrase(); process(effect, &samples[0:samples.count()])

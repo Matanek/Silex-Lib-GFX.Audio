@@ -42,7 +42,7 @@ public class PinkNoise:Generator {
     }
 
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var index = 0
         while index < samples.count() {
             // Voss-McCartney: one held octave changes, plus white at every frame.

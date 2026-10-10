@@ -17,11 +17,11 @@ silex run Packages/GFX.Audio/Examples/DynamicSounds.sx --release
 Fragment pour un `format` et un buffer `samples` préparés :
 
 ```sx
-match Processing.Compressor.create(format, threshold_db:-18.0, ratio:4.0,
+match try Processing.Compressor.create(format, threshold_db:-18.0, ratio:4.0,
     attack_seconds:0.008, release_seconds:0.12, makeup_db:9.0) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

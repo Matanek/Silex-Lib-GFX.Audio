@@ -14,7 +14,7 @@ func finite_block(samples:@float32[..]) Result<void, Error> {
     return Result<void, Error>.success()
 }
 func unit_block(samples:@float32[..]) Result<void, Error> {
-    try finite_block(samples)
+    try finite_block(samples) else error { return Result<void,Error>.failure(error) }
     for value in samples { if value < -1.0 || value > 1.0 { return Result<void, Error>.failure(invalid("modulation samples must be in [-1, 1]")) } }
     return Result<void, Error>.success()
 }
@@ -41,7 +41,7 @@ public class Mix:Generator {
         return Result<Mix, Error>.success(Mix(format, sources, gains))
     }
     func render(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         var offset = 0
         while offset < samples.count() {
             var count = samples.count() - offset
@@ -49,8 +49,8 @@ public class Mix:Generator {
             var i = 0
             while i < count { samples[offset + i] = 0.0; i++ }
             for source, var generator in self.sources.indexed() {
-                try generator.render(&self.temporary[0:count])
-                try finite_block(@self.temporary[0:count])
+                try generator.render(&self.temporary[0:count]) else error { return Result<void,Error>.failure(error) }
+                try finite_block(@self.temporary[0:count]) else error { return Result<void,Error>.failure(error) }
                 i = 0
                 while i < count {
                     let value = samples[offset + i] + self.gains[source] * self.temporary[i]

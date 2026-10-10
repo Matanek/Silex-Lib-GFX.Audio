@@ -17,11 +17,11 @@ silex run Packages/GFX.Audio/Examples/ReverberantSounds.sx --release
 Fragment pour un `format` et un buffer `samples` préparés :
 
 ```sx
-match Processing.Reverb.create(format, room_size:0.65, decay_seconds:2.0,
+match try Processing.Reverb.create(format, room_size:0.65, decay_seconds:2.0,
     damping:0.5, wet:0.45) {
     failure(error) => { panic(error.detail) }
     success(var effect) => {
-        match effect.process(&samples[0:samples.count()]) {
+        match try effect.process(&samples[0:samples.count()]) {
             failure(error) => { panic(error.detail) }; success => {}
         }
     }

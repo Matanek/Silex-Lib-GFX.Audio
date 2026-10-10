@@ -26,16 +26,16 @@ public class Player:Synthesis.Generator {
         let end = self.position + frames; var offset = 0
         while self.position < end {
             while self.next < self.score.events.count() && self.score.events[self.next].frame == self.position {
-                let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message)
+                let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message) else error { return Result<void,Error>.failure(error) }
                 if !handled { self.ignored++ }
                 self.next++
             }
-            if !self.finished && self.position == self.end_frame { try self.synthesizer.finish(); self.finished = true }
+            if !self.finished && self.position == self.end_frame { try self.synthesizer.finish() else error { return Result<void,Error>.failure(error) }; self.finished = true }
             var until = end
             if self.next < self.score.events.count() && self.score.events[self.next].frame < until { until = self.score.events[self.next].frame }
             if !self.finished && self.end_frame < until { until = self.end_frame }
             let count = (until - self.position) * self.format.channels
-            try self.synthesizer.render(&samples[offset:offset + count]); self.position = until; offset += count
+            try self.synthesizer.render(&samples[offset:offset + count]) else error { return Result<void,Error>.failure(error) }; self.position = until; offset += count
         }
         return Result<void, Error>.success()
     }
@@ -44,11 +44,11 @@ public class Player:Synthesis.Generator {
         if self.position < self.end_frame { return Result<void, Error>.failure(invalid("MIDI playback has not reached its end")) }
         if self.finished { return Result<void, Error>.success() }
         while self.next < self.score.events.count() && self.score.events[self.next].frame == self.position {
-            let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message)
+            let handled = try self.synthesizer.send(self.score.events[self.next].channel, self.score.events[self.next].message) else error { return Result<void,Error>.failure(error) }
             if !handled { self.ignored++ }
             self.next++
         }
-        try self.synthesizer.finish(); self.finished = true
+        try self.synthesizer.finish() else error { return Result<void,Error>.failure(error) }; self.finished = true
         return Result<void, Error>.success()
     }
     func reset() { self.synthesizer.reset(); self.position = 0; self.next = 0; self.finished = false; self.ignored = 0 }

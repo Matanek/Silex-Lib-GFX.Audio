@@ -7,23 +7,23 @@ func require(result:Result<void, Error>) { match result { failure(error) => { pa
 func format() Processing.Format { return Processing.Format(sample_rate:48_000, channels:1) }
 func buffer(frames:int) float32[] { var samples:float32[] = []; var i = 0; while i < frames { samples.append(0.0); i++ } return samples }
 func tone(frequency:float32, waveform:Synthesis.Waveform = Synthesis.Waveform.sine) Synthesis.Oscillator {
-    match Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:0.75, waveform:waveform) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+    match (try Synthesis.Oscillator.create(format(), frequency_hz:frequency, amplitude:0.75, waveform:waveform)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
 }
 func crush(source:Synthesis.Generator, bits:int, hold:int) Synthesis.Processed {
-    match Processing.Bitcrusher.create(format(), bits, hold_frames:hold) {
+    match (try Processing.Bitcrusher.create(format(), bits, hold_frames:hold)) {
         failure(error) => { panic(error.detail) }
         success(effect) => {
             var effects:Processing.Processor[] = [effect]
-            match Synthesis.Processed.create(source, effects) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
+            match (try Synthesis.Processed.create(source, effects)) { failure(error) => { panic(error.detail) }; success(value) => { return value } }
         }
     }
 }
 func envelope(samples:&float32[..], decay:int = 4_800, sustain:float32 = 0.7) {
-    match Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:decay, sustain:sustain, release_frames:4_800) {
+    match (try Synthesis.Envelope.create(format(), attack_frames:240, decay_frames:decay, sustain:sustain, release_frames:4_800)) {
         failure(error) => { panic(error.detail) }
         success(var effect) => {
-            effect.note_on(); require(effect.process(&samples[0:samples.count() - 4_800]))
-            effect.note_off(); require(effect.process(&samples[samples.count() - 4_800:samples.count()]))
+            effect.note_on(); require((try effect.process(&samples[0:samples.count() - 4_800])))
+            effect.note_off(); require((try effect.process(&samples[samples.count() - 4_800:samples.count()])))
         }
     }
 }
@@ -36,7 +36,7 @@ func play(audio:&Audio, samples:&float32[..], name:str) {
 }
 func compare(audio:&Audio, source:Synthesis.Generator, name:str) {
     var samples = buffer(48_000)
-    require(source.render(&samples[0:48_000])); envelope(&samples[0:48_000])
+    require((try source.render(&samples[0:48_000]))); envelope(&samples[0:48_000])
     play(audio, &samples[0:48_000], name)
 }
 func main() {
@@ -49,15 +49,15 @@ func main() {
     let notes:float32[] = [523.2511 as float32, 659.2551 as float32, 783.9909 as float32, 1_046.5023 as float32, 783.9909 as float32, 659.2551 as float32, 523.2511 as float32, 391.9954 as float32]
     for index, frequency in notes.indexed() {
         var source = crush(tone(frequency, waveform:Synthesis.Waveform.square), bits:8, hold:6)
-        require(source.render(&melody[index * 9_600:(index + 1) * 9_600]))
+        require((try source.render(&melody[index * 9_600:(index + 1) * 9_600])))
         envelope(&melody[index * 9_600:(index + 1) * 9_600], decay:1_200, sustain:0.4)
     }
     play(audio, &melody[0:melody.count()], "5 - Retro arpeggio, square, 8 bits, hold 6 frames")
-    match Synthesis.WhiteNoise.create(format(), seed:1985, amplitude:0.75) {
+    match (try Synthesis.WhiteNoise.create(format(), seed:1985, amplitude:0.75)) {
         failure(error) => { panic(error.detail) }
         success(noise) => {
             var source = crush(noise, bits:8, hold:8); var samples = buffer(24_000)
-            require(source.render(&samples[0:24_000])); envelope(&samples[0:24_000], decay:16_000, sustain:0.0)
+            require((try source.render(&samples[0:24_000]))); envelope(&samples[0:24_000], decay:16_000, sustain:0.0)
             play(audio, &samples[0:24_000], "6 - Retro noise impact, 8 bits, hold 8 frames")
         }
     }

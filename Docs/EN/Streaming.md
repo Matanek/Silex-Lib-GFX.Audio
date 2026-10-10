@@ -20,7 +20,7 @@ Fragment after creating `audio`, `stream` and the producer:
 
 ```sx
 var block = producer.next(256)
-match audio.write(stream, @block[0:block.count()]) {
+match try audio.write(stream, @block[0:block.count()]) {
     failure(error) => { panic(error.detail) }
     success(frames) => { assert(frames == 256) }
 }

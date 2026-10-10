@@ -50,15 +50,15 @@ public class Melody {
             beats += note.beats
             let end_seconds = beats * 60.0 / self.tempo
             if !Math.is_finite(end_seconds) || end_seconds + tail_seconds > max_seconds { return Result<Plan, Error>.failure(limit("melody and tail exceed the preparation duration limit")) }
-            let start = try Synthesis.frame_at(start_seconds, format.sample_rate)
-            let off = try Synthesis.frame_at(off_seconds, format.sample_rate)
-            let end = try Synthesis.frame_at(end_seconds, format.sample_rate)
+            let start = try Synthesis.frame_at(start_seconds, format.sample_rate) else error { return Result<Plan,Error>.failure(error) }
+            let off = try Synthesis.frame_at(off_seconds, format.sample_rate) else error { return Result<Plan,Error>.failure(error) }
+            let end = try Synthesis.frame_at(end_seconds, format.sample_rate) else error { return Result<Plan,Error>.failure(error) }
             if off <= start || end <= start { return Result<Plan, Error>.failure(invalid("note duration and held part must each occupy at least one frame")) }
-            let frequency = try MIDI.frequency(note.key)
+            let frequency = try MIDI.frequency(note.key) else error { return Result<Plan,Error>.failure(error) }
             if frequency >= format.sample_rate as float32 * 0.5 { return Result<Plan, Error>.failure(invalid("note frequency must remain below Nyquist at the selected rate")) }
             placements.append(Placement(start:start, off:off, frequency:frequency, velocity:note.velocity))
         }
-        let frames = try Synthesis.frame_at(beats * 60.0 / self.tempo + tail_seconds, format.sample_rate)
+        let frames = try Synthesis.frame_at(beats * 60.0 / self.tempo + tail_seconds, format.sample_rate) else error { return Result<Plan,Error>.failure(error) }
         if frames < 1 || frames > 16_777_216 / format.channels { return Result<Plan, Error>.failure(limit("prepared PCM exceeds 16777216 samples")) }
         return Result<Plan, Error>.success(Plan(notes:placements, frames:frames))
     }
@@ -72,7 +72,7 @@ public class Melody {
     }
     private func finish(audio:Audio, samples:&float32[..], format:Processing.Format, effects:Processing.Processor[]) Result<Audio.Sound, Error> {
         var treatments = effects
-        for var effect in treatments { effect.reset(); try effect.process(samples) }
+        for var effect in treatments { effect.reset(); try effect.process(samples) else error { return Result<Audio.Sound,Error>.failure(error) } }
         for sample in samples {
             if !Math.is_finite(sample) || sample < -1.0 || sample > 1.0 { return Result<Audio.Sound, Error>.failure(invalid("prepared samples must be finite and in [-1, 1]; reduce the instrument or effect level")) }
         }
@@ -82,24 +82,24 @@ public class Melody {
     func prepare(audio:Audio, using:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
         var tail = using.release_seconds
         if let seconds = tail_seconds { tail = seconds }
-        let plan = try self.plan(format, tail, max_seconds)
-        try self.validate_effects(effects, format)
-        let attack = try Synthesis.frame_at(using.attack_seconds, format.sample_rate)
-        let decay = try Synthesis.frame_at(using.decay_seconds, format.sample_rate)
-        let release = try Synthesis.frame_at(using.release_seconds, format.sample_rate)
-        let hold = try Synthesis.frame_at(using.hold_seconds, format.sample_rate)
+        let plan = try self.plan(format, tail, max_seconds) else error { return Result<Audio.Sound,Error>.failure(error) }
+        try self.validate_effects(effects, format) else error { return Result<Audio.Sound,Error>.failure(error) }
+        let attack = try Synthesis.frame_at(using.attack_seconds, format.sample_rate) else error { return Result<Audio.Sound,Error>.failure(error) }
+        let decay = try Synthesis.frame_at(using.decay_seconds, format.sample_rate) else error { return Result<Audio.Sound,Error>.failure(error) }
+        let release = try Synthesis.frame_at(using.release_seconds, format.sample_rate) else error { return Result<Audio.Sound,Error>.failure(error) }
+        let hold = try Synthesis.frame_at(using.hold_seconds, format.sample_rate) else error { return Result<Audio.Sound,Error>.failure(error) }
         // Validate the recipe before allocating the owned output or rendering notes.
-        var envelope = try Synthesis.Envelope.create(format, attack, decay, using.sustain, release)
+        var envelope = try Synthesis.Envelope.create(format, attack, decay, using.sustain, release) else error { return Result<Audio.Sound,Error>.failure(error) }
         var tone = try Synthesis.Oscillator.create(format, frequency_hz:0.0,
-            amplitude:using.amplitude, waveform:using.waveform, duty_cycle:using.duty_cycle)
+            amplitude:using.amplitude, waveform:using.waveform, duty_cycle:using.duty_cycle) else error { return Result<Audio.Sound,Error>.failure(error) }
         var held = hold
         if held == 0 { held = 1 }
-        var crusher = try Processing.Bitcrusher.create(format, bits:using.bits, hold_frames:held)
+        var crusher = try Processing.Bitcrusher.create(format, bits:using.bits, hold_frames:held) else error { return Result<Audio.Sound,Error>.failure(error) }
         var output = zeros(plan.frames * format.channels)
         var scratch = zeros(512 * format.channels)
         for note in plan.notes {
-            try tone.set_frequency(note.frequency)
-            try tone.set_amplitude(using.amplitude * note.velocity)
+            try tone.set_frequency(note.frequency) else error { return Result<Audio.Sound,Error>.failure(error) }
+            try tone.set_amplitude(using.amplitude * note.velocity) else error { return Result<Audio.Sound,Error>.failure(error) }
             tone.reset(); crusher.reset(); envelope.reset(); envelope.note_on()
             var position = note.start
             var end = note.off + release
@@ -110,32 +110,32 @@ public class Melody {
                 if position < note.off && until > note.off { until = note.off }
                 if until > end { until = end }
                 let count = (until - position) * format.channels
-                try tone.render(&scratch[0:count])
-                if using.bits < 24 || hold > 1 { try crusher.process(&scratch[0:count]) }
-                try envelope.process(&scratch[0:count])
+                try tone.render(&scratch[0:count]) else error { return Result<Audio.Sound,Error>.failure(error) }
+                if using.bits < 24 || hold > 1 { try crusher.process(&scratch[0:count]) else error { return Result<Audio.Sound,Error>.failure(error) } }
+                try envelope.process(&scratch[0:count]) else error { return Result<Audio.Sound,Error>.failure(error) }
                 var i = 0
                 while i < count { output[position * format.channels + i] += scratch[i]; i++ }
                 position = until
             }
         }
-        return self.finish(audio, &output[0:output.count()], format, effects)
+        return (try self.finish(audio, &output[0:output.count()], format, effects))
     }
 
     func prepare(audio:Audio, using:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
         var tail:float64 = 0.1
         if let seconds = tail_seconds { tail = seconds }
-        let plan = try self.plan(format, tail, max_seconds)
+        let plan = try self.plan(format, tail, max_seconds) else error { return Result<Audio.Sound,Error>.failure(error) }
         if using.format.sample_rate != format.sample_rate || using.format.channels != format.channels { return Result<Audio.Sound, Error>.failure(invalid("instrument and prepared sound must share a format")) }
-        try self.validate_effects(effects, format)
+        try self.validate_effects(effects, format) else error { return Result<Audio.Sound,Error>.failure(error) }
         var events:Synthesis.Event[] = []; var id = 0
         for note in plan.notes {
             events.append(Synthesis.Event(frame:note.start, command:Synthesis.Command.note_on(id, note.frequency, note.velocity)))
             events.append(Synthesis.Event(frame:note.off, command:Synthesis.Command.note_off(id))); id++
         }
-        var source = try Synthesis.Sequence.create(using, events, capacity:8_192)
+        var source = try Synthesis.Sequence.create(using, events, capacity:8_192) else error { return Result<Audio.Sound,Error>.failure(error) }
         source.reset()
         var output = zeros(plan.frames * format.channels)
-        try source.render(&output[0:output.count()])
-        return self.finish(audio, &output[0:output.count()], format, effects)
+        try source.render(&output[0:output.count()]) else error { return Result<Audio.Sound,Error>.failure(error) }
+        return (try self.finish(audio, &output[0:output.count()], format, effects))
     }
 }

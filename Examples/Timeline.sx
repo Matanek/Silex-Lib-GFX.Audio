@@ -3,12 +3,12 @@ func main() {
     var audio = Audio()
     var samples:float32[] = [0.0 as float32, 0.1 as float32, 0.0 as float32, -0.1 as float32]
     let sound = audio.create(@samples[0:4], sample_rate:48_000)
-    match audio.sound_info(sound) {
+    match (try audio.sound_info(sound)) {
         failure(error) => { panic(error.detail) }
         success(info) => { assert(info.sample_rate == 48_000); assert(info.duration_seconds() != null) }
     }
     let playing = audio.play(sound, Audio.Playback(start_frame:1))
-    match audio.watch_end(playing) { failure(error) => { panic(error.detail) }; success => {} }
+    match (try audio.watch_end(playing)) { failure(error) => { panic(error.detail) }; success => {} }
     audio.wait(playing)
     var events = audio.drain_end_events()
     assert(events.count() == 1)

@@ -4,7 +4,7 @@ use STD.Math
 
 public struct Level { let peak:float64; let rms:float64 }
 public func levels(samples:@float32[..], channels:int) Result<Level[], Error> {
-    try validate_block(samples, channels)
+    try validate_block(samples, channels) else error { return Result<Level[],Error>.failure(error) }
     var peaks:float64[] = []
     var energies:float64[] = []
     var initial = 0

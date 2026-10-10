@@ -37,7 +37,7 @@ public class Distortion:Processor {
     }
     func set_bypass(bypass:bool) { self.bypass = bypass }
     func process(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         if self.bypass || self.wet == 0.0 { return Result<void, Error>.success() }
         var hard_threshold:float32 = 1.0
         if self.drive > 1.0 { hard_threshold = 1.0 / self.drive }

@@ -87,7 +87,7 @@ public class Envelope:Processing.Processor {
     }
 
     func process(samples:&float32[..]) Result<void, Error> {
-        try validate_block(@samples[0:samples.count()], self.format.channels)
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void,Error>.failure(error) }
         for sample in samples {
             if !Math.is_finite(sample) { return Result<void, Error>.failure(invalid("samples must be finite")) }
         }
