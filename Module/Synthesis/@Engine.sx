@@ -55,15 +55,15 @@ class EngineExhaust {
     init(rate:float32, scale:float32, travel_seconds:float32) {
         // A combustion event has a sharp pressure front, an expansion/rebound
         // and a damped low body. Prepare this response, not a smooth periodic tone.
-        let frames = Math.ceil(rate * 0.040) as int
+        let frames = Math.ceil(rate * 0.080) as int
         for frame in 0...frames {
             let t = frame as float32 / rate
             let front = 1.3 * (Math.exp(-t / 0.0010) - Math.exp(-t / 0.00010))
             let rebound = -0.45 * (Math.exp(-t / 0.0030) - Math.exp(-t / 0.00065))
-            let body = 0.6 * Math.sin(6.283185307179586 as float32 * 96.0 * scale * t) * Math.exp(-t / 0.010)
-            let chamber = 0.25 * Math.sin(6.283185307179586 as float32 * 610.0 * scale * t) * Math.exp(-t / 0.0022)
+            let body = 0.6 * Math.sin(6.283185307179586 as float32 * 60.0 * scale * t) * Math.exp(-t / 0.025)
+            let chamber = 0.25 * Math.sin(6.283185307179586 as float32 * 450.0 * scale * t) * Math.exp(-t / 0.0022)
             // The tail reaches zero continuously before the circular buffer ends.
-            let taper = Math.min(1.0 as float32, (0.040 - t) / 0.008)
+            let taper = Math.min(1.0 as float32, (0.080 - t) / 0.016)
             self.combustion.append((front + rebound + body + chamber) * taper)
             self.pressure.append(0.0)
         }
@@ -75,9 +75,9 @@ class EngineExhaust {
         self.first_delay = self.travel_delay + Math.round(rate * 0.0037 * scale) as int
         self.second_delay = self.travel_delay + Math.round(rate * 0.0081 * scale) as int
         for _ in 0...self.second_delay + 1 { self.history.append(0.0) }
-        self.low = EngineResonance(rate, 92.0 * scale, 2.2)
-        self.middle = EngineResonance(rate, 235.0 * scale, 3.0)
-        self.high = EngineResonance(rate, 610.0 * scale, 2.0)
+        self.low = EngineResonance(rate, 65.0 * scale, 1.4)
+        self.middle = EngineResonance(rate, 170.0 * scale, 2.0)
+        self.high = EngineResonance(rate, 450.0 * scale, 2.0)
     }
 
     func fire(energy:float32) {

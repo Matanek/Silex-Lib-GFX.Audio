@@ -72,9 +72,12 @@ doit contenir des frames complètes ; un bloc vide n'avance pas le moteur.
 
 La saturation douce borne chaque sample par l'amplitude choisie. Elle ne remplace
 pas la gestion du niveau lors du mélange de plusieurs sources. Chaque combustion
-injecte une réponse préparée de 40 ms : front de pression bref, détente/retour,
-corps grave amorti et résonance courte. Deux accumulateurs conservent ces
-contributions, suivis des conduits et de trois résonances par voie.
+injecte une réponse préparée de 80 ms : front de pression bref, détente/retour,
+corps grave amorti et résonance courte. Le corps et les résonances du profil
+privilégient le registre grave sans modifier la fréquence des combustions
+commandée par le régime. Deux accumulateurs conservent ces contributions,
+suivis des conduits et de trois résonances par voie. Ce profil acoustique fixe
+ne constitue pas un calcul de cylindrée.
 
 Le modèle ne charge aucun enregistrement et ne simule pas les écoulements de gaz.
 Les réponses et coefficients sont préparés à création. Le coût suit le nombre

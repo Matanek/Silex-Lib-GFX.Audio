@@ -68,9 +68,11 @@ an empty block does not advance the engine.
 
 Soft saturation bounds each sample by the chosen amplitude. It does not replace
 level management when mixing several sources. Each combustion injects a prepared
-40 ms response: a brief pressure front, expansion/rebound, damped low body and
-short resonance. Two accumulators retain these contributions, followed by pipe
-histories and three resonances per path.
+80 ms response: a brief pressure front, expansion/rebound, damped low body and
+short resonance. The profile's body and resonances emphasize the low register
+without changing the combustion frequency commanded by RPM. Two accumulators
+retain these contributions, followed by pipe histories and three resonances
+per path. This fixed acoustic profile does not calculate engine displacement.
 
 The model loads no recording and does not simulate gas flow. Responses and
 coefficients are prepared at construction. Cost follows audio frames and
