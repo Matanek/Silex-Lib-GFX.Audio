@@ -1,0 +1,31 @@
+use GFX.Audio.Synthesis
+use Interop.C
+use Interop.Boundary
+use STD.Math
+
+let phase = C.function<func() int32>(library:Boundary.System, name:"getppid")
+
+func main() {
+    print("empty"); phase(); phase()
+    print("positive allocation"); phase()
+    var positive:float32[] = []
+    for i in 0...1_024 { positive.append(i as float32) }
+    phase(); assert(positive[1_023] == 1_023.0 as float32)
+    print("engine preparation"); phase()
+    var source = Synthesis.Engine.create()
+    var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+    phase()
+    print("first engine block"); phase()
+    source.render(&samples[0:samples.count()])
+    phase()
+    print("1000 blocks with state and character changes"); phase()
+    for i in 0...1_000 {
+        source.set_state(800.0 + (i % 500) as float32 * 11.0, throttle:0.8, load:0.6)
+        source.set_character(0.7, 0.4)
+        source.render(&samples[0:samples.count()])
+    }
+    phase()
+    for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.4) }
+    print("engine reset"); phase(); source.reset(); phase()
+    assert(source.current_rpm() == 800.0 as float32)
+}

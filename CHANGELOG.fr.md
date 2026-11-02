@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Ajoute `Synthesis.Engine`, prototype de moteur quatre temps commandé par
+  régime, accélérateur, charge et frein moteur : profil V8 à deux échappements,
+  1 à 12 cylindres, texture bruitée et coloration réglables, rampes continues,
+  PCM reproductible et exemple autonome, avec guides FR/EN.
+
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
   ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
   anciens appels stockant un résultat et propagations deviennent explicites.

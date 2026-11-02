@@ -251,6 +251,8 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 
 [Faire évoluer un son et alimenter un flux](Continuous.md).
 
+[Piloter un moteur thermique procédural depuis un jeu](Engine.md).
+
 [Jouer une partition MIDI avec ses propres instruments](MIDI.md).
 
 [Choisir et adapter une recette procédurale](Recipes.md).

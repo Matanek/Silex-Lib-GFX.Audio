@@ -1,0 +1,109 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Math
+
+func zeros(count:int) float32[] {
+    var values:float32[] = []
+    for _ in 0...count { values.append(0.0) }
+    return values
+}
+
+test "engine preserves phases random state and ramps across arbitrary block boundaries" {
+    var engine = Synthesis.Engine.create()
+    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000)
+    var expected = zeros(16_384)
+    engine.render(&expected[0:expected.count()])
+    engine.reset()
+    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000)
+    var actual = zeros(expected.count())
+    for bounds in [2, 516, 1_002, 8_192, 16_384] {
+        var start = 0
+        if bounds == 516 { start = 2 }
+        if bounds == 1_002 { start = 516 }
+        if bounds == 8_192 { start = 1_002 }
+        if bounds == 16_384 { start = 8_192 }
+        engine.render(&actual[start:bounds])
+    }
+    var energy:float64 = 0.0
+    for i, value in expected.indexed() {
+        assert(value == actual[i], "engine block split changed PCM")
+        assert(Math.is_finite(value) && Math.abs(value) <= 0.4)
+        energy += value as float64 * value as float64
+    }
+    assert(energy > 0.1)
+    assert(engine.current_rpm() == 4_800.0 as float32)
+}
+
+test "engine rejects invalid state character and partial frames before changing its state" {
+    var source = Synthesis.Engine.create()
+    var witness = Synthesis.Engine.create()
+    source.set_state(2_000.0, ramp_frames:100)
+    witness.set_state(2_000.0, ramp_frames:100)
+    match try source.set_state(-1.0) { failure(error) => {}; success => { panic("negative rpm accepted") } }
+    match try source.set_state(13_000.0) { failure(error) => {}; success => { panic("excess rpm accepted") } }
+    match try source.set_state(Math.sqrt(-1.0)) { failure(error) => {}; success => { panic("NaN rpm accepted") } }
+    match try source.set_state(800.0, load:1.1) { failure(error) => {}; success => { panic("invalid load accepted") } }
+    match try source.set_state(800.0, engine_brake:-0.1) { failure(error) => {}; success => { panic("invalid brake accepted") } }
+    match try source.set_character(1.1, 0.0) { failure(error) => {}; success => { panic("invalid character accepted") } }
+    match try source.set_character(0.0, 0.0, ramp_frames:-1) { failure(error) => {}; success => { panic("invalid ramp accepted") } }
+    var output = zeros(1_024); var expected = zeros(1_024)
+    match try source.render(&output[0:1]) { failure(error) => {}; success => { panic("partial stereo frame accepted") } }
+    assert(source.current_rpm() == 800.0 as float32)
+    source.render(&output[0:output.count()]); witness.render(&expected[0:expected.count()])
+    for i, value in output.indexed() { assert(value == expected[i]) }
+    for cylinders in [0, 13] {
+        match try Synthesis.Engine.create(cylinders:cylinders) { failure(error) => {}; success(value) => { panic("invalid cylinders accepted") } }
+    }
+    match try Synthesis.Engine.create(format:Processing.Format(sample_rate:8_000, channels:1)) { failure(error) => {}; success(value) => { panic("unsupported rate accepted") } }
+}
+
+test "engine load changes its sound at constant rpm and shutdown drains its acoustic tail" {
+    var light = Synthesis.Engine.create()
+    var heavy = Synthesis.Engine.create()
+    light.set_state(2_400.0, throttle:0.4, load:0.0, ramp_frames:0)
+    heavy.set_state(2_400.0, throttle:0.4, load:1.0, ramp_frames:0)
+    var a = zeros(48_000); var b = zeros(48_000)
+    light.render(&a[0:a.count()]); heavy.render(&b[0:b.count()])
+    var difference:float64 = 0.0
+    for i, value in a.indexed() { difference += Math.abs(value as float64 - b[i] as float64) }
+    assert(difference > 1.0 && light.current_rpm() == heavy.current_rpm())
+    heavy.set_state(0.0, ramp_frames:480)
+    heavy.render(&b[0:b.count()]); heavy.render(&b[0:b.count()])
+    for sample in b { assert(Math.abs(sample) < 0.00001, "engine tail did not decay") }
+}
+
+test "engine supports its cylinder rate and channel bounds with bounded finite samples" {
+    for rate in [22_050, 48_000, 192_000] {
+        for channels in [1, 2] {
+            for cylinders in 1...13 {
+                var source = Synthesis.Engine.create(Processing.Format(sample_rate:rate, channels:channels), cylinders:cylinders)
+                source.set_state(12_000.0, throttle:1.0, load:1.0, ramp_frames:0)
+                source.set_character(1.0, 1.0, ramp_frames:0)
+                var samples = zeros(2_048 * channels)
+                source.render(&samples[0:samples.count()])
+                for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.4) }
+            }
+        }
+    }
+}
+
+test "engine PCM survives partial streaming writes without duplicated frames" {
+    var source = Synthesis.Engine.create(format:Processing.Format(sample_rate:48_000, channels:1))
+    source.set_state(3_000.0, load:0.7)
+    var expected = zeros(2_048); source.render(&expected[0:expected.count()])
+    source.reset(); source.set_state(3_000.0, load:0.7)
+    var audio = Audio.offline(sample_rate:48_000, channels:1)
+    var producer = Synthesis.StreamProducer.create(audio, source, 2_048, block_frames:257, capacity_frames:127)
+    let playing = audio.play(producer.stream())
+    var offset = 0
+    while offset < expected.count() {
+        producer.pump()
+        let info = audio.stream_info(producer.stream())
+        let actual = audio.render(info.queued_frames)
+        for i, sample in actual.indexed() { assert(sample == expected[offset + i]) }
+        offset += actual.count()
+    }
+    assert(producer.input_closed())
+    assert(audio.stream_info(producer.stream()).discarded_frames == 0)
+}

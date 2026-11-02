@@ -1,0 +1,25 @@
+use GFX.Audio
+use GFX.Audio.Synthesis
+
+func main() {
+    var source = Synthesis.Engine.create()
+    var audio = Audio()
+    var producer = Synthesis.StreamProducer.create(audio, source, 240_000,
+        block_frames:480, capacity_frames:1_440)
+    for _ in 0...3 { producer.pump() }
+    let playing = audio.play(producer.stream(), Audio.Playback(fade_in_seconds:0.05))
+    var accelerated = false; var released = false
+    while !producer.input_closed() {
+        if !accelerated && producer.produced_frames() >= 48_000 {
+            source.set_state(4_800.0, throttle:0.9, load:0.7, ramp_frames:72_000)
+            accelerated = true
+        }
+        if !released && producer.produced_frames() >= 144_000 {
+            source.set_state(800.0, engine_brake:0.7, ramp_frames:72_000)
+            released = true
+        }
+        audio.wait_writable(producer.stream(), minimum_frames:480)
+        producer.pump()
+    }
+    audio.wait(playing)
+}

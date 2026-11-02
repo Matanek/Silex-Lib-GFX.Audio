@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Adds `Synthesis.Engine`, a prototype four-stroke engine controlled by RPM,
+  throttle, load and engine braking: two-exhaust V8 profile, 1–12 cylinders,
+  adjustable noise texture and coloration, continuous ramps, reproducible PCM
+  and a standalone example with FR/EN guides.
+
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
   storing results and propagating failures are made explicit. This revision

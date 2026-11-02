@@ -246,6 +246,8 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 
 [Evolve a sound and feed a stream](Continuous.md).
 
+[Drive a procedural combustion engine from a game](Engine.md).
+
 [Play a MIDI score with your own instruments](MIDI.md).
 
 [Choose and adapt a procedural recipe](Recipes.md).

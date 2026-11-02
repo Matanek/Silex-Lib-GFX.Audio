@@ -1,5 +1,16 @@
 # Prepared audio resource gate
 
+The procedural engine has a focused macOS ARM64 gate:
+
+```sh
+python3 Packages/GFX.Audio/Tests/Resources/ValidateEngine.py
+```
+
+It checks an empty phase and a positive allocation control, then preparation,
+the first block, 1,000 render/control updates and reset in Debug and Release.
+It writes `.silex/engine-resource-validation.json`. The marked scope is prepared
+engine DSP on the application thread; PCM transfer, SDL and UI are excluded.
+
 From the SilexProject root, or the owning Spec Worktree group:
 
 ```sh
