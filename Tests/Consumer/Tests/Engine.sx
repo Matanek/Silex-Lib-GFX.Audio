@@ -98,6 +98,33 @@ test "engine load changes its sound at constant rpm and shutdown drains its acou
     for sample in b { assert(Math.abs(sample) < 0.00001, "engine tail did not decay") }
 }
 
+test "engine effort changes pulse shape independently of pulse energy" {
+    var free = Synthesis.Engine.create()
+    var loaded = Synthesis.Engine.create()
+    free.set_character(0.65, 0.0, ramp_frames:0)
+    loaded.set_character(0.65, 0.0, ramp_frames:0)
+    // These controls have the same energy in the old amplitude-only model.
+    free.set_state(1_200.0, throttle:1.0, load:0.0, ramp_frames:0)
+    loaded.set_state(1_200.0, throttle:0.0, load:0.42 / 0.65, ramp_frames:0)
+    var a = zeros(96_000); var b = zeros(96_000)
+    free.render(&a[0:a.count()]); loaded.render(&b[0:b.count()])
+    var aa:float64 = 0.0; var ab:float64 = 0.0; var bb:float64 = 0.0
+    for i in 24_000...a.count() {
+        aa += a[i] as float64 * a[i] as float64
+        ab += a[i] as float64 * b[i] as float64
+        bb += b[i] as float64 * b[i] as float64
+    }
+    // Remove any overall gain difference before assessing the waveform.
+    let gain = ab / aa
+    var residual:float64 = 0.0
+    for i in 24_000...a.count() {
+        let difference = b[i] as float64 - gain * a[i] as float64
+        residual += difference * difference
+    }
+    assert(bb > 0.0 && residual / bb > 0.0001, "effort only changed the overall gain")
+    assert(free.current_rpm() == loaded.current_rpm())
+}
+
 test "engine supports its cylinder rate and channel bounds with bounded finite samples" {
     for rate in [22_050, 48_000, 192_000] {
         for channels in [1, 2] {

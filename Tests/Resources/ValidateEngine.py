@@ -1,4 +1,4 @@
-"""Qualify prepared engine DSP allocations on macOS ARM64 with a positive control."""
+"""Qualify prepared engine + room DSP allocations with a positive control."""
 from pathlib import Path
 import hashlib
 import json
@@ -25,7 +25,7 @@ subprocess.run(["clang", "-dynamiclib", "-arch", "arm64", "-O2", "-fno-builtin",
 pattern = re.compile(r"AUDIO_HEAP allocations=(\d+) bytes=(\d+) copies=(\d+) copy_bytes=(\d+)")
 report = {"host": platform.platform(), "target": "macos-arm64",
           "compiler_sha256": hashlib.sha256(compiler.read_bytes()).hexdigest(),
-          "scope": "Prepared Engine DSP on the marked thread; excludes Audio.write, SDL and UI",
+          "scope": "Prepared Engine and composed Reverb DSP on the marked thread; excludes Audio.write, SDL and UI",
           "modes": {}}
 for mode in ["debug", "release"]:
     binary = cache / f"engine-heap-{mode}"
@@ -52,5 +52,5 @@ for mode in ["debug", "release"]:
     for row in [rows[0], *rows[3:]]:
         assert row["allocations"] == 0, row
     report["modes"][mode] = rows
-    print(f"{mode}: positive control valid; engine render, controls and reset allocation-free")
+    print(f"{mode}: positive control valid; engine + room render, controls and reset allocation-free")
 (cache / "engine-resource-validation.json").write_text(json.dumps(report, indent=2) + "\n")

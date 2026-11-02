@@ -24,11 +24,15 @@ source.set_character(exhaust:0.7, roughness:0.4, ramp_frames:480)
 
 Le régime règle la fréquence des pulsations. `throttle` décrit l'ouverture des
 gaz et `load` l'effort fourni : changer la charge à régime constant change le
-signal. `engine_brake` atténue l'énergie des pulsations pendant la décélération.
+signal. L'effort modifie aussi la part du front de pression dans chaque
+pulsation, indépendamment du niveau global. `engine_brake` atténue l'énergie
+et le mordant des pulsations pendant la décélération.
 Le modèle ne calcule ni transmission, ni vitesse véhicule, ni couple aux roues.
 
 `exhaust` va d'un échappement feutré à ouvert ; `roughness` règle la modulation
-bruitée et les variations d'énergie entre combustions. Ces contrôles n'effacent
+bruitée, les différences d'énergie et d'attaque propres aux cylindres et leur
+variation lente entre combustions. À zéro, ces différences sont désactivées.
+Leur graine est fixée à la création. Ces contrôles n'effacent
 ni la phase des pulsations ni les historiques acoustiques. Le V8 regroupe ses
 combustions dans deux voies selon un ordre de bancs cross-plane. Des temps de
 propagation et niveaux distincts préservent ce rythme dans le mélange, y compris
@@ -51,7 +55,8 @@ n'altèrent pas les blocs déjà calculés et mis en file.
 
 `current_rpm()` donne le régime de la prochaine frame à produire, pas celui
 exactement présenté par les haut-parleurs. `reset()` vide les historiques,
-réinitialise la graine et retrouve 800 tr/min, commandes à zéro, échappement
+réinitialise la graine et la variation des cylindres et retrouve 800 tr/min,
+commandes à zéro, échappement
 0,65 et rugosité 0,4. Pour arrêter progressivement, commander zéro tr/min, rendre
 la queue acoustique, puis fermer le flux ; le modèle ne produit pas lui-même
 une notification de fin.
@@ -72,12 +77,16 @@ doit contenir des frames complètes ; un bloc vide n'avance pas le moteur.
 
 La saturation douce borne chaque sample par l'amplitude choisie. Elle ne remplace
 pas la gestion du niveau lors du mélange de plusieurs sources. Chaque combustion
-injecte une réponse préparée de 80 ms : front de pression bref, détente/retour,
+injecte une réponse préparée de 60 ms : front de pression bref, détente/retour,
 corps grave amorti et résonance courte. Le corps et les résonances du profil
 privilégient le registre grave sans modifier la fréquence des combustions
 commandée par le régime. Deux accumulateurs conservent ces contributions,
-suivis des conduits et de trois résonances par voie. Ce profil acoustique fixe
-ne constitue pas un calcul de cylindrée.
+suivis des conduits et de trois résonances par voie. Le front et le corps sont
+préparés séparément pour doser leur contribution à chaque combustion. Ce profil
+acoustique ne constitue pas un calcul de cylindrée. Le générateur ne fait pas
+fluctuer le régime fourni : une régulation de ralenti appartient au jeu ou au
+banc d'écoute. Une ambiance peut être ajoutée séparément avec
+[Processing.Reverb](Reverb.md) ; aucun espace de réverbération n'est imposé.
 
 Le modèle ne charge aucun enregistrement et ne simule pas les écoulements de gaz.
 Les réponses et coefficients sont préparés à création. Le coût suit le nombre

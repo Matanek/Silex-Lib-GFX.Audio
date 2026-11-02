@@ -33,6 +33,7 @@ class EngineResonance {
 // Each bank has its own pressure envelope, pipe delays and acoustic history.
 class EngineExhaust {
     private var combustion:float32[] = []
+    private var attack:float32[] = []
     private var pressure:float32[] = []
     private var pressure_offset:int = 0
     private let dc_alpha:float32
@@ -55,16 +56,18 @@ class EngineExhaust {
     init(rate:float32, scale:float32, travel_seconds:float32) {
         // A combustion event has a sharp pressure front, an expansion/rebound
         // and a damped low body. Prepare this response, not a smooth periodic tone.
-        let frames = Math.ceil(rate * 0.080) as int
+        let frames = Math.ceil(rate * 0.060) as int
         for frame in 0...frames {
             let t = frame as float32 / rate
             let front = 1.3 * (Math.exp(-t / 0.0010) - Math.exp(-t / 0.00010))
             let rebound = -0.45 * (Math.exp(-t / 0.0030) - Math.exp(-t / 0.00065))
-            let body = 0.6 * Math.sin(6.283185307179586 as float32 * 60.0 * scale * t) * Math.exp(-t / 0.025)
-            let chamber = 0.25 * Math.sin(6.283185307179586 as float32 * 450.0 * scale * t) * Math.exp(-t / 0.0022)
+            let body = 0.65 * Math.sin(6.283185307179586 as float32 * 76.0 * scale * t) * Math.exp(-t / 0.018)
+            let overtone = 0.14 * Math.sin(6.283185307179586 as float32 * 152.0 * scale * t) * Math.exp(-t / 0.008)
+            let chamber = 0.25 * Math.sin(6.283185307179586 as float32 * 520.0 * scale * t) * Math.exp(-t / 0.0022)
             // The tail reaches zero continuously before the circular buffer ends.
-            let taper = Math.min(1.0 as float32, (0.080 - t) / 0.016)
-            self.combustion.append((front + rebound + body + chamber) * taper)
+            let taper = Math.min(1.0 as float32, (0.060 - t) / 0.012)
+            self.combustion.append((rebound + body + overtone) * taper)
+            self.attack.append((front + chamber) * taper)
             self.pressure.append(0.0)
         }
         self.dc_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 15.0 / rate)
@@ -75,15 +78,18 @@ class EngineExhaust {
         self.first_delay = self.travel_delay + Math.round(rate * 0.0037 * scale) as int
         self.second_delay = self.travel_delay + Math.round(rate * 0.0081 * scale) as int
         for _ in 0...self.second_delay + 1 { self.history.append(0.0) }
-        self.low = EngineResonance(rate, 65.0 * scale, 1.4)
-        self.middle = EngineResonance(rate, 170.0 * scale, 2.0)
-        self.high = EngineResonance(rate, 450.0 * scale, 2.0)
+        self.low = EngineResonance(rate, 78.0 * scale, 1.7)
+        self.middle = EngineResonance(rate, 200.0 * scale, 2.4)
+        self.high = EngineResonance(rate, 530.0 * scale, 2.0)
     }
 
-    func fire(energy:float32) {
+    func fire(energy:float32, drive:float32) {
         var position = self.pressure_offset
+        var i = 0
+        let bite = 0.55 + 1.1 * drive
         for sample in self.combustion {
-            self.pressure[position] += energy * sample
+            self.pressure[position] += energy * (sample + bite * self.attack[i])
+            i++
             position++; if position == self.pressure.count() { position = 0 }
         }
     }
@@ -137,6 +143,9 @@ public class Engine:Generator {
     private var phase:float64 = 1.0
     private var firing:int = 0
     private var random:int
+    private var cylinder_energy:float32[] = []
+    private var cylinder_attack:float32[] = []
+    private var cylinder_drift:float32[] = []
     private var left:EngineExhaust
     private var right:EngineExhaust
 
@@ -149,6 +158,13 @@ public class Engine:Generator {
         // Different exhaust paths preserve the bank rhythm when mixed to mono.
         self.left = EngineExhaust(format.sample_rate as float32, 1.0, 0.013)
         self.right = EngineExhaust(format.sample_rate as float32, 1.07, 0.019)
+        // Seeded cylinder identities persist; only their slow combustion drift evolves.
+        for _ in 0...cylinders {
+            self.cylinder_energy.append(self.noise())
+            self.cylinder_attack.append(self.noise())
+            self.cylinder_drift.append(0.0)
+        }
+        self.random = noise_state(seed)
     }
 
     static func create(
@@ -205,9 +221,14 @@ public class Engine:Generator {
             bank = 0
             if index == 1 || index == 2 || index == 4 || index == 7 { bank = 1 }
         }
-        let uneven = 1.0 + roughness * (0.16 * self.noise() + 0.07 * ((self.firing % 3) as float32 - 1.0))
+        let drift = 0.85 * self.cylinder_drift[self.firing] + 0.15 * self.noise()
+        self.cylinder_drift[self.firing] = drift
+        let uneven = 1.0 + roughness * (0.14 * self.cylinder_energy[self.firing] + 0.22 * drift)
         let energy = (0.38 + 0.42 * throttle + 0.65 * load) * (1.0 - 0.45 * brake) * uneven
-        if bank == 0 { self.left.fire(energy) } else { self.right.fire(energy) }
+        // Effort changes the pressure front independently of overall pulse energy.
+        let drive = Math.clamp((0.3 * throttle + 0.7 * load) * (1.0 - 0.5 * brake) +
+            roughness * 0.1 * self.cylinder_attack[self.firing], 0.0, 1.0)
+        if bank == 0 { self.left.fire(energy, drive) } else { self.right.fire(energy, drive) }
         self.firing = (self.firing + 1) % self.cylinders
     }
 
@@ -247,5 +268,7 @@ public class Engine:Generator {
         self.phase = 1.0; self.firing = 0; self.random = noise_state(self.seed)
         self.rpm.reset(); self.throttle.reset(); self.load.reset(); self.brake.reset()
         self.exhaust.reset(); self.roughness.reset(); self.left.reset(); self.right.reset()
+        var i = 0
+        while i < self.cylinder_drift.count() { self.cylinder_drift[i] = 0.0; i++ }
     }
 }

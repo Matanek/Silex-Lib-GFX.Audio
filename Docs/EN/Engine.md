@@ -24,11 +24,14 @@ source.set_character(exhaust:0.7, roughness:0.4, ramp_frames:480)
 
 RPM sets pulse frequency. `throttle` describes throttle opening and `load` the
 effort delivered: changing load at constant RPM changes the signal.
-`engine_brake` reduces pulse energy during deceleration. The model does not
+Effort also changes each pulse's pressure-front contribution independently of
+overall level. `engine_brake` reduces pulse energy and bite during deceleration. The model does not
 calculate a transmission, vehicle speed or wheel torque.
 
 `exhaust` ranges from muffled to open; `roughness` controls noise modulation and
-combustion energy variations. These controls preserve pulse phase and acoustic
+the cylinder-specific energy and attack differences and their slow variation
+between combustions. Zero disables these differences; their seed is fixed at
+construction. These controls preserve pulse phase and acoustic
 history. The V8 groups combustion events into two exhaust paths using a
 cross-plane bank sequence. Different propagation times and levels preserve this
 rhythm in the mix, including mono. Other cylinder counts use a simplified alternating
@@ -47,7 +50,7 @@ duration. Retargeting starts at the current value. Zero applies an immediate,
 potentially audible change. Commands do not alter already generated, queued blocks.
 
 `current_rpm()` returns RPM for the next frame to produce, rather than the exact
-frame reaching the speakers. `reset()` clears history, resets the seed and restores
+frame reaching the speakers. `reset()` clears history, resets the seed and cylinder drift and restores
 800 RPM, zero operating controls, exhaust 0.65 and roughness 0.4. To stop gradually,
 command zero RPM, render the acoustic tail, then close the stream; the model does
 not generate an end notification itself.
@@ -68,11 +71,15 @@ an empty block does not advance the engine.
 
 Soft saturation bounds each sample by the chosen amplitude. It does not replace
 level management when mixing several sources. Each combustion injects a prepared
-80 ms response: a brief pressure front, expansion/rebound, damped low body and
+60 ms response: a brief pressure front, expansion/rebound, damped low body and
 short resonance. The profile's body and resonances emphasize the low register
 without changing the combustion frequency commanded by RPM. Two accumulators
 retain these contributions, followed by pipe histories and three resonances
-per path. This fixed acoustic profile does not calculate engine displacement.
+per path. The front and body are prepared separately so their contributions can
+vary with each combustion. This acoustic profile does not calculate engine
+displacement. The generator does not vary supplied RPM: idle regulation belongs
+to the game or listening bench. Add ambience separately with
+[Processing.Reverb](Reverb.md); no reverberant space is imposed.
 
 The model loads no recording and does not simulate gas flow. Responses and
 coefficients are prepared at construction. Cost follows audio frames and

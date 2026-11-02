@@ -4,8 +4,9 @@
 
 - Adds `Synthesis.Engine`, a prototype four-stroke engine controlled by RPM,
   throttle, load and engine braking: two-exhaust V8 profile, 1–12 cylinders,
-  adjustable noise texture and coloration, continuous ramps, pressure fronts
-  and extended low combustion bodies, reproducible PCM and a standalone example
+  adjustable noise texture and coloration, continuous ramps, effort-dependent
+  pressure fronts, low bodies, cylinder signatures and slow variation,
+  reproducible PCM and a standalone example
   with FR/EN guides.
 
 - Adopts one `Result` declaration: an ordinary call returns the value or
