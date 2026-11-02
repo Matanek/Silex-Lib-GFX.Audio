@@ -9,6 +9,31 @@ func zeros(count:int) float32[] {
     return values
 }
 
+func frequency_power(samples:@float32[..], frequency:float64) float64 {
+    let coefficient = 2.0 * Math.cos(2.0 * Math.pi<float64>() * frequency / 48_000.0)
+    var previous:float64 = 0.0; var previous2:float64 = 0.0
+    for sample in samples {
+        let value = sample as float64 + coefficient * previous - previous2
+        previous2 = previous; previous = value
+    }
+    return previous * previous + previous2 * previous2 - coefficient * previous * previous2
+}
+
+test "V8 bank rhythm survives a mono mix below the uniform combustion frequency" {
+    var source = Synthesis.Engine.create(format:Processing.Format(sample_rate:48_000, channels:1))
+    source.set_state(800.0, throttle:0.4, load:0.4, ramp_frames:0)
+    source.set_character(0.65, 0.0, ramp_frames:0)
+    var samples = zeros(48_000)
+    source.render(&samples[0:samples.count()])
+    // Four complete four-stroke cycles after startup. A uniform pulse train
+    // has its first line at order eight; bank character must survive below it.
+    let cycle_frequency:float64 = 800.0 / 120.0
+    let firing = frequency_power(@samples[14_400:43_200], cycle_frequency * 8.0)
+    var bank_orders:float64 = 0.0
+    for order in 1...8 { bank_orders += frequency_power(@samples[14_400:43_200], cycle_frequency * order as float64) }
+    assert(firing > 0.0 && bank_orders > firing * 0.01, "V8 banks collapsed into a uniform pulse train")
+}
+
 test "engine preserves phases random state and ramps across arbitrary block boundaries" {
     var engine = Synthesis.Engine.create()
     engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000)

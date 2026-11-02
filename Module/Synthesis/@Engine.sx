@@ -32,18 +32,18 @@ class EngineResonance {
 
 // Each bank has its own pressure envelope, pipe delays and acoustic history.
 class EngineExhaust {
-    private let body_decay:float32
-    private let edge_decay:float32
+    private var combustion:float32[] = []
+    private var pressure:float32[] = []
+    private var pressure_offset:int = 0
     private let dc_alpha:float32
     private let noise_alpha:float32
     private let dark_alpha:float32
     private let bright_alpha:float32
+    private let travel_delay:int
     private let first_delay:int
     private let second_delay:int
     private var history:float32[] = []
     private var offset:int = 0
-    private var body:float32 = 0.0
-    private var edge:float32 = 0.0
     private var previous:float32 = 0.0
     private var noise:float32 = 0.0
     private var dc:float32 = 0.0
@@ -52,26 +52,46 @@ class EngineExhaust {
     private var middle:EngineResonance
     private var high:EngineResonance
 
-    init(rate:float32, scale:float32) {
-        self.body_decay = Math.exp(-1.0 as float32 / (rate * 0.0045))
-        self.edge_decay = Math.exp(-1.0 as float32 / (rate * 0.00045))
+    init(rate:float32, scale:float32, travel_seconds:float32) {
+        // A combustion event has a sharp pressure front, an expansion/rebound
+        // and a damped low body. Prepare this response, not a smooth periodic tone.
+        let frames = Math.ceil(rate * 0.040) as int
+        for frame in 0...frames {
+            let t = frame as float32 / rate
+            let front = 1.3 * (Math.exp(-t / 0.0010) - Math.exp(-t / 0.00010))
+            let rebound = -0.45 * (Math.exp(-t / 0.0030) - Math.exp(-t / 0.00065))
+            let body = 0.6 * Math.sin(6.283185307179586 as float32 * 96.0 * scale * t) * Math.exp(-t / 0.010)
+            let chamber = 0.25 * Math.sin(6.283185307179586 as float32 * 610.0 * scale * t) * Math.exp(-t / 0.0022)
+            // The tail reaches zero continuously before the circular buffer ends.
+            let taper = Math.min(1.0 as float32, (0.040 - t) / 0.008)
+            self.combustion.append((front + rebound + body + chamber) * taper)
+            self.pressure.append(0.0)
+        }
         self.dc_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 15.0 / rate)
         self.noise_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 1_400.0 / rate)
         self.dark_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 360.0 / rate)
         self.bright_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 3_200.0 / rate)
-        self.first_delay = Math.round(rate * 0.0037 * scale) as int
-        self.second_delay = Math.round(rate * 0.0081 * scale) as int
+        self.travel_delay = Math.round(rate * travel_seconds) as int
+        self.first_delay = self.travel_delay + Math.round(rate * 0.0037 * scale) as int
+        self.second_delay = self.travel_delay + Math.round(rate * 0.0081 * scale) as int
         for _ in 0...self.second_delay + 1 { self.history.append(0.0) }
         self.low = EngineResonance(rate, 92.0 * scale, 2.2)
         self.middle = EngineResonance(rate, 235.0 * scale, 3.0)
         self.high = EngineResonance(rate, 610.0 * scale, 2.0)
     }
 
-    func fire(energy:float32) { self.body += energy; self.edge += energy }
+    func fire(energy:float32) {
+        var position = self.pressure_offset
+        for sample in self.combustion {
+            self.pressure[position] += energy * sample
+            position++; if position == self.pressure.count() { position = 0 }
+        }
+    }
 
     func next(white:float32, exhaust:float32, roughness:float32) float32 {
-        self.body *= self.body_decay; self.edge *= self.edge_decay
-        let pulse = self.body - self.edge
+        let pulse = self.pressure[self.pressure_offset]
+        self.pressure[self.pressure_offset] = 0.0
+        self.pressure_offset++; if self.pressure_offset == self.pressure.count() { self.pressure_offset = 0 }
         self.noise += self.noise_alpha * (white - self.noise)
         let input = pulse * (0.85 + roughness * 1.6 * self.noise) +
             (pulse - self.previous) * (0.5 + 3.0 * exhaust)
@@ -79,11 +99,13 @@ class EngineExhaust {
         self.dc += self.dc_alpha * (input - self.dc)
         let centered = input - self.dc
         self.history[self.offset] = centered
+        var arrival = self.offset - self.travel_delay
         var first = self.offset - self.first_delay
         var second = self.offset - self.second_delay
+        if arrival < 0 { arrival += self.history.count() }
         if first < 0 { first += self.history.count() }
         if second < 0 { second += self.history.count() }
-        let pipe = centered + 0.42 * self.history[first] - 0.23 * self.history[second]
+        let pipe = self.history[arrival] + 0.42 * self.history[first] - 0.23 * self.history[second]
         self.offset++; if self.offset == self.history.count() { self.offset = 0 }
         let colored = 0.55 * pipe + 1.25 * self.low.next(pipe) +
             0.7 * self.middle.next(pipe) + exhaust * self.high.next(pipe)
@@ -92,9 +114,10 @@ class EngineExhaust {
     }
 
     func reset() {
-        self.offset = 0; self.body = 0.0; self.edge = 0.0; self.previous = 0.0
+        self.offset = 0; self.pressure_offset = 0; self.previous = 0.0
         self.noise = 0.0; self.dc = 0.0; self.filtered = 0.0
         var i = 0; while i < self.history.count() { self.history[i] = 0.0; i++ }
+        i = 0; while i < self.pressure.count() { self.pressure[i] = 0.0; i++ }
         self.low.reset(); self.middle.reset(); self.high.reset()
     }
 }
@@ -123,8 +146,9 @@ public class Engine:Generator {
         self.rpm = RampState(800.0); self.throttle = RampState(0.0)
         self.load = RampState(0.0); self.brake = RampState(0.0)
         self.exhaust = RampState(0.65); self.roughness = RampState(0.4)
-        self.left = EngineExhaust(format.sample_rate as float32, 1.0)
-        self.right = EngineExhaust(format.sample_rate as float32, 1.07)
+        // Different exhaust paths preserve the bank rhythm when mixed to mono.
+        self.left = EngineExhaust(format.sample_rate as float32, 1.0, 0.013)
+        self.right = EngineExhaust(format.sample_rate as float32, 1.07, 0.019)
     }
 
     static func create(
@@ -203,7 +227,7 @@ public class Engine:Generator {
                 self.phase += rpm as float64 * self.cylinders as float64 / (120.0 * self.format.sample_rate as float64)
             }
             let left = self.left.next(self.noise(), exhaust, roughness)
-            let right = self.right.next(self.noise(), exhaust, roughness)
+            let right = 0.72 * self.right.next(self.noise(), exhaust, roughness)
             // Gentle saturation bounds the PCM, without a leveler erasing load dynamics.
             let a = 1.5 * (left + 0.55 * right)
             let b = 1.5 * (right + 0.55 * left)

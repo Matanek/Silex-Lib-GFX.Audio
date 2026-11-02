@@ -30,7 +30,8 @@ calculate a transmission, vehicle speed or wheel torque.
 `exhaust` ranges from muffled to open; `roughness` controls noise modulation and
 combustion energy variations. These controls preserve pulse phase and acoustic
 history. The V8 groups combustion events into two exhaust paths using a
-cross-plane bank sequence. Other cylinder counts use a simplified alternating
+cross-plane bank sequence. Different propagation times and levels preserve this
+rhythm in the mix, including mono. Other cylinder counts use a simplified alternating
 distribution, without claiming to reproduce every real engine architecture.
 
 ## Render and play
@@ -66,9 +67,14 @@ mutation; use `try` to keep that error. Blocks must contain complete frames;
 an empty block does not advance the engine.
 
 Soft saturation bounds each sample by the chosen amplitude. It does not replace
-level management when mixing several sources. Rendering keeps two pipe histories
-and three resonances per path; it loads no recording and does not simulate gas
-flow. Coefficients are prepared at construction; rendering cost follows audio frames.
+level management when mixing several sources. Each combustion injects a prepared
+40 ms response: a brief pressure front, expansion/rebound, damped low body and
+short resonance. Two accumulators retain these contributions, followed by pipe
+histories and three resonances per path.
+
+The model loads no recording and does not simulate gas flow. Responses and
+coefficients are prepared at construction. Cost follows audio frames and
+combustion events, hence RPM and cylinder count as well.
 
 The approach is inspired by the excitation/noise/coloration separation studied
 in [Engine Simulator](https://github.com/ange-yaghi/engine-sim), using an independent

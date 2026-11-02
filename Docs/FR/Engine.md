@@ -30,7 +30,9 @@ Le modèle ne calcule ni transmission, ni vitesse véhicule, ni couple aux roues
 `exhaust` va d'un échappement feutré à ouvert ; `roughness` règle la modulation
 bruitée et les variations d'énergie entre combustions. Ces contrôles n'effacent
 ni la phase des pulsations ni les historiques acoustiques. Le V8 regroupe ses
-combustions dans deux voies selon un ordre de bancs cross-plane. Les autres
+combustions dans deux voies selon un ordre de bancs cross-plane. Des temps de
+propagation et niveaux distincts préservent ce rythme dans le mélange, y compris
+en mono. Les autres
 nombres de cylindres utilisent une répartition alternée simplifiée, sans
 prétendre reproduire toutes les architectures réelles.
 
@@ -69,10 +71,14 @@ retourne `invalid_input` avant mutation ; `try` conserve cette erreur. Un bloc
 doit contenir des frames complètes ; un bloc vide n'avance pas le moteur.
 
 La saturation douce borne chaque sample par l'amplitude choisie. Elle ne remplace
-pas la gestion du niveau lors du mélange de plusieurs sources. Le rendu conserve
-deux historiques de conduits et trois résonances par voie ; il ne charge aucun
-enregistrement et ne simule pas les écoulements de gaz. Les coefficients sont
-préparés à création ; le coût du rendu suit le nombre de frames audio.
+pas la gestion du niveau lors du mélange de plusieurs sources. Chaque combustion
+injecte une réponse préparée de 40 ms : front de pression bref, détente/retour,
+corps grave amorti et résonance courte. Deux accumulateurs conservent ces
+contributions, suivis des conduits et de trois résonances par voie.
+
+Le modèle ne charge aucun enregistrement et ne simule pas les écoulements de gaz.
+Les réponses et coefficients sont préparés à création. Le coût suit le nombre
+de frames et de combustions, donc aussi le régime et le nombre de cylindres.
 
 L'approche s'inspire de la séparation excitation/bruit/coloration étudiée dans
 [Engine Simulator](https://github.com/ange-yaghi/engine-sim), avec une excitation
