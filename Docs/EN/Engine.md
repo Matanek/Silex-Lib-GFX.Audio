@@ -41,6 +41,20 @@ distribution, without claiming to reproduce every real engine architecture.
 
 ## Render and play
 
+`set_state` also accepts `fuel`, normalized availability from 0 to 1, defaulting
+to 1. It scales the energy of future combustion events independently of mechanical
+RPM. Reducing `fuel` does not alter pulses already injected into the exhaust.
+At zero, the engine can keep rotating without new combustion; rendering following
+blocks lets pressure and acoustic processing ring out. Ramps provide a gradual
+shutdown. This control is neither a fuel mass nor an injection simulation.
+
+Fragment reducing fuel over 350 ms at 48 kHz while the game still supplies
+1,800 mechanical RPM:
+
+```sx
+source.set_state(1_800.0, ramp_frames:16_800, fuel:0.0)
+```
+
 The engine is a `Synthesis.Generator`. `render` fills a mono or stereo PCM view
 and can be composed with existing processors or feed a [continuous stream](Continuous.md).
 Use generators and their commands on the same application thread. Prepare the
@@ -53,7 +67,7 @@ potentially audible change. Commands do not alter already generated, queued bloc
 
 `current_rpm()` returns RPM for the next frame to produce, rather than the exact
 frame reaching the speakers. `reset()` clears history, resets the seed and cylinder drift and restores
-800 RPM, zero operating controls, exhaust 0.65 and roughness 0.4. To stop gradually,
+800 RPM, zero operating controls, fuel 1, exhaust 0.65 and roughness 0.4. To stop gradually,
 command zero RPM, render the acoustic tail, then close the stream; the model does
 not generate an end notification itself.
 

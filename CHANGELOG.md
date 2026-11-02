@@ -6,6 +6,7 @@
   throttle, load and engine braking: two-exhaust V8 profile, 1–12 cylinders,
   adjustable noise texture and coloration, continuous ramps, RPM- and effort-dependent
   pressure releases, exhaust turbulence, cylinder signatures and slow variation,
+  progressive fuel control for future combustion while preserving engaged events,
   reproducible PCM and a standalone example
   with FR/EN guides.
 

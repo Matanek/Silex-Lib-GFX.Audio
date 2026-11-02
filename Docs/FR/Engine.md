@@ -44,6 +44,21 @@ prétendre reproduire toutes les architectures réelles.
 
 ## Rendre et lire
 
+`set_state` accepte aussi `fuel`, une disponibilité normalisée entre 0 et 1,
+à 1 par défaut. Elle dose l'énergie des prochaines combustions, indépendamment
+du régime mécanique. Une baisse de `fuel` ne modifie pas les pulsations déjà
+injectées dans les conduits. À zéro, le moteur peut encore tourner sans produire
+de nouvelles combustions ; rendre les blocs suivants laisse finir la pression
+et les traitements acoustiques. Les rampes permettent une extinction progressive.
+Ce contrôle n'est ni une masse d'essence ni une simulation d'injection.
+
+Fragment pour réduire l'alimentation sur 350 ms à 48 kHz pendant que le jeu
+fournit encore un régime de 1 800 tr/min :
+
+```sx
+source.set_state(1_800.0, ramp_frames:16_800, fuel:0.0)
+```
+
 Le moteur est un `Synthesis.Generator`. `render` remplit une vue PCM mono ou
 stéréo et peut être composé avec les traitements existants ou alimenter un
 [flux continu](Continuous.md). Les générateurs et leurs commandes s'utilisent
@@ -58,7 +73,7 @@ n'altèrent pas les blocs déjà calculés et mis en file.
 `current_rpm()` donne le régime de la prochaine frame à produire, pas celui
 exactement présenté par les haut-parleurs. `reset()` vide les historiques,
 réinitialise la graine et la variation des cylindres et retrouve 800 tr/min,
-commandes à zéro, échappement
+commandes à zéro, alimentation `fuel` à 1, échappement
 0,65 et rugosité 0,4. Pour arrêter progressivement, commander zéro tr/min, rendre
 la queue acoustique, puis fermer le flux ; le modèle ne produit pas lui-même
 une notification de fin.

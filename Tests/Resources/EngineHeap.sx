@@ -23,7 +23,7 @@ func main() {
     phase()
     print("1000 blocks with state and character changes"); phase()
     for i in 0...1_000 {
-        source.set_state(800.0 + (i % 500) as float32 * 11.0, throttle:0.8, load:0.6)
+        source.set_state(800.0 + (i % 500) as float32 * 11.0, throttle:0.8, load:0.6, fuel:(i % 100) as float32 / 100.0)
         source.set_character(0.7, 0.4)
         source.render(&samples[0:samples.count()])
         room.process(&samples[0:samples.count()])

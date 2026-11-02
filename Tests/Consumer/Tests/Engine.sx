@@ -36,11 +36,11 @@ test "V8 bank rhythm survives a mono mix below the uniform combustion frequency"
 
 test "engine preserves phases random state and ramps across arbitrary block boundaries" {
     var engine = Synthesis.Engine.create()
-    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000)
+    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000, fuel:0.6)
     var expected = zeros(16_384)
     engine.render(&expected[0:expected.count()])
     engine.reset()
-    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000)
+    engine.set_state(4_800.0, throttle:0.8, load:0.6, ramp_frames:6_000, fuel:0.6)
     var actual = zeros(expected.count())
     for bounds in [2, 516, 1_002, 8_192, 16_384] {
         var start = 0
@@ -70,6 +70,8 @@ test "engine rejects invalid state character and partial frames before changing 
     match try source.set_state(Math.sqrt(-1.0)) { failure(error) => {}; success => { panic("NaN rpm accepted") } }
     match try source.set_state(800.0, load:1.1) { failure(error) => {}; success => { panic("invalid load accepted") } }
     match try source.set_state(800.0, engine_brake:-0.1) { failure(error) => {}; success => { panic("invalid brake accepted") } }
+    match try source.set_state(800.0, fuel:-0.1) { failure(error) => {}; success => { panic("invalid fuel accepted") } }
+    match try source.set_state(800.0, fuel:Math.sqrt(-1.0)) { failure(error) => {}; success => { panic("NaN fuel accepted") } }
     match try source.set_character(1.1, 0.0) { failure(error) => {}; success => { panic("invalid character accepted") } }
     match try source.set_character(0.0, 0.0, ramp_frames:-1) { failure(error) => {}; success => { panic("invalid ramp accepted") } }
     var output = zeros(1_024); var expected = zeros(1_024)
@@ -153,6 +155,35 @@ test "isolated exhaust releases change with RPM without texture" {
     }
     assert(aa > 0.0 && bb > 0.0 && residual / bb > 0.001,
         "exhaust release ignored engine time and replayed a fixed response")
+}
+
+test "fuel cut preserves engaged combustion and permits rotation without firing" {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var stopped = Synthesis.Engine.create(format, cylinders:1)
+    var coasting = Synthesis.Engine.create(format, cylinders:1)
+    stopped.set_state(800.0, ramp_frames:0)
+    coasting.set_state(800.0, ramp_frames:0)
+    var first = zeros(1)
+    stopped.render(&first[0:1]); coasting.render(&first[0:1])
+    stopped.set_state(0.0, ramp_frames:0)
+    coasting.set_state(800.0, ramp_frames:0, fuel:0.0)
+    // Before the next single-cylinder cycle, both must finish the same event.
+    var a = zeros(6_000); var b = zeros(6_000)
+    stopped.render(&a[0:a.count()]); coasting.render(&b[0:b.count()])
+    var energy:float64 = 0.0
+    for i, sample in a.indexed() {
+        assert(sample == b[i], "fuel cut altered a combustion already in progress")
+        energy += sample as float64 * sample as float64
+    }
+    assert(energy > 0.0001 && coasting.current_rpm() == 800.0 as float32)
+    var tail = zeros(48_000)
+    coasting.render(&tail[0:tail.count()])
+    for sample in tail[24_000:tail.count()] { assert(Math.abs(sample) < 0.000001) }
+    coasting.set_state(800.0, ramp_frames:960, fuel:1.0)
+    coasting.render(&tail[0:tail.count()])
+    energy = 0.0
+    for sample in tail { energy += sample as float64 * sample as float64 }
+    assert(energy > 0.01, "engine failed to resume combustion")
 }
 
 test "engine supports its cylinder rate and channel bounds with bounded finite samples" {

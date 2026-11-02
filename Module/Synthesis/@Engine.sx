@@ -152,6 +152,7 @@ public class Engine:Generator {
     private var throttle:RampState
     private var load:RampState
     private var brake:RampState
+    private var fuel:RampState
     private var exhaust:RampState
     private var roughness:RampState
     private var phase:float64 = 1.0
@@ -168,6 +169,7 @@ public class Engine:Generator {
         self.amplitude = amplitude; self.random = noise_state(seed)
         self.rpm = RampState(800.0); self.throttle = RampState(0.0)
         self.load = RampState(0.0); self.brake = RampState(0.0)
+        self.fuel = RampState(1.0)
         self.exhaust = RampState(0.65); self.roughness = RampState(0.4)
         // Different exhaust paths preserve the bank rhythm when mixed to mono.
         self.left = EngineExhaust(format.sample_rate as float32, 1.0, 0.013)
@@ -196,15 +198,16 @@ public class Engine:Generator {
 
     func set_state(
         rpm:float32, throttle:float32 = 0.0, load:float32 = 0.0,
-        engine_brake:float32 = 0.0, ramp_frames:int = 480
+        engine_brake:float32 = 0.0, ramp_frames:int = 480, fuel:float32 = 1.0
     ) Result<void, Error> {
         if !Math.is_finite(rpm) || rpm < 0.0 || rpm > 12_000.0 ||
-            !Engine.unit(throttle) || !Engine.unit(load) || !Engine.unit(engine_brake) ||
+            !Engine.unit(throttle) || !Engine.unit(load) || !Engine.unit(engine_brake) || !Engine.unit(fuel) ||
             !valid_ramp(ramp_frames) {
             return Result<void, Error>.failure(invalid("engine requires rpm in [0,12000], unit controls and a supported ramp"))
         }
         self.rpm.set(rpm, ramp_frames); self.throttle.set(throttle, ramp_frames)
         self.load.set(load, ramp_frames); self.brake.set(engine_brake, ramp_frames)
+        self.fuel.set(fuel, ramp_frames)
         return Result<void, Error>.success()
     }
 
@@ -227,7 +230,7 @@ public class Engine:Generator {
         return 2.0 * ((self.random % 16_777_216) as float32 / 16_777_216.0) - 1.0
     }
 
-    private func fire(rpm:float32, throttle:float32, load:float32, brake:float32, roughness:float32) {
+    private func fire(rpm:float32, throttle:float32, load:float32, brake:float32, roughness:float32, fuel:float32) {
         // Cross-plane V8 bank order: L R R L R L L R over two crank revolutions.
         var bank = self.firing % 2
         if self.cylinders == 8 {
@@ -238,11 +241,13 @@ public class Engine:Generator {
         let drift = 0.85 * self.cylinder_drift[self.firing] + 0.15 * self.noise()
         self.cylinder_drift[self.firing] = drift
         let uneven = 1.0 + roughness * (0.14 * self.cylinder_energy[self.firing] + 0.22 * drift)
-        let energy = (0.38 + 0.42 * throttle + 0.65 * load) * (1.0 - 0.45 * brake) * uneven
+        let energy = fuel * (0.38 + 0.42 * throttle + 0.65 * load) * (1.0 - 0.45 * brake) * uneven
         // Effort changes the pressure front independently of overall pulse energy.
         let drive = Math.clamp((0.3 * throttle + 0.7 * load) * (1.0 - 0.5 * brake) +
             roughness * 0.1 * self.cylinder_attack[self.firing], 0.0, 1.0)
-        if bank == 0 { self.left.fire(energy, drive, rpm) } else { self.right.fire(energy, drive, rpm) }
+        if fuel > 0.0 {
+            if bank == 0 { self.left.fire(energy, drive, rpm) } else { self.right.fire(energy, drive, rpm) }
+        }
         self.firing = (self.firing + 1) % self.cylinders
     }
 
@@ -254,10 +259,11 @@ public class Engine:Generator {
         while i < samples.count() {
             let rpm = self.rpm.next(); let throttle = self.throttle.next()
             let load = self.load.next(); let brake = self.brake.next()
+            let fuel = self.fuel.next()
             let exhaust = self.exhaust.next(); let roughness = self.roughness.next()
             if rpm > 0.0 {
                 if self.phase >= 1.0 {
-                    self.phase -= 1.0; self.fire(rpm, throttle, load, brake, roughness)
+                    self.phase -= 1.0; self.fire(rpm, throttle, load, brake, roughness, fuel)
                 }
                 self.phase += rpm as float64 * self.cylinders as float64 / (120.0 * self.format.sample_rate as float64)
             }
@@ -280,7 +286,7 @@ public class Engine:Generator {
 
     func reset() {
         self.phase = 1.0; self.firing = 0; self.random = noise_state(self.seed)
-        self.rpm.reset(); self.throttle.reset(); self.load.reset(); self.brake.reset()
+        self.rpm.reset(); self.throttle.reset(); self.load.reset(); self.brake.reset(); self.fuel.reset()
         self.exhaust.reset(); self.roughness.reset(); self.left.reset(); self.right.reset()
         var i = 0
         while i < self.cylinder_drift.count() { self.cylinder_drift[i] = 0.0; i++ }

@@ -6,7 +6,8 @@
   régime, accélérateur, charge et frein moteur : profil V8 à deux échappements,
   1 à 12 cylindres, texture bruitée et coloration réglables, rampes continues,
   décharges de pression liées au régime et à l'effort, turbulence d'échappement, signatures et
-  variations lentes par cylindre, PCM reproductible et
+  variations lentes par cylindre, alimentation progressive des nouvelles
+  combustions préservant les événements engagés, PCM reproductible et
   exemple autonome, avec guides FR/EN.
 
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
