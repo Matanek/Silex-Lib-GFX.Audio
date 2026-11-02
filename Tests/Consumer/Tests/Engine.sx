@@ -125,6 +125,36 @@ test "engine effort changes pulse shape independently of pulse energy" {
     assert(free.current_rpm() == loaded.current_rpm())
 }
 
+test "isolated exhaust releases change with RPM without texture" {
+    let format = Processing.Format(sample_rate:48_000, channels:1)
+    var slow = Synthesis.Engine.create(format, cylinders:1)
+    var fast = Synthesis.Engine.create(format, cylinders:1)
+    slow.set_character(0.65, 0.0, ramp_frames:0)
+    fast.set_character(0.65, 0.0, ramp_frames:0)
+    slow.set_state(800.0, load:0.4, ramp_frames:0)
+    fast.set_state(3_200.0, load:0.4, ramp_frames:0)
+    // Trigger exactly one event, then halt future firing while preserving its tail.
+    var first = zeros(1)
+    slow.render(&first[0:1]); fast.render(&first[0:1])
+    slow.set_state(0.0, ramp_frames:0); fast.set_state(0.0, ramp_frames:0)
+    var a = zeros(8_000); var b = zeros(8_000)
+    slow.render(&a[0:a.count()]); fast.render(&b[0:b.count()])
+    var aa:float64 = 0.0; var ab:float64 = 0.0; var bb:float64 = 0.0
+    for i, sample in a.indexed() {
+        aa += sample as float64 * sample as float64
+        ab += sample as float64 * b[i] as float64
+        bb += b[i] as float64 * b[i] as float64
+    }
+    let gain = ab / aa
+    var residual:float64 = 0.0
+    for i, sample in a.indexed() {
+        let difference = b[i] as float64 - gain * sample as float64
+        residual += difference * difference
+    }
+    assert(aa > 0.0 && bb > 0.0 && residual / bb > 0.001,
+        "exhaust release ignored engine time and replayed a fixed response")
+}
+
 test "engine supports its cylinder rate and channel bounds with bounded finite samples" {
     for rate in [22_050, 48_000, 192_000] {
         for channels in [1, 2] {

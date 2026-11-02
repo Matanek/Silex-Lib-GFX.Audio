@@ -29,9 +29,11 @@ pulsation, indépendamment du niveau global. `engine_brake` atténue l'énergie
 et le mordant des pulsations pendant la décélération.
 Le modèle ne calcule ni transmission, ni vitesse véhicule, ni couple aux roues.
 
-`exhaust` va d'un échappement feutré à ouvert ; `roughness` règle la modulation
-bruitée, les différences d'énergie et d'attaque propres aux cylindres et leur
-variation lente entre combustions. À zéro, ces différences sont désactivées.
+`exhaust` va d'un échappement feutré à ouvert ; `roughness` ajoute de la modulation
+bruitée et règle les différences d'énergie et d'attaque propres aux cylindres et
+leur variation lente entre combustions. À zéro, ces différences sont désactivées ;
+une faible turbulence d'écoulement reste modulée par la pression. Elle n'est pas
+une piste de souffle indépendante et disparaît avec la queue de pression.
 Leur graine est fixée à la création. Ces contrôles n'effacent
 ni la phase des pulsations ni les historiques acoustiques. Le V8 regroupe ses
 combustions dans deux voies selon un ordre de bancs cross-plane. Des temps de
@@ -77,13 +79,14 @@ doit contenir des frames complètes ; un bloc vide n'avance pas le moteur.
 
 La saturation douce borne chaque sample par l'amplitude choisie. Elle ne remplace
 pas la gestion du niveau lors du mélange de plusieurs sources. Chaque combustion
-injecte une réponse préparée de 60 ms : front de pression bref, détente/retour,
-corps grave amorti et résonance courte. Le corps et les résonances du profil
-privilégient le registre grave sans modifier la fréquence des combustions
-commandée par le régime. Deux accumulateurs conservent ces contributions,
-suivis des conduits et de trois résonances par voie. Le front et le corps sont
-préparés séparément pour doser leur contribution à chaque combustion. Ce profil
-acoustique ne constitue pas un calcul de cylindrée. Le générateur ne fait pas
+injecte une décharge d'échappement préparée en phase : front bref, détente positive
+puis raréfaction, sans oscillateur accordé injecté dans l'excitation. Sa durée
+suit 0,3 cycle quatre temps, bornée à 3–60 ms. Le front et le corps sont dosés
+selon l'effort. Deux accumulateurs conservent ces contributions, suivis des
+conduits et de trois résonances par voie. La dérivée de pression utilise une
+échelle temporelle fixe pour garder son poids quand la fréquence d'échantillonnage
+change. Cette approximation acoustique ne calcule ni cylindrée, ni pression
+thermodynamique, ni débit de soupape réel. Le générateur ne fait pas
 fluctuer le régime fourni : une régulation de ralenti appartient au jeu ou au
 banc d'écoute. Une ambiance peut être ajoutée séparément avec
 [Processing.Reverb](Reverb.md) ; aucun espace de réverbération n'est imposé.

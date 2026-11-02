@@ -28,9 +28,11 @@ Effort also changes each pulse's pressure-front contribution independently of
 overall level. `engine_brake` reduces pulse energy and bite during deceleration. The model does not
 calculate a transmission, vehicle speed or wheel torque.
 
-`exhaust` ranges from muffled to open; `roughness` controls noise modulation and
+`exhaust` ranges from muffled to open; `roughness` adds noise modulation and controls
 the cylinder-specific energy and attack differences and their slow variation
-between combustions. Zero disables these differences; their seed is fixed at
+between combustions. Zero disables these differences; weak flow turbulence still
+follows pressure. It is not an independent hiss track and fades with the pressure
+tail. Their seed is fixed at
 construction. These controls preserve pulse phase and acoustic
 history. The V8 groups combustion events into two exhaust paths using a
 cross-plane bank sequence. Different propagation times and levels preserve this
@@ -71,13 +73,14 @@ an empty block does not advance the engine.
 
 Soft saturation bounds each sample by the chosen amplitude. It does not replace
 level management when mixing several sources. Each combustion injects a prepared
-60 ms response: a brief pressure front, expansion/rebound, damped low body and
-short resonance. The profile's body and resonances emphasize the low register
-without changing the combustion frequency commanded by RPM. Two accumulators
-retain these contributions, followed by pipe histories and three resonances
-per path. The front and body are prepared separately so their contributions can
-vary with each combustion. This acoustic profile does not calculate engine
-displacement. The generator does not vary supplied RPM: idle regulation belongs
+phase-based exhaust release: brief front, positive blowdown then rarefaction,
+with no pitched oscillator injected into the excitation. Duration follows 0.3
+of a four-stroke cycle, bounded to 3–60 ms. Effort sets the front/body blend.
+Two accumulators retain contributions, followed by pipe histories and three
+resonances per path. The pressure derivative uses a fixed time scale so its
+weight is preserved when sample rate changes. This acoustic approximation does
+not calculate displacement, thermodynamic pressure or actual valve flow.
+The generator does not vary supplied RPM: idle regulation belongs
 to the game or listening bench. Add ambience separately with
 [Processing.Reverb](Reverb.md); no reverberant space is imposed.
 

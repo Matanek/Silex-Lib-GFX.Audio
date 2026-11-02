@@ -5,7 +5,7 @@
 - Ajoute `Synthesis.Engine`, prototype de moteur quatre temps commandé par
   régime, accélérateur, charge et frein moteur : profil V8 à deux échappements,
   1 à 12 cylindres, texture bruitée et coloration réglables, rampes continues,
-  fronts de pression dépendant de l'effort, corps graves, signatures et
+  décharges de pression liées au régime et à l'effort, turbulence d'échappement, signatures et
   variations lentes par cylindre, PCM reproductible et
   exemple autonome, avec guides FR/EN.
 
