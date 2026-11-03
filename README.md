@@ -34,3 +34,7 @@ instruments keep their own musical settings and the existing extension protocol.
 [Play a procedural piano](Docs/EN/Piano.md) with `Music.Instruments.piano`, strike dynamics, natural decay and sustain pedal.
 
 [Play procedural guitar, violin and drums](Docs/EN/Catalogue.md), with named percussion keys and family-specific settings.
+
+[Build an engine sound from replaceable parts](Docs/EN/EngineParts.md): block,
+head, intake, exhaust, silencer, mechanics and optional turbo, driven by game
+state through `Synthesis.Engine.assemble`.

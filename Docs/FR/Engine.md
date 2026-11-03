@@ -1,5 +1,9 @@
 # Donner une voix à un moteur thermique
 
+Pour composer les pièces et remplacer un assemblage pendant la lecture, utiliser
+[le parcours Engine.assemble](EngineParts.md). Cette page décrit le prototype
+conservé par `Engine.create()`.
+
 `Synthesis.Engine` produit un moteur quatre temps à partir du régime et de son
 contexte de fonctionnement. Le jeu fournit les tours/minute, l'accélérateur,
 la charge et le frein moteur ; il n'a pas à décrire les pièces mécaniques.

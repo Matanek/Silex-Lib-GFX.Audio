@@ -1,0 +1,294 @@
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+// A normalized band-pass, prepared once; its history advances per audio frame.
+class EngineResonance {
+    private let b:float32
+    private let a1:float32
+    private let a2:float32
+    private var x1:float32 = 0.0
+    private var x2:float32 = 0.0
+    private var y1:float32 = 0.0
+    private var y2:float32 = 0.0
+
+    init(rate:float32, frequency:float32, q:float32) {
+        let angle = 6.283185307179586 as float32 * frequency / rate
+        let alpha = Math.sin(angle) / (2.0 * q)
+        self.b = alpha / (1.0 + alpha)
+        self.a1 = -2.0 * Math.cos(angle) / (1.0 + alpha)
+        self.a2 = (1.0 - alpha) / (1.0 + alpha)
+    }
+
+    func next(value:float32) float32 {
+        let result = self.b * (value - self.x2) - self.a1 * self.y1 - self.a2 * self.y2
+        self.x2 = self.x1; self.x1 = value
+        self.y2 = self.y1; self.y1 = result
+        return result
+    }
+
+    func reset() { self.x1 = 0.0; self.x2 = 0.0; self.y1 = 0.0; self.y2 = 0.0 }
+}
+
+// Each bank has its own pressure envelope, pipe delays and acoustic history.
+class EngineExhaust {
+    private let rate:float32
+    private let duration_scale:float32
+    private var combustion:float32[] = []
+    private var attack:float32[] = []
+    private var pressure:float32[] = []
+    private var pressure_offset:int = 0
+    private let dc_alpha:float32
+    private let noise_alpha:float32
+    private let dark_alpha:float32
+    private let bright_alpha:float32
+    private let travel_delay:int
+    private let first_delay:int
+    private let second_delay:int
+    private var history:float32[] = []
+    private var offset:int = 0
+    private var previous:float32 = 0.0
+    private var noise:float32 = 0.0
+    private var dc:float32 = 0.0
+    private var filtered:float32 = 0.0
+    private var low:EngineResonance
+    private var middle:EngineResonance
+    private var high:EngineResonance
+
+    init(rate:float32, scale:float32, travel_seconds:float32) {
+        self.rate = rate; self.duration_scale = scale
+        // Dimensionless exhaust release: fast blowdown and a slower rarefaction.
+        // No pitched oscillator is injected. Fire maps this shape to engine time.
+        let frames = Math.ceil(rate * 0.060) as int
+        for frame in 0...frames {
+            let phase = frame as float32 / (frames - 1) as float32
+            let front = 1.3 * (Math.exp(-phase / 0.035) - Math.exp(-phase / 0.002))
+            let blowdown = 1.2 * (Math.exp(-phase / 0.15) - Math.exp(-phase / 0.008))
+            let rarefaction = -0.65 * (Math.exp(-phase / 0.35) - Math.exp(-phase / 0.08))
+            // The tail reaches zero continuously before the circular buffer ends.
+            let taper = Math.min(1.0 as float32, (1.0 - phase) / 0.2)
+            self.combustion.append((blowdown + rarefaction) * taper)
+            self.attack.append(front * taper)
+            self.pressure.append(0.0)
+        }
+        self.dc_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 15.0 / rate)
+        self.noise_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 1_400.0 / rate)
+        self.dark_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 360.0 / rate)
+        self.bright_alpha = 1.0 - Math.exp(-6.283185307179586 as float32 * 3_200.0 / rate)
+        self.travel_delay = Math.round(rate * travel_seconds) as int
+        self.first_delay = self.travel_delay + Math.round(rate * 0.0037 * scale) as int
+        self.second_delay = self.travel_delay + Math.round(rate * 0.0081 * scale) as int
+        for _ in 0...self.second_delay + 1 { self.history.append(0.0) }
+        self.low = EngineResonance(rate, 78.0 * scale, 1.7)
+        self.middle = EngineResonance(rate, 200.0 * scale, 2.4)
+        self.high = EngineResonance(rate, 530.0 * scale, 2.0)
+    }
+
+    func fire(energy:float32, drive:float32, rpm:float32) {
+        var position = self.pressure_offset
+        let bite = 0.55 + 1.1 * drive
+        // 0.3 of a four-stroke cycle, bounded for startup and extreme RPM.
+        let duration = Math.clamp(36.0 * self.duration_scale / rpm, 0.003, 0.060)
+        var frames = Math.ceil(self.rate * duration) as int
+        if frames > self.combustion.count() { frames = self.combustion.count() }
+        for frame in 0...frames {
+            let phase = frame as float32 * (self.combustion.count() - 1) as float32 / (frames - 1) as float32
+            var first = Math.floor(phase) as int
+            if first >= self.combustion.count() - 1 { first = self.combustion.count() - 2 }
+            let blend = Math.clamp(phase - first as float32, 0.0, 1.0)
+            let body = self.combustion[first] + blend * (self.combustion[first + 1] - self.combustion[first])
+            let attack = self.attack[first] + blend * (self.attack[first + 1] - self.attack[first])
+            self.pressure[position] += energy * (body + bite * attack)
+            position++; if position == self.pressure.count() { position = 0 }
+        }
+    }
+
+    func next(white:float32, exhaust:float32, roughness:float32) float32 {
+        let pulse = self.pressure[self.pressure_offset]
+        self.pressure[self.pressure_offset] = 0.0
+        self.pressure_offset++; if self.pressure_offset == self.pressure.count() { self.pressure_offset = 0 }
+        self.noise += self.noise_alpha * (white - self.noise)
+        // A pressure derivative in seconds, with a fixed time scale: changing
+        // sample rate must not silently change its contribution to the attack.
+        let derivative = (pulse - self.previous) * self.rate
+        // Flow turbulence follows pressure even with regular cylinder firing.
+        // Roughness adds variation; it does not remove the underlying exhaust grain.
+        let input = pulse * (0.7 + (0.8 + roughness * 1.6) * self.noise) +
+            derivative * (0.00005 + 0.00025 * exhaust)
+        self.previous = pulse
+        self.dc += self.dc_alpha * (input - self.dc)
+        let centered = input - self.dc
+        self.history[self.offset] = centered
+        var arrival = self.offset - self.travel_delay
+        var first = self.offset - self.first_delay
+        var second = self.offset - self.second_delay
+        if arrival < 0 { arrival += self.history.count() }
+        if first < 0 { first += self.history.count() }
+        if second < 0 { second += self.history.count() }
+        let pipe = self.history[arrival] + 0.42 * self.history[first] - 0.23 * self.history[second]
+        self.offset++; if self.offset == self.history.count() { self.offset = 0 }
+        let colored = 0.55 * pipe + 1.25 * self.low.next(pipe) +
+            0.7 * self.middle.next(pipe) + exhaust * self.high.next(pipe)
+        self.filtered += (self.dark_alpha + exhaust * (self.bright_alpha - self.dark_alpha)) * (colored - self.filtered)
+        return self.filtered
+    }
+
+    func reset() {
+        self.offset = 0; self.pressure_offset = 0; self.previous = 0.0
+        self.noise = 0.0; self.dc = 0.0; self.filtered = 0.0
+        var i = 0; while i < self.history.count() { self.history[i] = 0.0; i++ }
+        i = 0; while i < self.pressure.count() { self.pressure[i] = 0.0; i++ }
+        self.low.reset(); self.middle.reset(); self.high.reset()
+    }
+}
+
+// A game-controlled four-stroke engine, not a vehicle or thermodynamic simulation.
+class ClassicEngine:Generator {
+    let format:Processing.Format
+    let cylinders:int
+    let seed:int
+    private let amplitude:float32
+    private var rpm:RampState
+    private var throttle:RampState
+    private var load:RampState
+    private var brake:RampState
+    private var fuel:RampState
+    private var exhaust:RampState
+    private var roughness:RampState
+    private var phase:float64 = 1.0
+    private var firing:int = 0
+    private var random:int
+    private var cylinder_energy:float32[] = []
+    private var cylinder_attack:float32[] = []
+    private var cylinder_drift:float32[] = []
+    private var left:EngineExhaust
+    private var right:EngineExhaust
+
+    private init(format:Processing.Format, cylinders:int, seed:int, amplitude:float32) {
+        self.format = format; self.cylinders = cylinders; self.seed = seed
+        self.amplitude = amplitude; self.random = noise_state(seed)
+        self.rpm = RampState(800.0); self.throttle = RampState(0.0)
+        self.load = RampState(0.0); self.brake = RampState(0.0)
+        self.fuel = RampState(1.0)
+        self.exhaust = RampState(0.65); self.roughness = RampState(0.4)
+        // Different exhaust paths preserve the bank rhythm when mixed to mono.
+        self.left = EngineExhaust(format.sample_rate as float32, 1.0, 0.013)
+        self.right = EngineExhaust(format.sample_rate as float32, 1.07, 0.019)
+        // Seeded cylinder identities persist; only their slow combustion drift evolves.
+        for _ in 0...cylinders {
+            self.cylinder_energy.append(self.noise())
+            self.cylinder_attack.append(self.noise())
+            self.cylinder_drift.append(0.0)
+        }
+        self.random = noise_state(seed)
+    }
+
+    static func create(
+        format:Processing.Format = Processing.Format(sample_rate:48_000, channels:2),
+        cylinders:int = 8, seed:int = 42, amplitude:float32 = 0.4
+    ) Result<ClassicEngine, Error> {
+        if format.sample_rate < 22_050 || format.sample_rate > 192_000 ||
+            (format.channels != 1 && format.channels != 2) ||
+            cylinders < 1 || cylinders > 12 ||
+            !Math.is_finite(amplitude) || amplitude < 0.0 || amplitude > 1.0 {
+            return Result<ClassicEngine, Error>.failure(invalid("engine requires 22050..192000 Hz, mono/stereo, 1..12 cylinders and unit amplitude"))
+        }
+        return Result<ClassicEngine, Error>.success(ClassicEngine(format, cylinders, seed, amplitude))
+    }
+
+    func set_state(
+        rpm:float32, throttle:float32 = 0.0, load:float32 = 0.0,
+        engine_brake:float32 = 0.0, ramp_frames:int = 480, fuel:float32 = 1.0
+    ) Result<void, Error> {
+        if !Math.is_finite(rpm) || rpm < 0.0 || rpm > 12_000.0 ||
+            !ClassicEngine.unit(throttle) || !ClassicEngine.unit(load) || !ClassicEngine.unit(engine_brake) || !ClassicEngine.unit(fuel) ||
+            !valid_ramp(ramp_frames) {
+            return Result<void, Error>.failure(invalid("engine requires rpm in [0,12000], unit controls and a supported ramp"))
+        }
+        self.rpm.set(rpm, ramp_frames); self.throttle.set(throttle, ramp_frames)
+        self.load.set(load, ramp_frames); self.brake.set(engine_brake, ramp_frames)
+        self.fuel.set(fuel, ramp_frames)
+        return Result<void, Error>.success()
+    }
+
+    func set_character(exhaust:float32, roughness:float32, ramp_frames:int = 480) Result<void, Error> {
+        if !ClassicEngine.unit(exhaust) || !ClassicEngine.unit(roughness) || !valid_ramp(ramp_frames) {
+            return Result<void, Error>.failure(invalid("engine character requires unit controls and a supported ramp"))
+        }
+        self.exhaust.set(exhaust, ramp_frames); self.roughness.set(roughness, ramp_frames)
+        return Result<void, Error>.success()
+    }
+
+    func current_rpm() float32 { return self.rpm.value }
+
+    private static func unit(value:float32) bool {
+        return Math.is_finite(value) && value >= 0.0 && value <= 1.0
+    }
+
+    private func noise() float32 {
+        self.random = (self.random * 48_271) % 2_147_483_647
+        return 2.0 * ((self.random % 16_777_216) as float32 / 16_777_216.0) - 1.0
+    }
+
+    private func fire(rpm:float32, throttle:float32, load:float32, brake:float32, roughness:float32, fuel:float32) {
+        // Cross-plane V8 bank order: L R R L R L L R over two crank revolutions.
+        var bank = self.firing % 2
+        if self.cylinders == 8 {
+            let index = self.firing % 8
+            bank = 0
+            if index == 1 || index == 2 || index == 4 || index == 7 { bank = 1 }
+        }
+        let drift = 0.85 * self.cylinder_drift[self.firing] + 0.15 * self.noise()
+        self.cylinder_drift[self.firing] = drift
+        let uneven = 1.0 + roughness * (0.14 * self.cylinder_energy[self.firing] + 0.22 * drift)
+        let energy = fuel * (0.38 + 0.42 * throttle + 0.65 * load) * (1.0 - 0.45 * brake) * uneven
+        // Effort changes the pressure front independently of overall pulse energy.
+        let drive = Math.clamp((0.3 * throttle + 0.7 * load) * (1.0 - 0.5 * brake) +
+            roughness * 0.1 * self.cylinder_attack[self.firing], 0.0, 1.0)
+        if fuel > 0.0 {
+            if bank == 0 { self.left.fire(energy, drive, rpm) } else { self.right.fire(energy, drive, rpm) }
+        }
+        self.firing = (self.firing + 1) % self.cylinders
+    }
+
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error {
+            return Result<void, Error>.failure(error)
+        }
+        var i = 0
+        while i < samples.count() {
+            let rpm = self.rpm.next(); let throttle = self.throttle.next()
+            let load = self.load.next(); let brake = self.brake.next()
+            let fuel = self.fuel.next()
+            let exhaust = self.exhaust.next(); let roughness = self.roughness.next()
+            if rpm > 0.0 {
+                if self.phase >= 1.0 {
+                    self.phase -= 1.0; self.fire(rpm, throttle, load, brake, roughness, fuel)
+                }
+                self.phase += rpm as float64 * self.cylinders as float64 / (120.0 * self.format.sample_rate as float64)
+            }
+            let left = self.left.next(self.noise(), exhaust, roughness)
+            let right = 0.72 * self.right.next(self.noise(), exhaust, roughness)
+            // Gentle saturation bounds the PCM, without a leveler erasing load dynamics.
+            let a = 1.5 * (left + 0.55 * right)
+            let b = 1.5 * (right + 0.55 * left)
+            if self.format.channels == 1 {
+                let mono = 0.5 * (a + b)
+                samples[i] = self.amplitude * mono / (1.0 + Math.abs(mono))
+            } else {
+                samples[i] = self.amplitude * a / (1.0 + Math.abs(a))
+                samples[i + 1] = self.amplitude * b / (1.0 + Math.abs(b))
+            }
+            i += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+
+    func reset() {
+        self.phase = 1.0; self.firing = 0; self.random = noise_state(self.seed)
+        self.rpm.reset(); self.throttle.reset(); self.load.reset(); self.brake.reset(); self.fuel.reset()
+        self.exhaust.reset(); self.roughness.reset(); self.left.reset(); self.right.reset()
+        var i = 0
+        while i < self.cylinder_drift.count() { self.cylinder_drift[i] = 0.0; i++ }
+    }
+}

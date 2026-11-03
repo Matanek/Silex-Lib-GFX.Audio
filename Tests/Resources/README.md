@@ -81,3 +81,13 @@ d’allocation et copie : 16/64 voix stéréo, blocs 128/512, frappes, rendu,
 vols de voix, contrôles, pédale et reset. Le compteur du thread appelant ne
 mesure ni une latence maximale, ni le transfert PCM natif du player.
 Depuis la racine workspace : `python3 Packages/GFX.Audio/Tests/Resources/ValidatePiano.py`.
+
+## Engine-part assemblies
+
+Run `python3 Packages/GFX.Audio/Tests/Resources/ValidateEngineAssembly.py` from
+the workspace or Spec group root. The macOS ARM64 counter checks Debug/Release
+first-block rendering, 1,000 blocks with state/mix changes, prepared part
+crossfades and reset. Empty/growing-array controls must succeed. Preparation and
+part replacement are separately counted as allocating operations. Output and
+binary identities are retained in `.silex/engine-assembly-resource-validation.json`.
+Audio device, streaming transfer, UI and other threads are excluded.

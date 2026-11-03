@@ -264,3 +264,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Jouer un piano procédural](Piano.md).
 
 [Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.
+
+[Assembler un moteur avec bloc, culasse, admission, échappement et turbo](EngineParts.md).

@@ -1,0 +1,108 @@
+use GFX.Audio.Synthesis.EngineParts
+use STD.Math
+
+// Prepared pressure release: fast attack, body and zero-area rarefaction.
+class EnginePulse {
+    private let body_decay:float32
+    private let front_decay:float32
+    private let tail_decay:float32
+    private let tail_weight:float32
+    private var body:float32 = 0.0
+    private var front:float32 = 0.0
+    private var tail:float32 = 0.0
+    init(rate:float32, body_ms:float32, attack_ms:float32) {
+        let attack = Math.min(body_ms * 0.6, attack_ms)
+        self.body_decay = Math.exp(-1_000.0 / (rate * body_ms))
+        self.front_decay = Math.exp(-1_000.0 / (rate * attack))
+        self.tail_decay = Math.exp(-1_000.0 / (rate * body_ms * 2.5))
+        self.tail_weight = (body_ms - attack) / (body_ms * 1.5)
+    }
+    func fire(energy:float32) { self.body += energy; self.front += energy; self.tail += energy }
+    func next() float32 {
+        let result = (1.0 + self.tail_weight) * self.body - self.front - self.tail_weight * self.tail
+        self.body *= self.body_decay; self.front *= self.front_decay; self.tail *= self.tail_decay
+        return result
+    }
+    func reset() { self.body = 0.0; self.front = 0.0; self.tail = 0.0 }
+}
+
+// Passive round-trip delay; all storage and coefficients are prepared once.
+class EngineDuct {
+    private var history:float32[] = []
+    private var offset:int = 0
+    private var loss:float32 = 0.0
+    private let reflection:float32
+    private let loss_step:float32
+    init(rate:float32, pipe:EngineParts.Pipe, reflection:float32) {
+        let frames = Math.max(2.0, Math.round(rate * 2.0 * pipe.length_mm / 343_000.0)) as int
+        for _ in 0...frames { self.history.append(0.0) }
+        self.reflection = reflection
+        let cutoff = Math.min(rate * 0.4, 2_500.0 * Math.sqrt(pipe.diameter_mm / 50.0))
+        self.loss_step = 1.0 - Math.exp(-6.28318530718 * cutoff / rate)
+    }
+    func next(input:float32) float32 {
+        let returned = self.history[self.offset]
+        self.loss += self.loss_step * (returned - self.loss)
+        self.history[self.offset] = input + self.reflection * self.loss
+        self.offset = (self.offset + 1) % self.history.count()
+        return 0.65 * input + 0.35 * returned
+    }
+    func reset() {
+        for i in 0...self.history.count() { self.history[i] = 0.0 }
+        self.offset = 0; self.loss = 0.0
+    }
+}
+
+class EngineExhaustPath {
+    private var header:EngineDuct
+    private var pipe:EngineDuct
+    private var chamber:EngineResonance
+    private let absorption:float32
+    private let step:float32
+    private let gain:float32
+    private var low:float32 = 0.0
+    init(rate:float32, parts:EngineParts.Exhaust) {
+        let a = parts.header.diameter_mm * parts.header.diameter_mm
+        let b = parts.pipe.diameter_mm * parts.pipe.diameter_mm
+        self.header = EngineDuct(rate, parts.header, Math.clamp((a - b) / (a + b), -0.85, 0.85))
+        self.pipe = EngineDuct(rate, parts.pipe, -0.55 * (1.0 - 0.5 * parts.silencer.absorption))
+        let area = Math.pi<float32>() * b / 4_000_000.0
+        let volume = parts.silencer.volume_litres / 1_000.0
+        let neck = parts.pipe.length_mm / 1_000.0
+        let frequency = Math.clamp(343.0 / 6.28318530718 * Math.sqrt(area / (volume * neck)), 30.0, rate * 0.25)
+        self.absorption = parts.silencer.absorption
+        self.chamber = EngineResonance(rate, frequency, 0.6 + 2.5 * (1.0 - self.absorption))
+        self.step = 1.0 - Math.exp(-6.28318530718 * Math.min(rate * 0.4, 700.0 + 5_500.0 * (1.0 - self.absorption)) / rate)
+        self.gain = Math.sqrt(50.0 / parts.pipe.diameter_mm)
+    }
+    func next(pressure:float32) float32 {
+        let input = self.pipe.next(self.header.next(pressure))
+        let body = self.chamber.next(input)
+        self.low += self.step * (input - self.low)
+        return self.gain * ((1.0 - 0.55 * self.absorption) * self.low + 0.65 * body)
+    }
+    func reset() { self.header.reset(); self.pipe.reset(); self.chamber.reset(); self.low = 0.0 }
+}
+
+class EngineIntakePath {
+    private var runner:EngineDuct
+    private var box:EngineResonance
+    private let step:float32
+    private let absorption:float32
+    private var low:float32 = 0.0
+    init(rate:float32, parts:EngineParts.Intake) {
+        self.runner = EngineDuct(rate, parts.runner, -0.55)
+        let area = Math.pi<float32>() * parts.runner.diameter_mm * parts.runner.diameter_mm / 4_000_000.0
+        let frequency = Math.clamp(343.0 / 6.28318530718 * Math.sqrt(area /
+            (parts.airbox_litres * 0.001 * parts.runner.length_mm * 0.001)), 40.0, rate * 0.25)
+        self.box = EngineResonance(rate, frequency, 1.8)
+        self.absorption = parts.filter_absorption
+        self.step = 1.0 - Math.exp(-6.28318530718 * Math.min(rate * 0.4, 900.0 + 5_000.0 * (1.0 - self.absorption)) / rate)
+    }
+    func next(flow:float32, noise:float32) float32 {
+        let input = self.runner.next(flow * (0.4 + 0.6 * noise))
+        self.low += self.step * (input - self.low)
+        return (1.0 - 0.65 * self.absorption) * (self.low + 0.8 * self.box.next(input))
+    }
+    func reset() { self.runner.reset(); self.box.reset(); self.low = 0.0 }
+}

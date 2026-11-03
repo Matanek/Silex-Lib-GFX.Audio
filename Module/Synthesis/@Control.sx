@@ -25,6 +25,10 @@ class RampState {
         }
         return value
     }
+    func inherit(other:RampState) {
+        self.value = other.value; self.target = other.target; self.start = other.start
+        self.elapsed = other.elapsed; self.duration = other.duration
+    }
     func reset() { self.value = self.initial; self.target = self.initial; self.start = self.initial; self.elapsed = 0; self.duration = 0 }
 }
 

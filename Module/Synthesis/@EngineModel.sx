@@ -1,0 +1,210 @@
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis.EngineParts
+use STD.Error
+use STD.Math
+
+class EngineModel:Generator {
+    let format:Processing.Format
+    let parts:EngineParts.Assembly
+    let seed:int
+    private let amplitude:float32
+    private let revolutions:float64
+    private let energy:float32
+    private var angles:float64[] = []
+    private var banks:int[] = []
+    private var cylinders:int[] = []
+    private var signatures:float32[] = []
+    private var random:int
+    private var phase:float64 = 0.0
+    private var firing:int = 0
+    private var aspiration:int = 0
+    private var next_fire:float64 = 0.0
+    private var next_intake:float64
+    private var rpm:RampState = RampState(800.0)
+    private var throttle:RampState = RampState(0.0)
+    private var load:RampState = RampState(0.0)
+    private var brake:RampState = RampState(0.0)
+    private var fuel:RampState = RampState(1.0)
+    private var boost:RampState = RampState(0.0)
+    private var exhaust_mix:RampState
+    private var intake_mix:RampState
+    private var mechanics_mix:RampState
+    private var turbo_mix:RampState
+    private var roughness:RampState = RampState(0.15)
+    private var openness:RampState = RampState(1.0)
+    private var pulses:EnginePulse[] = []
+    private var exhausts:EngineExhaustPath[] = []
+    private var intake_pulse:EnginePulse
+    private var intake:EngineIntakePath
+    private var mechanical_pulse:EnginePulse
+    private var mechanical_body:EngineResonance
+    private let mechanical_damping:float32
+    private var mechanical_low:float32 = 0.0
+    private let mechanical_step:float32
+    private var turbo_speed:float32 = 0.0
+    private var turbo_phase:float64 = 0.0
+    private var release:float32 = 0.0
+    private var turbo_step:float32 = 0.0
+    private var release_decay:float32 = 0.0
+    private var turbo_frequency:float32 = 0.0
+    private var turbo_pressure:float32 = 0.0
+
+    init(parts:EngineParts.Assembly, format:Processing.Format, seed:int, amplitude:float32) {
+        self.parts = parts; self.format = format; self.seed = seed; self.amplitude = amplitude
+        self.random = noise_state(seed)
+        var revolutions:float64 = 2.0
+        if parts.block.cycle == EngineParts.Cycle.two_stroke { revolutions = 1.0 }
+        self.revolutions = revolutions; self.next_intake = 0.5
+        let rate = format.sample_rate as float32
+        let cylinder_litres = parts.block.displacement_litres() / parts.block.cylinders as float32
+        self.energy = 0.55 * Math.sqrt(cylinder_litres / 0.5) * Math.sqrt(parts.compression_ratio() / 10.0)
+        let duration = Math.clamp(6.0 * Math.sqrt(cylinder_litres / 0.5) * Math.sqrt(10.0 / parts.compression_ratio()), 2.0, 18.0)
+        for exhaust in parts.exhausts {
+            self.pulses.append(EnginePulse(rate, duration * Math.sqrt(45.0 / exhaust.header.diameter_mm), parts.head.burn_ms * 0.3))
+            self.exhausts.append(EngineExhaustPath(rate, exhaust))
+        }
+        self.intake_pulse = EnginePulse(rate, duration * 1.8, 1.0)
+        self.intake = EngineIntakePath(rate, parts.intake)
+        self.mechanical_pulse = EnginePulse(rate, 1.5, 0.15)
+        self.mechanical_body = EngineResonance(rate, 240.0 * Math.sqrt(100.0 / parts.mechanics.block_mass_kg), 1.8)
+        self.mechanical_damping = parts.mechanics.damping
+        self.mechanical_step = 1.0 - Math.exp(-6.28318530718 * (800.0 + 4_000.0 * (1.0 - parts.mechanics.damping)) / rate)
+        self.exhaust_mix = RampState(parts.mix.exhaust); self.intake_mix = RampState(parts.mix.intake)
+        self.mechanics_mix = RampState(parts.mix.mechanics); self.turbo_mix = RampState(parts.mix.turbo)
+        if let turbo = parts.turbo {
+            self.turbo_step = 1.0 - Math.exp(-1.0 / (rate * turbo.spool_seconds))
+            self.release_decay = Math.exp(-1.0 / (rate * 0.08))
+            self.turbo_frequency = 300.0 / (Math.pi<float32>() * turbo.wheel_mm * 0.001) * turbo.blade_count as float32
+            self.turbo_pressure = turbo.max_boost_bar
+        }
+        for i in 0...parts.block.cylinders {
+            var angle = i as float64 / parts.block.cylinders as float64
+            if parts.block.firing_angles.count() != 0 { angle = parts.block.firing_angles[i] as float64 / (360.0 * revolutions) }
+            self.angles.append(angle)
+            var cylinder = i
+            if parts.block.firing_order.count() != 0 { cylinder = parts.block.firing_order[i] - 1 }
+            self.cylinders.append(cylinder)
+            var bank = 0
+            if parts.block.exhaust_banks.count() != 0 { bank = parts.block.exhaust_banks[cylinder] }
+            self.banks.append(bank); self.signatures.append(self.noise())
+        }
+        self.random = noise_state(seed)
+    }
+    func state(rpm:float32, throttle:float32, load:float32, brake:float32, fuel:float32, boost:float32, frames:int) {
+        self.rpm.set(rpm, frames); self.throttle.set(throttle, frames); self.load.set(load, frames)
+        self.brake.set(brake, frames); self.fuel.set(fuel, frames); self.boost.set(boost, frames)
+    }
+    func character(exhaust:float32, roughness:float32, frames:int) { self.openness.set(exhaust, frames); self.roughness.set(roughness, frames) }
+    func mix(value:EngineParts.Mix, frames:int) {
+        self.exhaust_mix.set(value.exhaust, frames); self.intake_mix.set(value.intake, frames)
+        self.mechanics_mix.set(value.mechanics, frames); self.turbo_mix.set(value.turbo, frames)
+    }
+    func current_rpm() float32 { return self.rpm.value }
+    func inherit(other:EngineModel) {
+        self.rpm.inherit(other.rpm); self.throttle.inherit(other.throttle); self.load.inherit(other.load)
+        self.brake.inherit(other.brake); self.fuel.inherit(other.fuel); self.boost.inherit(other.boost)
+        self.roughness.inherit(other.roughness); self.openness.inherit(other.openness)
+        self.phase = other.phase * other.revolutions / self.revolutions
+        self.phase -= Math.floor(self.phase)
+        self.firing = 0
+        while self.firing < self.angles.count() && self.angles[self.firing] < self.phase { self.firing++ }
+        self.next_fire = 0.0
+        if self.firing == self.angles.count() { self.firing = 0; self.next_fire = 1.0 }
+        self.next_fire += self.angles[self.firing]
+        let intake_phase = self.phase - 0.5
+        self.aspiration = 0
+        while self.aspiration < self.angles.count() && self.angles[self.aspiration] < intake_phase { self.aspiration++ }
+        self.next_intake = 0.5
+        if self.aspiration == self.angles.count() { self.aspiration = 0; self.next_intake += 1.0 }
+        self.next_intake += self.angles[self.aspiration]
+        self.turbo_speed = other.turbo_speed; self.turbo_phase = other.turbo_phase
+    }
+    private func noise() float32 {
+        self.random = (self.random * 48_271) % 2_147_483_647
+        return 2.0 * ((self.random % 16_777_216) as float32 / 16_777_216.0) - 1.0
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        try validate_block(@samples[0:samples.count()], self.format.channels) else error { return Result<void, Error>.failure(error) }
+        let rate = self.format.sample_rate as float32
+        var i = 0
+        while i < samples.count() {
+            let rpm = self.rpm.next(); let throttle = self.throttle.next(); let load = self.load.next()
+            let fuel = self.fuel.next(); let brake = self.brake.next(); let boost = self.boost.next()
+            let roughness = self.roughness.next(); let openness = self.openness.next()
+            if rpm > 0.0 {
+                while self.next_fire <= self.phase {
+                    let signature = 1.0 + roughness * (0.15 * self.signatures[self.cylinders[self.firing]] + 0.08 * self.noise())
+                    let energy = self.energy * fuel * (0.25 + 0.4 * throttle + 0.75 * load) * (1.0 - 0.6 * brake) * signature
+                    self.pulses[self.banks[self.firing]].fire(energy)
+                    self.mechanical_pulse.fire(self.energy * (0.15 + rpm / 12_000.0))
+                    let previous = self.angles[self.firing]
+                    self.firing++; var step:float64 = 0.0
+                    if self.firing == self.angles.count() { self.firing = 0; step = 1.0 }
+                    self.next_fire += step + self.angles[self.firing] - previous
+                }
+                while self.next_intake <= self.phase {
+                    self.intake_pulse.fire(self.energy * (0.15 + 0.85 * throttle) * Math.min(1.5, rpm / 3_000.0))
+                    let previous = self.angles[self.aspiration]
+                    self.aspiration++; var step:float64 = 0.0
+                    if self.aspiration == self.angles.count() { self.aspiration = 0; step = 1.0 }
+                    self.next_intake += step + self.angles[self.aspiration] - previous
+                }
+                self.phase += rpm as float64 / (60.0 * self.revolutions * rate as float64)
+                if self.phase >= 1.0 { self.phase -= 1.0; self.next_fire -= 1.0; self.next_intake -= 1.0 }
+            }
+            let exhaust_gain = self.exhaust_mix.next() * openness
+            var left:float32 = 0.0; var right:float32 = 0.0
+            for bank in 0...self.exhausts.count() {
+                let pressure = self.pulses[bank].next()
+                let value = self.exhausts[bank].next(pressure * (1.0 + roughness * 0.12 * self.noise())) * exhaust_gain
+                var pan:float32 = 0.0
+                if self.exhausts.count() > 1 { pan = 2.0 * bank as float32 / (self.exhausts.count() - 1) as float32 - 1.0 }
+                left += value * (0.75 - 0.25 * pan); right += value * (0.75 + 0.25 * pan)
+            }
+            let aspiration = self.intake.next(self.intake_pulse.next(), self.noise()) * self.intake_mix.next()
+            let mechanical = self.mechanical_pulse.next()
+            self.mechanical_low += self.mechanical_step * (mechanical - self.mechanical_low)
+            let body = self.mechanical_body.next(mechanical)
+            let mechanics = ((1.0 - self.mechanical_damping * 0.7) * self.mechanical_low + body) * self.mechanics_mix.next()
+            var turbo:float32 = 0.0
+            let turbo_gain = self.turbo_mix.next()
+            if self.turbo_step > 0.0 {
+                var target:float32 = 0.0
+                if rpm > 0.0 { target = boost }
+                let delta = target - self.turbo_speed
+                if delta < 0.0 { self.release += -delta * self.turbo_step }
+                self.turbo_speed += self.turbo_step * delta; self.release *= self.release_decay
+                let frequency = self.turbo_frequency * Math.sqrt(self.turbo_speed)
+                self.turbo_phase += frequency as float64 / rate as float64
+                self.turbo_phase -= Math.floor(self.turbo_phase)
+                let antialias = Math.clamp((rate * 0.48 - frequency) / (rate * 0.08), 0.0, 1.0)
+                turbo = (0.18 * antialias * self.turbo_speed * round_float<float32>(Math.sin(6.28318530718 * self.turbo_phase)) +
+                    1.5 * self.release * self.noise()) * Math.sqrt(self.turbo_pressure) * turbo_gain
+                let absorption = 1.0 - 0.15 * self.turbo_speed
+                left *= absorption; right *= absorption
+            }
+            let common = aspiration + mechanics + turbo
+            let a = left + common; let b = right + common
+            if self.format.channels == 1 {
+                let mono = (a + b) * 0.5
+                samples[i] = self.amplitude * mono / (1.0 + Math.abs(mono))
+            } else {
+                samples[i] = self.amplitude * a / (1.0 + Math.abs(a))
+                samples[i + 1] = self.amplitude * b / (1.0 + Math.abs(b))
+            }
+            i += self.format.channels
+        }
+        return Result<void, Error>.success()
+    }
+    func reset() {
+        self.phase = 0.0; self.firing = 0; self.aspiration = 0; self.next_fire = 0.0; self.next_intake = 0.5
+        self.random = noise_state(self.seed)
+        self.rpm.reset(); self.throttle.reset(); self.load.reset(); self.brake.reset(); self.fuel.reset(); self.boost.reset()
+        self.exhaust_mix.reset(); self.intake_mix.reset(); self.mechanics_mix.reset(); self.turbo_mix.reset()
+        self.roughness.reset(); self.openness.reset()
+        for var pulse in self.pulses { pulse.reset() }
+        for var path in self.exhausts { path.reset() }
+        self.intake_pulse.reset(); self.intake.reset(); self.mechanical_pulse.reset(); self.mechanical_body.reset()
+        self.mechanical_low = 0.0; self.turbo_speed = 0.0; self.turbo_phase = 0.0; self.release = 0.0
+    }
+}

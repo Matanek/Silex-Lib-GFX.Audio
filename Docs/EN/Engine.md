@@ -1,5 +1,9 @@
 # Give a combustion engine its sound
 
+For configurable parts and assembly changes during playback, use
+[Engine.assemble](EngineParts.md). This page describes the prototype retained
+by `Engine.create()`.
+
 `Synthesis.Engine` generates a four-stroke engine from RPM and operating context.
 The game supplies RPM, throttle, load and engine braking without describing
 mechanical parts. This first acoustic model is a prototype requiring listening

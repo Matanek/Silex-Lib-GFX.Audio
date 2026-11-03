@@ -93,3 +93,14 @@ and transfer headroom.
 [Validate audio paths](Validation.md)
 
 [Choose musical playback costs](MusicResources.md).
+
+## Engine-part assemblies
+
+`python3 Packages/GFX.Audio/Tests/Resources/ValidateEngineAssembly.py` checks
+prepared part-based rendering in macOS ARM64 Debug/Release: first block,
+1,000 blocks with changing RPM/load/boost and mix, assembly crossfade and reset.
+The observed phases allocate nothing. Empty and growing-array controls qualify
+the counter; preparation and `set_parts` are counted separately as allocating
+operations. See [Tests/Resources](../../Tests/Resources/README.md) for the protocol
+and report. This excludes SDL and PCM transfer and provides no hard real-time
+guarantee on another host.

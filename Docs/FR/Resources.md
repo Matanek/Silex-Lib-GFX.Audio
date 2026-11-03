@@ -96,3 +96,14 @@ avec ses instruments, effets, commandes et marge de transfert.
 [Vérifier les parcours audio](Validation.md)
 
 [Choisir le coût d’une lecture musicale](MusicResources.md).
+
+## Assemblages de pièces moteur
+
+`python3 Packages/GFX.Audio/Tests/Resources/ValidateEngineAssembly.py` vérifie le
+rendu préparé par pièces en Debug/Release macOS ARM64 : premier bloc,
+1 000 blocs avec régime/charge/boost et mix variables, fondu entre assemblages,
+puis reset. Les phases observées n’allouent pas. Les témoins vide et croissance
+de tableau qualifient le compteur ; préparation et `set_parts` sont comptés
+séparément comme opérations allouantes. Le protocole et le rapport vivent sous
+[Tests/Resources](../../Tests/Resources/README.md). Aucun coût de SDL ou de
+transfert PCM n’est couvert, ni garantie de temps réel dur sur un autre hôte.

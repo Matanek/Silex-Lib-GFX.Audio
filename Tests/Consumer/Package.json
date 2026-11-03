@@ -1,8 +1,8 @@
 {
   "sources": "Tests",
   "dependencies": {
-    "GFX": "^0.37.0",
-    "GFX.Audio": "^0.2.0",
+    "GFX": "^0.40.0",
+    "GFX.Audio": "^0.4.0",
     "STD": "^0.22.0"
   }
 }

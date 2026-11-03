@@ -1,0 +1,44 @@
+use GFX.Audio
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use GFX.Audio.Synthesis.EngineParts
+use STD.Process
+use STD.Math
+
+func main() {
+    var parts = EngineParts.v8()
+    parts.exhausts[0].silencer = EngineParts.Silencer(volume_litres:18.0, absorption:0.8)
+    var source = Synthesis.Engine.assemble(parts:parts)
+    source.set_state(800.0, throttle:0.2, load:0.2)
+    let arguments = Process.arguments()
+    for argument in arguments {
+        if argument == "--check" {
+            var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+            var energy:float64 = 0.0
+            for _ in 0...100 {
+                source.render(&samples[0:samples.count()])
+                for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.4); energy += sample as float64 * sample as float64 }
+            }
+            assert(energy > 0.01)
+            parts.exhausts[0].pipe.length_mm = 1_000.0; source.set_parts(parts)
+            source.set_state(3_000.0, throttle:0.8, load:0.6)
+            for _ in 0...100 { source.render(&samples[0:samples.count()]) }
+            print("Engine assembly consumer passed")
+            return
+        }
+    }
+    var audio = Audio()
+    var producer = Synthesis.StreamProducer.create(audio, source, 240_000, block_frames:480, capacity_frames:1_440)
+    for _ in 0...3 { producer.pump() }
+    let playing = audio.play(producer.stream(), Audio.Playback(fade_in_seconds:0.05))
+    var changed = false
+    while !producer.input_closed() {
+        if !changed && producer.produced_frames() >= 96_000 {
+            parts.exhausts[0].silencer.absorption = 0.2; parts.exhausts[1].silencer.absorption = 0.2
+            source.set_parts(parts); source.set_state(3_200.0, throttle:0.8, load:0.6, ramp_frames:48_000)
+            changed = true
+        }
+        audio.wait_writable(producer.stream(), minimum_frames:480); producer.pump()
+    }
+    audio.wait(playing)
+}

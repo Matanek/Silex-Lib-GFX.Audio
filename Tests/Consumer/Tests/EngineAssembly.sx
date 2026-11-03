@@ -1,0 +1,178 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Synthesis.EngineParts
+use GFX.Audio.Processing
+use STD.Math
+
+func zeros(count:int) float32[] { var values:float32[] = []; for _ in 0...count { values.append(0.0) }
+    return values }
+func sound(parts:EngineParts.Assembly, rpm:float32 = 2_400.0) float32[] {
+    var engine = Synthesis.Engine.assemble(parts, Processing.Format(sample_rate:48_000, channels:1))
+    engine.set_state(rpm, throttle:0.7, load:0.6, boost:0.8, ramp_frames:0)
+    engine.set_character(1.0, 0.0, ramp_frames:0)
+    var result = zeros(48_000); engine.render(&result[0:result.count()])
+    for value in result { assert(Math.is_finite(value) && Math.abs(value) <= 0.4) }
+    return result
+}
+func residual(a:@float32[..], b:@float32[..]) float64 {
+    var aa:float64 = 0.0; var ab:float64 = 0.0; var bb:float64 = 0.0
+    for i in 12_000...a.count() { aa += a[i] as float64 * a[i] as float64; ab += a[i] as float64 * b[i] as float64; bb += b[i] as float64 * b[i] as float64 }
+    assert(aa > 0.00001 && bb > 0.00001)
+    return 1.0 - ab * ab / (aa * bb)
+}
+func power(samples:@float32[..], frequency:float64) float64 {
+    let coefficient = 2.0 * Math.cos(6.283185307179586 * frequency / 48_000.0)
+    var a:float64 = 0.0; var b:float64 = 0.0
+    for sample in samples { let next = sample as float64 + coefficient * a - b; b = a; a = next }
+    return a * a + b * b - coefficient * a * b
+}
+
+test "engine assemblies validate geometry topology and finite controls before mutation" {
+    var parts = EngineParts.v8(); parts.validate()
+    assert(parts.block.displacement_litres() > 7.4 && parts.block.displacement_litres() < 7.5)
+    assert(parts.compression_ratio() > 10.0 && parts.compression_ratio() < 10.5)
+    var engine = Synthesis.Engine.assemble(parts)
+    var witness = Synthesis.Engine.assemble(parts)
+    var snapshot = engine.parts()!; snapshot.exhausts[0].pipe.length_mm = 300.0
+    assert(engine.parts()!.exhausts[0].pipe.length_mm == parts.exhausts[0].pipe.length_mm, "parts snapshot must be independent")
+    var invalid = parts; invalid.block.bore_mm = Math.sqrt(-1.0)
+    match try engine.set_parts(invalid) { failure(error) => {}; success => { panic("NaN bore accepted") } }
+    invalid = parts; invalid.block.firing_order = [1, 1, 3, 4, 5, 6, 7, 8]
+    match try invalid.validate() { failure(error) => {}; success => { panic("duplicate firing order accepted") } }
+    invalid = parts; invalid.block.exhaust_banks[0] = 2
+    match try invalid.validate() { failure(error) => {}; success => { panic("missing exhaust accepted") } }
+    invalid = parts; invalid.block.firing_angles = [0.0, 90.0]
+    match try invalid.validate() { failure(error) => {}; success => { panic("truncated angles accepted") } }
+    invalid = parts; invalid.head.chamber_cc = 1.0
+    match try invalid.validate() { failure(error) => {}; success => { panic("excessive compression accepted") } }
+    match try engine.set_state(800.0, boost:1.1) { failure(error) => {}; success => { panic("invalid boost accepted") } }
+    var output = zeros(960); var expected = zeros(960)
+    match try engine.render(&output[0:1]) { failure(error) => {}; success => { panic("partial frame accepted") } }
+    engine.render(&output[0:960]); witness.render(&expected[0:960])
+    for i in 0...960 { assert(output[i] == expected[i], "rejected command changed the engine") }
+}
+
+test "each engine part changes timbre independently of overall gain" {
+    var base = EngineParts.v8(); base.turbo = EngineParts.Turbo()
+    base.mix = EngineParts.Mix(exhaust:0.8, intake:0.5, mechanics:0.3, turbo:0.5)
+    let reference = sound(base)
+    var variants:EngineParts.Assembly[] = []
+    var value = base; value.block.bore_mm = 90.0; variants.append(value)
+    value = base; value.block.stroke_mm = 70.0; variants.append(value)
+    value = base; value.block.cycle = EngineParts.Cycle.two_stroke; variants.append(value)
+    value = base; value.block.firing_order = [1, 2, 3, 4, 5, 6, 7, 8]; variants.append(value)
+    value = base; value.block.firing_angles = [0.0, 70.0, 180.0, 250.0, 360.0, 430.0, 540.0, 610.0]; variants.append(value)
+    value = base; value.head.chamber_cc = 140.0; variants.append(value)
+    value = base; value.head.burn_ms = 0.3; variants.append(value)
+    value = base; value.intake.runner.length_mm = 100.0; variants.append(value)
+    value = base; value.intake.runner.diameter_mm = 25.0; variants.append(value)
+    value = base; value.intake.airbox_litres = 2.0; variants.append(value)
+    value = base; value.intake.filter_absorption = 0.05; variants.append(value)
+    value = base; value.exhausts[0].header.length_mm = 200.0; variants.append(value)
+    value = base; value.exhausts[0].header.diameter_mm = 25.0; variants.append(value)
+    value = base; value.exhausts[0].pipe.length_mm = 500.0; variants.append(value)
+    value = base; value.exhausts[0].pipe.diameter_mm = 30.0; variants.append(value)
+    value = base; value.exhausts[0].silencer.volume_litres = 2.0; variants.append(value)
+    value = base; value.exhausts[0].silencer.absorption = 0.05; variants.append(value)
+    value = base; value.mechanics.block_mass_kg = 20.0; variants.append(value)
+    value = base; value.mechanics.damping = 0.05; variants.append(value)
+    value = base; value.turbo = null; variants.append(value)
+    value = base; value.turbo = EngineParts.Turbo(wheel_mm:80.0); variants.append(value)
+    value = base; value.turbo = EngineParts.Turbo(blade_count:4); variants.append(value)
+    value = base; value.turbo = EngineParts.Turbo(max_boost_bar:0.3); variants.append(value)
+    value = base; value.turbo = EngineParts.Turbo(spool_seconds:1.2); variants.append(value)
+    for i, variant in variants.indexed() {
+        let changed = sound(variant)
+        let difference = residual(@reference[0:reference.count()], @changed[0:changed.count()])
+        print("part ", i, " residual ", difference)
+        assert(difference > 0.000001, "part changed only the overall gain")
+    }
+}
+
+test "two stroke cycle doubles the firing cadence at equal rpm" {
+    var parts = EngineParts.motocross()
+    parts.mix = EngineParts.Mix(exhaust:1.0, intake:0.0, mechanics:0.0, turbo:0.0)
+    let four = sound(parts, 3_000.0)
+    parts.block.cycle = EngineParts.Cycle.two_stroke
+    let two = sound(parts, 3_000.0)
+    let four_fundamental = power(@four[24_000:48_000], 25.0)
+    let two_fundamental = power(@two[24_000:48_000], 25.0)
+    let two_firing = power(@two[24_000:48_000], 50.0)
+    assert(four_fundamental > 0.001 && two_firing > 0.001)
+    assert(two_fundamental < two_firing * 0.01, "two stroke retained a four stroke subharmonic")
+}
+
+test "queued part replacements and control ramps are independent of block boundaries" {
+    let parts = EngineParts.v8()
+    var first = Synthesis.Engine.assemble(parts); var second = Synthesis.Engine.assemble(parts)
+    var before = zeros(960); first.render(&before[0:960]); second.render(&before[0:960])
+    var next = parts; next.exhausts[0].pipe.length_mm = 500.0
+    first.set_parts(next, transition_frames:1_700); second.set_parts(next, transition_frames:1_700)
+    next.intake.filter_absorption = 0.05
+    first.set_parts(next, transition_frames:800); second.set_parts(next, transition_frames:800)
+    next.block.bore_mm = 100.0
+    first.set_parts(next, transition_frames:1_100); second.set_parts(next, transition_frames:1_100)
+    first.set_state(4_000.0, throttle:0.8, load:0.6, ramp_frames:4_000)
+    second.set_state(4_000.0, throttle:0.8, load:0.6, ramp_frames:4_000)
+    var expected = zeros(16_000); var actual = zeros(16_000)
+    first.render(&expected[0:16_000])
+    var start = 0
+    for end in [2, 126, 962, 3_400, 3_402, 5_000, 16_000] { second.render(&actual[start:end]); start = end }
+    for i in 0...16_000 { assert(expected[i] == actual[i], "block split changed a transition") }
+    first.reset(); second.reset()
+    first.render(&expected[0:16_000]); second.render(&actual[0:16_000])
+    for i in 0...16_000 { assert(expected[i] == actual[i], "reset changed reproducibility") }
+}
+
+test "fuel cut retains spinning intake and mechanics then full stop drains every branch" {
+    var parts = EngineParts.v8(); parts.turbo = EngineParts.Turbo()
+    var source = Synthesis.Engine.assemble(parts)
+    var samples = zeros(96_000)
+    source.set_state(3_000.0, throttle:0.7, load:0.6, boost:0.8, ramp_frames:0)
+    source.render(&samples[0:samples.count()])
+    source.set_state(3_000.0, throttle:0.4, fuel:0.0, ramp_frames:0)
+    source.set_mix(EngineParts.Mix(exhaust:0.0, intake:1.0, mechanics:0.0, turbo:0.0), ramp_frames:0)
+    source.render(&samples[0:samples.count()])
+    var energy:float64 = 0.0
+    for sample in samples { energy += sample as float64 * sample as float64 }
+    assert(energy > 0.001, "ignition cut incorrectly silenced rotating intake")
+    source.set_state(0.0, fuel:0.0, ramp_frames:0)
+    source.render(&samples[0:samples.count()]); source.render(&samples[0:samples.count()])
+    for sample in samples { assert(Math.abs(sample) < 0.00001, "acoustic tail failed to drain") }
+}
+
+
+test "identical linear exhausts cannot invent a mono bank signature" {
+    var parts = EngineParts.v8()
+    parts.exhausts[1] = parts.exhausts[0]
+    parts.mix = EngineParts.Mix(exhaust:1.0, intake:0.0, mechanics:0.0, turbo:0.0)
+    let original = sound(parts)
+    parts.block.firing_order = [1, 2, 3, 4, 5, 6, 7, 8]
+    let reordered = sound(parts)
+    assert(residual(@original[0:original.count()], @reordered[0:reordered.count()]) < 0.000001)
+}
+
+test "engine parts remain finite at supported format and geometry extremes" {
+    for rate in [22_050, 192_000] {
+        for channels in [1, 2] {
+            var parts = EngineParts.Assembly(block:EngineParts.Block(cylinders:16, bore_mm:86.0, stroke_mm:86.0),
+                head:EngineParts.Head(chamber_cc:55.0), turbo:EngineParts.Turbo(wheel_mm:20.0, blade_count:16))
+            parts.exhausts = [EngineParts.Exhaust(pipe:EngineParts.Pipe(length_mm:5_000.0, diameter_mm:250.0))]
+            var source = Synthesis.Engine.assemble(parts, Processing.Format(sample_rate:rate, channels:channels))
+            source.set_state(20_000.0, throttle:1.0, load:1.0, boost:1.0, ramp_frames:0)
+            var samples = zeros(4_800 * channels)
+            source.render(&samples[0:samples.count()])
+            for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 0.4) }
+        }
+    }
+}
+
+
+test "mix commands reach a queued assembly instead of being lost at activation" {
+    var parts = EngineParts.v8(); var source = Synthesis.Engine.assemble(parts)
+    var samples = zeros(960); source.render(&samples[0:960])
+    parts.exhausts[0].pipe.length_mm = 500.0; source.set_parts(parts)
+    parts.exhausts[0].pipe.length_mm = 900.0; source.set_parts(parts)
+    source.set_mix(EngineParts.Mix(exhaust:0.0, intake:0.0, mechanics:0.0, turbo:0.0), ramp_frames:0)
+    for _ in 0...30 { source.render(&samples[0:960]) }
+    for sample in samples { assert(sample == 0.0 as float32, "queued assembly lost the latest mix") }
+}

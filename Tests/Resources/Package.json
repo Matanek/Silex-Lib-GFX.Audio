@@ -2,7 +2,7 @@
   "name": "Resources",
   "version": "0.0.0",
   "sources": ".",
-  "dependencies": { "GFX.Audio": "^0.2.0", "STD": "^0.22.0" },
+  "dependencies": { "GFX.Audio": "^0.4.0", "STD": "^0.22.0" },
   "boundary": {
     "macos-arm64": { "providers": { "System": { "libraries": ["System"] } } },
     "macos-x64": { "providers": { "System": { "libraries": ["System"] } } }

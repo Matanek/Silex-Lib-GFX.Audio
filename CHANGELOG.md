@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Adds `Synthesis.Engine.assemble` and typed `EngineParts`: block/cycle/firing,
+  head, intake, pipes, silencers, mechanics and optional turbo. Game-controlled
+  RPM/load/fuel/boost, branch mixing and bounded crossfades for part replacement;
+  independent consumer, workshop demo and FR/EN guide. Retains the original
+  `Engine.create` prototype and the standalone engine-sim listening bench.
+
 - Adds `Synthesis.Engine`, a prototype four-stroke engine controlled by RPM,
   throttle, load and engine braking: two-exhaust V8 profile, 1–12 cylinders,
   adjustable noise texture and coloration, continuous ramps, RPM- and effort-dependent
