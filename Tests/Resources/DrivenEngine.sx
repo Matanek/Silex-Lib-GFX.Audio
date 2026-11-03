@@ -1,0 +1,54 @@
+use GFX.Audio.Engines
+use STD.Math
+use STD.Process
+use STD.Time.Stopwatch
+
+func main() {
+    let arguments = Process.arguments(); var directory = "Build/EngineLibrary-Monster-Package"
+    if arguments.count() > 1 { directory = arguments[1] }
+    var library = Engines.Library.open(directory)
+    var legacy = Engines.Library.open("Build/EngineLibrary-Gearing-Package")
+    match try legacy.driven_engine() { failure(error) => {}; success(value) => { panic("v2 bank accepted game RPM") } }
+    var engine = library.driven_engine(); var queued = library.driven_engine()
+    var a:float32[] = []; var b:float32[] = []
+    for _ in 0...960 { a.append(0.0); b.append(0.0) }
+    let initial = engine.state()
+    let invalid_states:Engines.OperatingState[] = [Engines.OperatingState(rpm:-1.0), Engines.OperatingState(rpm:7_001.0),
+        Engines.OperatingState(rpm:Math.sqrt(-1.0)), Engines.OperatingState(rpm:850.0, load:1.1)]
+    for invalid in invalid_states {
+        match try engine.set_state(invalid) { failure(error) => {}; success => { panic("invalid game state accepted") } }
+        assert(engine.state().rpm == initial.rpm && engine.state().running == initial.running)
+    }
+    var quiet:float64 = 0.0; var loaded:float64 = 0.0
+    let states:Engines.OperatingState[] = [Engines.OperatingState(rpm:850.0),
+        Engines.OperatingState(rpm:2_500.0, load:0.05), Engines.OperatingState(rpm:2_500.0, load:1.0),
+        Engines.OperatingState(rpm:4_500.0, load:0.8), Engines.OperatingState(rpm:1_200.0),
+        Engines.OperatingState(rpm:1_200.0, running:false), Engines.OperatingState(rpm:0.0, running:false)]
+    for index, state in states.indexed() {
+        engine.set_state(state); queued.set_state(state)
+        var energy:float64 = 0.0
+        for batch in 0...40 {
+            queued.enqueue()
+            for block in 0...4 {
+                engine.render(&a[0:960])
+                var clock = Stopwatch(); clock.start()
+                while !queued.render_ready(&b[0:960]) { assert(clock.get_elapsed_seconds() < 5.0) }
+                assert(engine.current_rpm() == queued.current_rpm())
+                for i in 0...960 {
+                    assert(Math.is_finite(a[i]) && a[i] == b[i], "game RPM sync/FIFO changed PCM")
+                    if batch >= 30 { energy += (a[i] as float64) * (a[i] as float64) }
+                }
+            }
+        }
+        assert(Math.abs(engine.current_rpm() - state.rpm) < 10.0, "crank speed does not follow game RPM")
+        if index == 1 { quiet = energy }
+        if index == 2 { loaded = energy }
+        print("Driven state passed: rpm=", state.rpm, " measured=", engine.current_rpm(), " load=", state.load, " energy=", energy)
+    }
+    assert(Math.abs(loaded - quiet) > 0.01, "effort must affect the signal at the same RPM")
+    engine.set_state(Engines.OperatingState(rpm:2_500.0, load:0.7)); engine.enqueue(); engine.reset()
+    assert(engine.pending_blocks() == 0 && engine.state().rpm == 2_500.0)
+    for _ in 0...80 { engine.render(&a[0:960]) }
+    assert(Math.abs(engine.current_rpm() - 2_500.0) < 10.0, "reset lost external mode")
+    print("Driven engine checks passed: validation, load, external RPM, contact, reset and bit-exact FIFO")
+}

@@ -43,10 +43,12 @@ public class Engine:Synthesis.Generator {
     private var ambience_gain:float32 = 0.0
     private var remaining:int = 0
     private let driving:bool
+    private var operating:OperatingState?
 
-    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?) {
+    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?, operating:OperatingState? = null) {
         self.root = root; self.profile = profile
         self.worker = worker
+        self.operating = operating
         self.custom_gearing = gearing; self.gearing = gearing ?? profile.gearing
         self.control = Controls(intake:profile.intake, transmission:transmission)
         self.driving = transmission != null
@@ -57,6 +59,7 @@ public class Engine:Synthesis.Generator {
         for _ in 0...960 { self.room_buffer.append(0.0) }
     }
     func controls() Controls { return self.control }
+    module func follow(state:OperatingState) { self.operating = state; self.control.running = state.running }
     func set_controls(value:Controls) Result<void, Error> {
         if (value.transmission != null) != self.driving || value.gear < 0 || value.gear > self.gearing.ratios.count() ||
             (!self.driving && (value.gear != 0 || value.braking)) {
@@ -90,7 +93,7 @@ public class Engine:Synthesis.Generator {
         while self.worker.in_flight() < depth {
             try self.worker.request(480, self.control.running, self.control.accelerating, self.control.texture,
                 self.control.exhaust, self.control.idle_rpm, self.control.load,
-                self.drive_mode(), self.control.gear, self.control.braking) else error { return Result<void, Error>.failure(error) }
+                self.drive_mode(), self.control.gear, self.control.braking, self.operating) else error { return Result<void, Error>.failure(error) }
         }
         return Result<void, Error>.success()
     }
@@ -112,7 +115,7 @@ public class Engine:Synthesis.Generator {
             try self.worker.render(&samples[offset:offset + frames * 2], &self.intake[0:frames],
                 self.control.running, self.control.accelerating, self.control.texture,
                 self.control.exhaust, self.control.idle_rpm, self.control.load,
-                self.drive_mode(), self.control.gear, self.control.braking) else error { return Result<void, Error>.failure(error) }
+                self.drive_mode(), self.control.gear, self.control.braking, self.operating) else error { return Result<void, Error>.failure(error) }
             self.process_output(&samples[offset:offset + frames * 2])
             self.remaining -= frames; offset += frames * 2
         }
@@ -134,7 +137,7 @@ public class Engine:Synthesis.Generator {
         }
     }
     func reset() {
-        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving, self.custom_gearing)
+        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving, self.custom_gearing, self.operating != null)
         self.remaining = 0; self.gain = 0.7; self.ambience_gain = 0.0
         self.airflow.reset(); self.room.reset()
     }

@@ -130,9 +130,44 @@ engine to change it. The demo stages edits until “Appliquer la démultiplicati
 with the engine and vehicle stopped. It also restores stock ratios. Demo edits
 use 0.001 precision; the API accepts `float64` values directly.
 
+## Supply RPM from a game
+
+When the game already owns engine state, use `driven_engine` instead of the free
+bench or its road vehicle. This path requires a v3 bank:
+
+```sx
+var engine = library.driven_engine("454")
+engine.set_state(Engines.OperatingState(rpm:2_500.0, load:0.65, running:true))
+```
+
+`OperatingState` supplies crankshaft RPM, positive combustion effort `load` in
+0..1, and ignition `running`. Load controls intake and audible effort at a given
+RPM: 0 means released throttle, 1 means maximum requested effort. Engine braking
+follows falling RPM and load; there is no contradictory acceleration command.
+Values must be finite, with RPM in 0..`profile.ceiling`. Invalid input is rejected
+before mutation. `state()` returns the requested state.
+
+Creation starts at zero RPM with ignition off. The game supplies startup,
+running and stopping phases. Cutting ignition retains pumping noise while the
+game imposes rotation; zero RPM with ignition off lets the acoustic tail decay.
+`current_rpm()` reports measured crank speed in the last received block.
+
+The same thermal simulator, profiles and bench processing produce the sound.
+A rotation constraint follows the supplied RPM with a slew limit of 20,000 RPM
+per second. Phases and histories persist across commands. This path simulates
+neither another gearbox nor another vehicle. `render`, `enqueue`, `render_ready`,
+`pending_blocks` and `reset` follow the rules below; `reset()` retains the target
+state. Existing v1/v2 banks still support the previous benches and reject
+`driven_engine`.
+
+The Silex-Examples MonsterTruck demo uses this input. Its driving model has no
+crankshaft or gearbox: an acoustic adapter reads rim rotation and wheel-motor
+effort without changing forces. That derivation remains a demo approximation.
+
 ## Produce blocks without blocking the interface
 
-The fixed format is 44,100 Hz stereo. `Engine` implements `Synthesis.Generator`.
+The fixed format is 44,100 Hz stereo. `Engine` and `DrivenEngine` implement
+`Synthesis.Generator`.
 `render()` fills complete frames in the supplied slice, in internal blocks of
 at most 480 frames. It waits for calculation; use it offline or in a production
 context that can wait.
@@ -163,8 +198,8 @@ profiles, including start, throttle, exhaust/texture/load changes, volume,
 ambience and shutdown. The old bench remains an independent witness.
 
 This version retains the full simulator and one process per engine. It allocates
-and uses IPC; it is unsuitable for a real-time audio callback. Heavy-application
-qualification and direct game-provided RPM control remain open. This extraction
-has been built and executed on macOS ARM64; other targets remain to be prepared
+and uses IPC; it is unsuitable for a real-time audio callback. External RPM has
+an offline-tested path; listening quality and heavy-application qualification
+remain open. This extraction has been built and executed on macOS ARM64; other targets remain to be prepared
 and tested. Installing the package alone does not yet supply prebuilt native
 banks for every OS.

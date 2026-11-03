@@ -35,6 +35,16 @@ protocol and stock settings are unchanged. The Silex API retains v1-bank
 compatibility for stock gearing and rejects overrides before spawning a v1
 renderer. Keep the executable, provenance and marker from the same build.
 
+Builds with `following-v1` use the `silex-engine-library-v3` marker and add
+`follow` / `follow-intake` modes. The existing seven-field request carries frame
+count, ignition, combustion effort (0..1), texture, convolution, external RPM
+(0..12000), and a reserved zero. Replies use magic `0x41563845` or `0x42563845`
+with the free-mode header and sample layout. An added rotational constraint
+tracks RPM without resetting crank angles; its requested rate changes by at
+most 200 RPM per 10 ms quantum. The regular free/road paths are unchanged.
+The public API validates the narrower profile-specific RPM ceiling and rejects
+older banks before launching an unsupported mode.
+
 `Catalog.py` maintains the Silex profile projection from `Profiles.json`.
 Keep profile ordering aligned with the native renderer. The original profiles,
 impulses and full thermal simulation are retained: this is an extraction, not a

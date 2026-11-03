@@ -6,6 +6,7 @@ def stage(source, output):
     source,output=Path(source).resolve(),Path(output).resolve()
     expected=json.loads((source/'Provenance.json').read_text())
     marker='silex-engine-library-v2\n' if 'gearing-v1' in expected.get('features',[]) else 'silex-engine-library-v1\n'
+    if 'following-v1' in expected.get('features',[]):marker='silex-engine-library-v3\n'
     if source==output:
         (output/'EngineLibrary.txt').write_text(marker)
         return

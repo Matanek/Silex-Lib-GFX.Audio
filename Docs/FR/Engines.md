@@ -133,11 +133,48 @@ jusqu’à « Appliquer la démultiplication », moteur et véhicule arrêtés. 
 permet aussi de rétablir les rapports d’origine ; ses réglages ont une précision
 de 0,001, tandis que l’API accepte les valeurs `float64` directement.
 
+## Fournir le régime depuis un jeu
+
+Quand le jeu possède déjà son état moteur, utiliser `driven_engine` plutôt que
+le banc libre ou son véhicule Route. Ce parcours exige une banque v3 :
+
+```sx
+var engine = library.driven_engine("454")
+engine.set_state(Engines.OperatingState(rpm:2_500.0, load:0.65, running:true))
+```
+
+`OperatingState` contient le régime du vilebrequin en tr/min, la charge positive
+de combustion `load` dans 0..1 et le contact `running`. La charge commande
+l’admission et l’effort audible à régime donné ; 0 représente les gaz relâchés,
+1 l’effort maximal demandé. Le frein moteur découle de la baisse de régime et
+de charge. Il n’y a pas de seconde commande d’accélération contradictoire.
+Toutes les valeurs doivent être finies ; le régime accepte 0..`profile.ceiling`.
+Une valeur invalide est refusée avant mutation. `state()` retourne la consigne.
+
+La création commence à régime nul, contact coupé. Le jeu fournit ensuite les
+phases de démarrage, de marche et d’arrêt. Couper le contact conserve les bruits
+de pompage tant que le jeu impose une rotation ; régime nul et contact coupé
+laissent s’écouler la queue acoustique. `current_rpm()` donne le régime mesuré
+dans le dernier bloc reçu.
+
+Le même simulateur thermique, les profils et les traitements du banc produisent
+le son. Une contrainte de rotation suit le régime fourni, avec une variation
+bornée à 20 000 tr/min par seconde. Les phases et les historiques persistent
+entre commandes. Ce parcours ne simule ni une autre boîte ni un autre véhicule.
+Les méthodes `render`, `enqueue`, `render_ready`, `pending_blocks` et `reset`
+suivent les règles ci-dessous ; `reset()` conserve la consigne. Les banques v1/v2
+restent utilisables pour les bancs précédents et refusent `driven_engine`.
+
+La démo MonsterTruck de Silex-Examples emploie cette entrée. Sa conduite n’a
+pas de vilebrequin ni de boîte : un adaptateur acoustique lit la rotation des
+jantes et l’effort de leur commande, sans changer les forces. Cette dérivation
+reste une approximation de démo.
+
 ## Produire des blocs sans bloquer l’interface
 
 Le format est fixe : 44 100 Hz, stéréo. `Engine` implémente
-`Synthesis.Generator`. `render()` calcule des frames complètes dans la tranche
-fournie, par blocs internes d’au plus 480 frames. Ce parcours attend le calcul :
+`Synthesis.Generator`, tout comme `DrivenEngine`. `render()` calcule des frames
+complètes dans la tranche fournie, par blocs internes d’au plus 480 frames. Ce parcours attend le calcul :
 l’utiliser hors ligne ou dans un contexte de production qui peut attendre.
 
 Pour une interface, `enqueue(depth:4)` demande au plus quatre blocs de 480
@@ -167,8 +204,8 @@ ambiance et coupure. L’ancien banc reste un témoin autonome.
 
 Cette version garde le simulateur complet et un processus par moteur. Elle
 alloue et communique entre processus ; elle n’est pas adaptée à un callback
-audio temps réel. La tenue dans une application lourde et le pilotage direct par
-le régime du jeu restent à qualifier. La construction et l’exécution de cette
-extraction sont vérifiées sur macOS ARM64 ; les autres cibles restent à préparer
+audio temps réel. Le régime externe dispose d’un parcours contrôlé hors ligne ;
+sa qualité à l’écoute et la tenue dans une application lourde restent à qualifier.
+La construction et l’exécution de cette extraction sont vérifiées sur macOS ARM64 ; les autres cibles restent à préparer
 et à tester. L’installation du package seule ne fournit pas encore une banque
 native préconstruite pour chaque OS.

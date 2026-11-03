@@ -1,0 +1,33 @@
+use GFX.Audio.Processing
+use GFX.Audio.Synthesis
+use STD.Error
+use STD.Math
+
+public struct OperatingState {
+    var rpm:float
+    var load:float = 0.0
+    var running:bool = true
+}
+
+// The game supplies crank speed and effort; no second vehicle is simulated.
+public class DrivenEngine:Synthesis.Generator {
+    let format:Processing.Format
+    let profile:Profile
+    private var source:Engine
+    private var requested:OperatingState = OperatingState(rpm:0.0, running:false)
+    module init(source:Engine) { self.source = source; self.format = source.format; self.profile = source.profile }
+    func state() OperatingState { return self.requested }
+    func set_state(value:OperatingState) Result<void, Error> {
+        if !Math.is_finite(value.rpm) || value.rpm < 0.0 || value.rpm > self.profile.ceiling || !engine_unit(value.load) {
+            return Result<void, Error>.failure(engine_error("finite RPM in 0..profile.ceiling and load in 0..1 required"))
+        }
+        self.requested = value; self.source.follow(value)
+        return Result<void, Error>.success()
+    }
+    func current_rpm() float { return self.source.current_rpm() }
+    func pending_blocks() int { return self.source.pending_blocks() }
+    func enqueue(depth:int = 4) Result<void, Error> { return try self.source.enqueue(depth) }
+    func render_ready(samples:&float32[..]) Result<bool, Error> { return try self.source.render_ready(&samples[0:samples.count()]) }
+    func render(samples:&float32[..]) Result<void, Error> { return try self.source.render(&samples[0:samples.count()]) }
+    func reset() { self.source.reset() }
+}

@@ -10,6 +10,7 @@ class EngineWorker {
     private var rpm:float = 0.0
     private var starting:bool = false
     private let driving:bool
+    private let following:bool
     private let header_size:int
     private let intake_mode:bool
     private let sample_bytes:int
@@ -22,7 +23,8 @@ class EngineWorker {
     private var request_count:int = 0
     private var reply:uint8[] = []
 
-    private init(child:Subprocess.Child, key:str, driving:bool) {
+    private init(child:Subprocess.Child, key:str, driving:bool, following:bool) {
+        self.following = following
         self.driving = driving; self.intake_mode = key == "cross4"
         var bytes = 2; if self.intake_mode { bytes = 4 }
         self.sample_bytes = bytes
@@ -30,11 +32,12 @@ class EngineWorker {
         self.header_size = size
         self.child = child
     }
-    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null) Result<EngineWorker, Error> {
+    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false) Result<EngineWorker, Error> {
         var script = root + "/Runtime/Profile-$(key).mr"
         var impulse = root + "/Runtime/Impulse-$(key).pcm"
         if profile == 0 { script = root + "/Runtime/Profile454.mr"; impulse = root + "/Runtime/Impulse.pcm" }
         var mode = "serve"; if driving { mode = "drive" }
+        if following { mode = "follow" }
         if key == "cross4" { mode += "-intake" }
         var arguments:str[] = [script, impulse, "unused", mode, "$(profile)"]
         if let value = gearing {
@@ -45,7 +48,7 @@ class EngineWorker {
             executable:root + "/RenderReference",
             arguments:arguments,
             current_directory:root + "/Runtime", inherit_environment:true, environment:[])) else error { return Result<EngineWorker, Error>.failure(error) }
-        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving))
+        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving, following))
     }
 
     func current_gear() int { return self.gear }
@@ -64,14 +67,18 @@ class EngineWorker {
     }
 
     func request(frames:int, running:bool, pedal:bool, texture:float,
-        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false) Result<void, Error> {
+        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null) Result<void, Error> {
         if frames <= 0 || frames > 960 || self.request_count == 4 {
             return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"engine-reference.request",
                 subject:null, detail:"1 to 960 frames and fewer than four outstanding requests required"))
         }
         var contact = 0; if running { contact = 1 }
         var acceleration = 0; if running && pedal { acceleration = 1 }
-        var text = "$(frames) $(contact) $(acceleration) $(texture) $(convolution) $(base_rpm) $(load)"
+        var text = ""
+        if let state = operating {
+            var fuel = 0; if state.running { fuel = 1 }
+            text = "$(frames) $(fuel) $(state.load) $(texture) $(convolution) $(state.rpm) 0"
+        } else { text = "$(frames) $(contact) $(acceleration) $(texture) $(convolution) $(base_rpm) $(load)" }
         if self.driving {
             var brake = 0; if braking { brake = 1 }
             text += " $(mode) $(gear) $(brake)"
@@ -120,6 +127,7 @@ class EngineWorker {
         let frames = self.request_frames[self.request_head]
         var magic = 878_065_733; if self.driving { magic = 911_620_165 }
         if self.intake_mode { magic = 945_174_597; if self.driving { magic = 961_951_813 } }
+        if self.following { magic = 1_096_169_541; if self.intake_mode { magic = 1_112_946_757 } }
         if samples.count() != frames * 2 || intake.count() != frames || self.reply.count() < self.header_size + frames * self.sample_bytes ||
             self.integer(@self.reply[0:self.reply.count()], 0) != magic ||
             self.integer(@self.reply[0:self.reply.count()], 4) != frames {
@@ -162,12 +170,12 @@ class EngineWorker {
     }
 
     func render(samples:&float32[..], intake:&float32[..], running:bool, pedal:bool, texture:float,
-        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false) Result<void, Error> {
+        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null) Result<void, Error> {
         if samples.count() % 2 != 0 || self.has_request() {
             return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"engine-reference.render",
                 subject:null, detail:"stereo frames and an empty request queue required"))
         }
-        try self.request(samples.count() / 2, running, pedal, texture, convolution, base_rpm, load, mode, gear, braking) else error {
+        try self.request(samples.count() / 2, running, pedal, texture, convolution, base_rpm, load, mode, gear, braking, operating) else error {
             return Result<void, Error>.failure(error)
         }
         var attempts = 0

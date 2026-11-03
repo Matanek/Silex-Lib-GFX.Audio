@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Adds `Engines.Library.driven_engine` and `OperatingState` for game-owned RPM
+  and combustion effort. Retains the validated thermal/acoustic chain with
+  continuous crank phases and bounded RPM changes, supports the existing FIFO
+  rendering path, and keeps stock free/road modes. New native v3 banks expose
+  this input; v1/v2 banks remain usable for their previous modes.
+
 - Adds `Engines.Gearing` for per-gear ratios and final drive at road-engine
   creation. Exposes stock and active gearing, validates before spawning,
   preserves configuration on reset, and retains unmodified stock PCM. New

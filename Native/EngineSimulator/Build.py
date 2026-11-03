@@ -131,7 +131,7 @@ def main():
         'dependencies': DEPENDENCIES, 'profiles': profiles,
         'local_profiles_sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((tools / 'Profiles').glob('*.mr'))},
         'catalog_sha256': hashlib.sha256((tools / 'Profiles.json').read_bytes()).hexdigest(), 'profile': 'assets/engines/chevrolet/engine_03_for_e1.mr',
-        'features': ['gearing-v1'], 'sample_rate': 44100, 'vector_fir': not args.scalar_fir,
+        'features': ['gearing-v1', 'following-v1'], 'sample_rate': 44100, 'vector_fir': not args.scalar_fir,
         'binary_sha256': hashlib.sha256((output / 'RenderReference').read_bytes()).hexdigest(),
         'impulse_sha256': hashlib.sha256(impulse.read_bytes()).hexdigest()}
     (output / 'Provenance.json').write_text(json.dumps(metadata, indent=2) + '\n')

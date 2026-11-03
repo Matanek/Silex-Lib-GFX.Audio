@@ -260,6 +260,72 @@ static void serveDrive(CapturingSimulator& simulator, Engine& engine, RoadVehicl
 
 // -----------------------------------------------------------------------------
 
+class FollowRotation : public atg_scs::Constraint {
+    public: explicit FollowRotation(Engine& engine) : atg_scs::Constraint(1, 1) {
+        m_bodies[0] = &engine.getOutputCrankshaft()->m_body;
+    }
+    public: void setRpm(double rpm) { speed = units::rpm(rpm); }
+    public: void calculate(Output* output, atg_scs::SystemState*) override {
+        output->J[0][0] = 0; output->J[0][1] = 0; output->J[0][2] = 1;
+        output->J_dot[0][0] = 0; output->J_dot[0][1] = 0; output->J_dot[0][2] = 0;
+        output->ks[0] = 0; output->kd[0] = 1; output->C[0] = 0;
+        output->v_bias[0] = speed;
+        output->limits[0][0] = -10000; output->limits[0][1] = 10000;
+    }
+    private: double speed { 0 };
+};
+
+// -----------------------------------------------------------------------------
+
+static void serveFollowing(CapturingSimulator& simulator, Engine& engine, FollowRotation& rotation, bool withIntake) {
+    simulator.captureIntake = withIntake;
+    simulator.intake.reserve(1024);
+    std::vector<uint16_t> intake;
+    intake.reserve(2048);
+    std::vector<int16_t> pending;
+    pending.reserve(2048);
+    int frames = 0, ignition = 0;
+    double load = 0, texture = 1, convolution = 1, target = 0, unused = 0;
+    double rpm = 0, opening = 0;
+    while (std::cin >> frames >> ignition >> load >> texture >> convolution >> target >> unused) {
+        if (frames < 1 || frames > 960 || ignition < 0 || ignition > 1 ||
+            !std::isfinite(load) || load < 0 || load > 1 || !std::isfinite(target) || target < 0 || target > 12000 ||
+            !std::isfinite(texture) || texture < 0 || texture > 1 || !std::isfinite(convolution) || convolution < 0 || convolution > 1 || unused != 0) {
+            throw std::runtime_error("Invalid externally driven engine state");
+        }
+        auto parameters = simulator.synthesizer().getAudioParameters();
+        parameters.airNoise = texture * engine.getInitialNoise();
+        parameters.inputSampleNoise = texture * engine.getInitialJitter();
+        parameters.convolution = convolution; parameters.volume = 0.5;
+        simulator.synthesizer().setAudioParameters(parameters);
+        while (pending.size() < static_cast<size_t>(frames)) {
+            rpm += std::clamp(target - rpm, -200.0, 200.0);
+            rotation.setRpm(rpm);
+            simulator.m_starterMotor.m_enabled = false;
+            simulator.m_dyno.m_enabled = false;
+            engine.getIgnitionModule()->m_enabled = ignition;
+            opening += 0.16 * ((ignition ? load : 0) - opening);
+            engine.setSpeedControl(opening);
+            renderQuantum(simulator, engine, pending, withIntake ? &intake : nullptr);
+        }
+        writeInteger(std::cout, withIntake ? 0x42563845 : 0x41563845, 4);
+        writeInteger(std::cout, frames, 4);
+        writeInteger(std::cout, static_cast<uint32_t>(std::round(std::max(0.0, engine.getRpm()) * 1000)), 4);
+        writeInteger(std::cout, 0, 4);
+        for (int index = 0; index < frames; ++index) {
+            writeInteger(std::cout, static_cast<uint16_t>(pending[index]), 2);
+            if (withIntake) writeInteger(std::cout, intake[index], 2);
+        }
+        std::cout.flush();
+        if (!std::cout) throw std::runtime_error("Reference output pipe closed");
+        pending.erase(pending.begin(), pending.begin() + frames);
+        if (withIntake) intake.erase(intake.begin(), intake.begin() + frames);
+    }
+    if (!std::cin.eof()) throw std::runtime_error("Malformed externally driven engine state");
+}
+
+// -----------------------------------------------------------------------------
+
 static void renderOffline(CapturingSimulator& simulator, Engine& engine, const std::string& prefix) {
     std::vector<int16_t> samples;
     std::ofstream states(prefix + ".csv");
@@ -308,9 +374,10 @@ int main(int count, char** arguments) {
             return 2;
         }
         const std::string mode = arguments[4];
-        const bool withIntake = mode == "serve-intake" || mode == "drive-intake";
+        const bool following = mode == "follow" || mode == "follow-intake";
+        const bool withIntake = mode == "serve-intake" || mode == "drive-intake" || mode == "follow-intake";
         const bool driving = mode == "drive" || mode == "drive-intake";
-        if (mode != "full" && mode != "base" && mode != "serve" && !driving && mode != "serve-intake") throw std::runtime_error("Unknown rendering mode");
+        if (mode != "full" && mode != "base" && mode != "serve" && !driving && !following && mode != "serve-intake") throw std::runtime_error("Unknown rendering mode");
         const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
         auto settings = profileSettings(profile);
         if (count > 6) {
@@ -400,7 +467,9 @@ int main(int count, char** arguments) {
             const double volume = engine.getExhaustSystem(index)->getImpulseResponse()->getVolume();
             synthesizer.initializeImpulseResponse(impulse.data(), impulse.size(), volume, index);
         }
-        if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
+        FollowRotation rotation(engine);
+        if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
+        else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
         else if (mode == "serve" || mode == "serve-intake") serve(simulator, engine, settings, profile, withIntake);
         else renderOffline(simulator, engine, arguments[3]);
         synthesizer.destroy();
