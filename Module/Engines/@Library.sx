@@ -1,0 +1,38 @@
+use STD.Error
+use STD.Error.Kind
+use STD.File
+use STD.Path
+use STD.Process
+
+// A deployed bank owns the validated profiles, impulse responses and renderer.
+public class Library {
+    private let root:str
+    private init(root:str) { self.root = root }
+    static func open(directory:str) Result<Library, Error> {
+        var root = directory
+        let absolute = try Path.is_absolute(root) else error { return Result<Library, Error>.failure(error) }
+        if !absolute {
+            let current = try Process.current_directory() else error { return Result<Library, Error>.failure(error) }
+            root = try Path.join(current, root) else error { return Result<Library, Error>.failure(error) }
+        }
+        let marker_path = try Path.join(root, "EngineLibrary.txt") else error { return Result<Library, Error>.failure(error) }
+        let marker = try File.read_text(marker_path, 128) else error { return Result<Library, Error>.failure(error) }
+        if marker != "silex-engine-library-v1\n" {
+            return Result<Library, Error>.failure(engine_error("unsupported engine library version"))
+        }
+        return Result<Library, Error>.success(Library(root))
+    }
+    func profiles() Profile[] { return engine_profiles() }
+    func engine(key:str = "454") Result<Engine, Error> {
+        for profile in engine_profiles() {
+            if profile.key == key {
+                var worker = try EngineWorker.open(self.root, profile.slot, profile.key) else error { return Result<Engine, Error>.failure(error) }
+                return Result<Engine, Error>.success(Engine(self.root, profile, worker))
+            }
+        }
+        return Result<Engine, Error>.failure(engine_error("unknown engine profile"))
+    }
+}
+func engine_error(detail:str) Error {
+    return Error(kind:Kind.invalid_input(), operation:"audio.engines", subject:null, detail:detail)
+}

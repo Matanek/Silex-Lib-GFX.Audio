@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Extracts the validated engine-bench chain into `GFX.Audio.Engines`: deployable
+  native engine library, eight profiles, original exhaust responses, measured
+  4T intake and output processing. Adds synchronous generation and bounded
+  asynchronous requests. The former autonomous bench remains the PCM oracle;
+  the parts workshop is experimental. Native bank construction/execution is
+  currently qualified on macOS ARM64, not yet distributed for every target.
+
 - Corrects part-based exhaust pressure radiation and smooths pulse attacks;
   adds per-outlet listening levels and preserves unequal bank contributions in
   the V8 preset. Tests distinguish isolated timbre changes from turbo level changes.

@@ -1,0 +1,24 @@
+use GFX.Audio.Engines
+use STD.Process
+use STD.Math
+
+// Offline consumer: the library directory can be deployed next to any application.
+func main() {
+    let arguments = Process.arguments()
+    var directory = "Build/EngineLibrary"
+    if arguments.count() > 1 { directory = arguments[1] }
+    var library = Engines.Library.open(directory)
+    assert(library.profiles().count() == 8)
+    var engine = library.engine("454")
+    var controls = engine.controls(); controls.running = true
+    engine.set_controls(controls)
+    var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+    var energy:float64 = 0.0
+    for block in 0...450 {
+        if block == 200 { controls.accelerating = true; engine.set_controls(controls) }
+        engine.render(&samples[0:960])
+        for sample in samples { assert(Math.is_finite(sample)); energy += sample as float64 * sample as float64 }
+    }
+    assert(engine.current_rpm() > 1_000.0 && energy > 0.001)
+    print("GFX.Audio engine library consumer passed; RPM=", engine.current_rpm())
+}

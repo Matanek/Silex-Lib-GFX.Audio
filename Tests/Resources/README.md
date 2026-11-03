@@ -109,3 +109,17 @@ that second condition. This witness exercises the real device-consumption path
 without speakers; it does not certify uninterrupted playback under arbitrary
 load or count historical native underruns. The fixture's `usleep` boundary is
 macOS-only test instrumentation, never part of the installed package.
+
+## Validated engine library lifecycle
+
+After preparing the bank described in the Engines guide:
+
+```sh
+silex compile Packages/GFX.Audio/Tests/Resources/EngineLibrary.sx --release -o Build/EngineLibrary-Checks
+Build/EngineLibrary-Checks /absolute/path/to/EngineLibrary
+```
+
+This exercises parameter rejection, four-block FIFO, identical synchronous and
+asynchronous PCM, reset with outstanding requests and process release. It opens
+no speakers. The native library must match the host. It is an IPC/lifecycle
+check, not an allocation-free callback or performance claim.

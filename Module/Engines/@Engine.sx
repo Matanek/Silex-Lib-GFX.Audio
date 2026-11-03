@@ -1,0 +1,110 @@
+use GFX.Audio.Synthesis
+use GFX.Audio.Processing
+use STD.Error
+use STD.Math
+
+public struct Controls {
+    var running:bool = false
+    var accelerating:bool = false
+    var idle_rpm:float = 800.0
+    var load:float = 0.2
+    var texture:float = 1.0
+    var exhaust:float = 1.0
+    var intake:float = 0.0
+    var volume:float = 0.7
+    var ambience:float = 0.0
+}
+
+// Retains the validated simulator and its original output processing.
+public class Engine:Synthesis.Generator {
+    let format:Processing.Format = Processing.Format(sample_rate:44_100, channels:2)
+    let profile:Profile
+    private let root:str
+    private var worker:EngineWorker
+    private var control:Controls
+    private var airflow:EngineAirflow
+    private var intake:float32[] = []
+    private var room:Processing.Reverb
+    private var room_buffer:float32[] = []
+    private var gain:float32 = 0.7
+    private var ambience_gain:float32 = 0.0
+    private var remaining:int = 0
+
+    module init(root:str, profile:Profile, worker:EngineWorker) {
+        self.root = root; self.profile = profile
+        self.worker = worker
+        self.control = Controls(intake:profile.intake)
+        self.airflow = EngineAirflow(self.format)
+        self.room = Processing.Reverb.create(self.format, room_size:0.18,
+            decay_seconds:0.22, damping:0.65, wet:1.0)
+        for _ in 0...480 { self.intake.append(0.0) }
+        for _ in 0...960 { self.room_buffer.append(0.0) }
+    }
+    func controls() Controls { return self.control }
+    func set_controls(value:Controls) Result<void, Error> {
+        if !Math.is_finite(value.idle_rpm) || value.idle_rpm < 700.0 || value.idle_rpm > 4_000.0 ||
+            !engine_unit(value.load) || !engine_unit(value.texture) || !engine_unit(value.exhaust) ||
+            !engine_unit(value.intake) || !engine_unit(value.volume) || !engine_unit(value.ambience) {
+            return Result<void, Error>.failure(engine_error("finite controls in 0..1 and idle RPM in 700..4000 required"))
+        }
+        self.control = value
+        return Result<void, Error>.success()
+    }
+    func current_rpm() float { return self.worker.current_rpm() }
+    func is_starting() bool { return self.worker.is_starting() }
+    func pending_blocks() int { return self.worker.in_flight() }
+    func enqueue(depth:int = 4) Result<void, Error> {
+        if depth < 1 || depth > 4 || self.remaining != 0 {
+            return Result<void, Error>.failure(engine_error("queue depth 1..4 and no partial synchronous block required"))
+        }
+        while self.worker.in_flight() < depth {
+            try self.worker.request(480, self.control.running, self.control.accelerating, self.control.texture,
+                self.control.exhaust, self.control.idle_rpm, self.control.load) else error { return Result<void, Error>.failure(error) }
+        }
+        return Result<void, Error>.success()
+    }
+    func render_ready(samples:&float32[..]) Result<bool, Error> {
+        if samples.count() != 960 { return Result<bool, Error>.failure(engine_error("ready rendering requires 480 stereo frames")) }
+        let ready = try self.worker.render_ready(&samples[0:960], &self.intake[0:480]) else error { return Result<bool, Error>.failure(error) }
+        if ready { self.process_output(&samples[0:960]) }
+        return Result<bool, Error>.success(ready)
+    }
+    func render(samples:&float32[..]) Result<void, Error> {
+        if samples.count() % 2 != 0 || self.pending_blocks() != 0 {
+            return Result<void, Error>.failure(engine_error("complete stereo frames and an empty asynchronous queue required"))
+        }
+        var offset = 0
+        while offset < samples.count() {
+            if self.remaining == 0 { self.remaining = 480 }
+            var frames = (samples.count() - offset) / 2
+            if frames > self.remaining { frames = self.remaining }
+            try self.worker.render(&samples[offset:offset + frames * 2], &self.intake[0:frames],
+                self.control.running, self.control.accelerating, self.control.texture,
+                self.control.exhaust, self.control.idle_rpm, self.control.load) else error { return Result<void, Error>.failure(error) }
+            self.process_output(&samples[offset:offset + frames * 2])
+            self.remaining -= frames; offset += frames * 2
+        }
+        return Result<void, Error>.success()
+    }
+    private func process_output(samples:&float32[..]) {
+        self.airflow.mix(&samples[0:samples.count()], @self.intake[0:samples.count() / 2], self.control.intake)
+        for i in 0...samples.count() { self.room_buffer[i] = samples[i] }
+        self.room.process(&self.room_buffer[0:samples.count()])
+        var frame = 0
+        while frame < samples.count() {
+            self.gain += 0.002 * (self.control.volume as float32 - self.gain)
+            self.ambience_gain += 0.002 * (self.control.ambience as float32 - self.ambience_gain)
+            for channel in 0...2 {
+                let index = frame + channel
+                samples[index] = self.gain * ((1.0 - self.ambience_gain) * samples[index] + self.ambience_gain * self.room_buffer[index])
+            }
+            frame += 2
+        }
+    }
+    func reset() {
+        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key)
+        self.remaining = 0; self.gain = 0.7; self.ambience_gain = 0.0
+        self.airflow.reset(); self.room.reset()
+    }
+}
+func engine_unit(value:float) bool { return Math.is_finite(value) && value >= 0.0 && value <= 1.0 }

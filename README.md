@@ -35,6 +35,9 @@ instruments keep their own musical settings and the existing extension protocol.
 
 [Play procedural guitar, violin and drums](Docs/EN/Catalogue.md), with named percussion keys and family-specific settings.
 
-[Build an engine sound from replaceable parts](Docs/EN/EngineParts.md): block,
-head, intake, exhaust, silencer, mechanics and optional turbo, driven by game
-state through `Synthesis.Engine.assemble`.
+[Reuse the validated engine-bench sounds](Docs/EN/Engines.md) through
+`GFX.Audio.Engines`: package-owned simulation, profiles, exhaust responses,
+intake and output processing, with an independently deployable native bank.
+
+The [parts workshop](Docs/EN/EngineParts.md) remains experimental and separate
+from the validated engine library.

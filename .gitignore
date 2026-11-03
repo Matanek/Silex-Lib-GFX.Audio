@@ -5,3 +5,6 @@
 # Package.json. Keep their manifests, checksums, patches, and licenses in Git.
 Boundary/*/*.a
 Boundary/*/*.lib
+
+# Local native preparation and Python validation tools.
+__pycache__/
