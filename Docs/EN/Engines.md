@@ -90,8 +90,10 @@ requested gear with the actual gear on every reply. After selecting N while
 moving, successive + commands can therefore reach a safe gear. A rejected
 request cannot engage later without a fresh command.
 
-To return to free mode, create another engine after switching off and stopping
-the vehicle. Changing transmission presence, requesting an out-of-range gear or
+To return to free mode, create another engine. The demo allows this as soon as
+ignition is off, without waiting for deceleration: the new context resets RPM
+and vehicle speed. Changing transmission presence on an existing engine,
+requesting an out-of-range gear or
 braking in free mode is rejected before mutation. `reset()` retains mode and
 controls while recreating the stopped context.
 

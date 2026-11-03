@@ -92,8 +92,10 @@ ne pas écraser cette demande avec le rapport réel à chaque réponse. Après N
 roulant, plusieurs appuis + peuvent ainsi atteindre un rapport sûr. Une demande
 refusée n’est pas engagée plus tard sans nouvelle commande.
 
-Pour revenir au mode libre, créer un autre moteur après extinction et arrêt du
-véhicule. Modifier la présence de transmission, demander un rapport hors plage
+Pour revenir au mode libre, créer un autre moteur. Dans la démo, ce changement
+est possible dès le contact coupé, sans attendre le ralentissement : le nouveau
+contexte réinitialise régime et vitesse. Modifier la présence de transmission
+sur le moteur existant, demander un rapport hors plage
 ou freiner en mode libre est refusé avant mutation. `reset()` conserve le mode
 choisi et les commandes, tout en recréant le contexte arrêté.
 
