@@ -10,6 +10,7 @@ class EnginePulse {
     private var body:float32 = 0.0
     private var front:float32 = 0.0
     private var tail:float32 = 0.0
+    private var opening:float32 = 0.0
     init(rate:float32, body_ms:float32, attack_ms:float32) {
         let attack = Math.min(body_ms * 0.6, attack_ms)
         self.body_decay = Math.exp(-1_000.0 / (rate * body_ms))
@@ -21,9 +22,10 @@ class EnginePulse {
     func next() float32 {
         let result = (1.0 + self.tail_weight) * self.body - self.front - self.tail_weight * self.tail
         self.body *= self.body_decay; self.front *= self.front_decay; self.tail *= self.tail_decay
-        return result
+        self.opening += (1.0 - self.front_decay) * (result - self.opening)
+        return self.opening
     }
-    func reset() { self.body = 0.0; self.front = 0.0; self.tail = 0.0 }
+    func reset() { self.body = 0.0; self.front = 0.0; self.tail = 0.0; self.opening = 0.0 }
 }
 
 // Passive round-trip delay; all storage and coefficients are prepared once.
@@ -61,6 +63,10 @@ class EngineExhaustPath {
     private let step:float32
     private let gain:float32
     private var low:float32 = 0.0
+    private let radiation_decay:float32
+    private let radiation_gain:float32
+    private var radiation:float32 = 0.0
+    private var previous:float32 = 0.0
     init(rate:float32, parts:EngineParts.Exhaust) {
         let a = parts.header.diameter_mm * parts.header.diameter_mm
         let b = parts.pipe.diameter_mm * parts.pipe.diameter_mm
@@ -73,15 +79,25 @@ class EngineExhaustPath {
         self.absorption = parts.silencer.absorption
         self.chamber = EngineResonance(rate, frequency, 0.6 + 2.5 * (1.0 - self.absorption))
         self.step = 1.0 - Math.exp(-6.28318530718 * Math.min(rate * 0.4, 700.0 + 5_500.0 * (1.0 - self.absorption)) / rate)
-        self.gain = Math.sqrt(50.0 / parts.pipe.diameter_mm)
+        self.gain = parts.outlet_level * Math.sqrt(50.0 / parts.pipe.diameter_mm)
+        // Pressure inside the pipe is not the radiated sound. A small outlet
+        // differentiates it below c/(2*pi*radius), with bounded high-frequency gain.
+        self.radiation_decay = Math.exp(-343_000.0 / (0.5 * parts.pipe.diameter_mm * rate))
+        self.radiation_gain = rate * 0.006
     }
     func next(pressure:float32) float32 {
         let input = self.pipe.next(self.header.next(pressure))
         let body = self.chamber.next(input)
         self.low += self.step * (input - self.low)
-        return self.gain * ((1.0 - 0.55 * self.absorption) * self.low + 0.65 * body)
+        let pressure_out = (1.0 - 0.55 * self.absorption) * self.low + 0.65 * body
+        self.radiation = pressure_out - self.previous + self.radiation_decay * self.radiation
+        self.previous = pressure_out
+        return self.gain * self.radiation_gain * self.radiation
     }
-    func reset() { self.header.reset(); self.pipe.reset(); self.chamber.reset(); self.low = 0.0 }
+    func reset() {
+        self.header.reset(); self.pipe.reset(); self.chamber.reset(); self.low = 0.0
+        self.previous = 0.0; self.radiation = 0.0
+    }
 }
 
 class EngineIntakePath {

@@ -91,3 +91,21 @@ crossfades and reset. Empty/growing-array controls must succeed. Preparation and
 part replacement are separately counted as allocating operations. Output and
 binary identities are retained in `.silex/engine-assembly-resource-validation.json`.
 Audio device, streaming transfer, UI and other threads are excluded.
+
+## Engine workshop reserve witness
+
+On macOS, from the workspace or owning Spec group, compile the private fixture
+and run it with SDL's silent driver:
+
+```sh
+silex compile Packages/GFX.Audio/Tests/Resources/EngineStreamReserve.sx --release -o Build/EngineStreamReserve
+SDL_AUDIO_DRIVER=dummy Build/EngineStreamReserve
+```
+
+It deliberately leaves 45 ms between refills. A 1,440-frame reserve at 48 kHz
+must exhibit empty-queue observations; the 4,800-frame reserve must not. Run on
+an otherwise available host: OS scheduling stalls longer than 100 ms invalidate
+that second condition. This witness exercises the real device-consumption path
+without speakers; it does not certify uninterrupted playback under arbitrary
+load or count historical native underruns. The fixture's `usleep` boundary is
+macOS-only test instrumentation, never part of the installed package.

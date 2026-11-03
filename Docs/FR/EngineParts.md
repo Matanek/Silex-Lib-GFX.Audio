@@ -28,8 +28,11 @@ engine.set_state(3_200.0, throttle:0.8, load:0.6)
 ```
 
 `EngineParts.v8()` fournit un V8 7,45 L à deux lignes, ordre cross-plane.
-Les deux lignes ont des longueurs distinctes, ce qui préserve un caractère de
-bancs jusque dans le mélange mono.
+Les deux lignes ont des longueurs distinctes et des niveaux de sortie 1 et 0,1,
+comme le banc Chevrolet de référence. `Exhaust.outlet_level` (0..1, défaut 1)
+règle la contribution entendue de chaque sortie ; ce niveau d’écoute ne modifie
+pas la cylindrée ou l’allumage. Deux lignes identiques au même niveau peuvent
+effacer le rythme propre à chaque banc dans leur somme mono.
 `EngineParts.motocross()` et `motocross(Cycle.two_stroke)` fournissent des monos
 450 quatre temps et 250 deux temps approximatifs. Ces assemblages sont des
 points de départ acoustiques, sans certification du son d’un véhicule commercial.
@@ -39,14 +42,14 @@ Le générateur implémente `Synthesis.Generator` : il remplit des blocs PCM,
 compose avec les traitements existants et alimente un `StreamProducer`.
 Les commandes et le rendu appartiennent au même thread applicatif.
 
-## Donner à chaque pièce un rôle audible
+## Comprendre le rôle de chaque pièce
 
 | Pièce | Paramètres | Effet du modèle |
 | --- | --- | --- |
 | `Block` | Cylindres, alésage/course en mm, cycle, allumage, bancs | Cylindrée, cadence et distribution des impulsions |
 | `Head` | Chambre en cm³, combustion en ms | Compression géométrique, énergie et forme de la détente |
 | `Intake` | Conduit `Pipe`, boîte à air en litres, absorption du filtre | Propagation, résonance et bruit pulsé d’aspiration |
-| `Exhaust` | Collecteur et ligne `Pipe`, `Silencer` | Retards, réflexions aux changements de section et coloration |
+| `Exhaust` | Collecteur et ligne `Pipe`, `Silencer`, `outlet_level` | Retards, réflexions aux changements de section et coloration |
 | `Silencer` | Litres et absorption 0..1 | Résonance de chambre et atténuation des aigus |
 | `Mechanics` | Masse du bloc en kg, amortissement 0..1 | Résonance du bloc et atténuation des vibrations |
 | `Turbo` facultatif | Roue en mm, pales, pression maximale en bar, inertie en secondes | Sifflement, montée/retombée et bruit de décharge |
@@ -133,7 +136,13 @@ explicites, un par événement, commencent à zéro et croissent dans le cycle d
 une liste vide les dirige tous vers le premier.
 
 Le format accepte 22 050..192 000 Hz, mono ou stéréo. Graine et amplitude 0..1
-sont fixées à la préparation. La sortie est bornée par l’amplitude, par défaut
+sont fixées à la préparation. La pression des lignes est transformée en rayonnement de sortie, avec une
+attaque lissée et un gain de restitution commun. Ce modèle reste une
+approximation acoustique ; il ne garantit pas un effet perceptible de chaque
+petite variation de géométrie dans un mélange complet. Isoler la voie et comparer
+à régime/charge identiques avant de juger un réglage.
+
+La sortie est bornée par l’amplitude, par défaut
 0,4. Les blocs doivent contenir des frames complètes ; un bloc vide n’avance rien.
 L’ancienne fabrique `Engine.create()` conserve le prototype quatre temps et son
 contrat [existant](Engine.md) ; `assemble` ouvre le parcours par pièces.

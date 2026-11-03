@@ -28,7 +28,11 @@ engine.set_state(3_200.0, throttle:0.8, load:0.6)
 ```
 
 `EngineParts.v8()` provides a 7.45 L cross-plane V8 with two exhausts.
-The paths have different lengths, preserving a bank signature in the mono mix.
+The paths have different lengths and outlet levels of 1 and 0.1, matching the
+Chevrolet reference bench. `Exhaust.outlet_level` (0..1, default 1) controls the
+heard contribution of each outlet; this listening level does not change
+displacement or firing. Identical paths at equal levels can erase the individual
+bank rhythm when summed to mono.
 `EngineParts.motocross()` and `motocross(Cycle.two_stroke)` provide approximate
 450 four-stroke and 250 two-stroke singles. These are acoustic starting points,
 not certified reproductions of commercial vehicles. `Assembly()` also provides
@@ -38,14 +42,14 @@ The engine implements `Synthesis.Generator`: render PCM blocks, compose existing
 processors or feed a `StreamProducer`. Commands and rendering belong to the
 same application thread.
 
-## Give every part an audible role
+## Understand each part’s role
 
 | Part | Parameters | Model effect |
 | --- | --- | --- |
 | `Block` | Cylinders, bore/stroke in mm, cycle, firing, banks | Displacement, pulse cadence and distribution |
 | `Head` | Chamber in cc, combustion in ms | Geometric compression, release energy and shape |
 | `Intake` | Runner `Pipe`, airbox litres, filter absorption | Propagation, resonance and pulsed intake noise |
-| `Exhaust` | Header and main `Pipe`, `Silencer` | Delays, area-change reflections and coloration |
+| `Exhaust` | Header and main `Pipe`, `Silencer`, `outlet_level` | Delays, area-change reflections and coloration |
 | `Silencer` | Litres and absorption 0..1 | Chamber resonance and high-frequency attenuation |
 | `Mechanics` | Block mass in kg, damping 0..1 | Block resonance and vibration attenuation |
 | Optional `Turbo` | Wheel mm, blades, maximum bar, inertia seconds | Whistle, spool response and release noise |
@@ -129,7 +133,12 @@ cylinder to a zero-based exhaust index; an empty list routes all cylinders to
 the first exhaust.
 
 Formats span 22,050..192,000 Hz, mono or stereo. Seed and amplitude 0..1 are fixed
-at preparation. Output is bounded by amplitude, default 0.4. Blocks must contain
+at preparation. Pipe pressure is transformed into outlet radiation with a smoothed attack and
+a common playback calibration. This remains an acoustic approximation; it does
+not guarantee that every small geometry change will be audible in a full mix.
+Isolate the branch and compare at identical RPM/load before judging a control.
+
+Output is bounded by amplitude, default 0.4. Blocks must contain
 complete frames; empty blocks do not advance state. The original `Engine.create()`
 factory retains the four-stroke prototype and its [existing contract](Engine.md);
 `assemble` opens the parts-based path.

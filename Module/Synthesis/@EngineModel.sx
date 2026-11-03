@@ -156,7 +156,7 @@ class EngineModel:Generator {
             var left:float32 = 0.0; var right:float32 = 0.0
             for bank in 0...self.exhausts.count() {
                 let pressure = self.pulses[bank].next()
-                let value = self.exhausts[bank].next(pressure * (1.0 + roughness * 0.12 * self.noise())) * exhaust_gain
+                let value = self.exhausts[bank].next(pressure) * exhaust_gain
                 var pan:float32 = 0.0
                 if self.exhausts.count() > 1 { pan = 2.0 * bank as float32 / (self.exhausts.count() - 1) as float32 - 1.0 }
                 left += value * (0.75 - 0.25 * pan); right += value * (0.75 + 0.25 * pan)

@@ -32,6 +32,7 @@ public struct Exhaust {
     var header:Pipe = Pipe(length_mm:600.0, diameter_mm:40.0)
     var pipe:Pipe = Pipe()
     var silencer:Silencer = Silencer()
+    var outlet_level:float32 = 1.0
 }
 public struct Intake {
     var runner:Pipe = Pipe(length_mm:300.0, diameter_mm:40.0)
@@ -79,7 +80,7 @@ public struct Assembly {
         }
         for exhaust in self.exhausts {
             if !pipe_valid(exhaust.header) || !pipe_valid(exhaust.pipe) ||
-                !in_range(exhaust.silencer.volume_litres, 0.05, 100.0) || !unit(exhaust.silencer.absorption) {
+                !in_range(exhaust.silencer.volume_litres, 0.05, 100.0) || !unit(exhaust.silencer.absorption) || !unit(exhaust.outlet_level) {
                 return Result<void, Error>.failure(invalid("invalid exhaust pipe or silencer"))
             }
         }
@@ -129,7 +130,7 @@ public func v8() Assembly {
     let exhaust = Exhaust(header:Pipe(length_mm:700.0, diameter_mm:45.0),
         pipe:Pipe(length_mm:1_800.0, diameter_mm:65.0), silencer:Silencer(volume_litres:14.0, absorption:0.7))
     var second = exhaust
-    second.header.length_mm = 760.0; second.pipe.length_mm = 1_950.0
+    second.header.length_mm = 760.0; second.pipe.length_mm = 1_950.0; second.outlet_level = 0.1
     return Assembly(block:Block(cylinders:8, bore_mm:108.0, stroke_mm:101.6,
         firing_order:[1, 8, 4, 3, 6, 5, 7, 2], exhaust_banks:[0, 1, 0, 1, 0, 1, 0, 1]),
         head:Head(chamber_cc:100.0, burn_ms:1.8), exhausts:[exhaust, second],

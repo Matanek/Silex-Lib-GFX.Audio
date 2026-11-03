@@ -1,0 +1,32 @@
+use GFX.Audio
+use GFX.Audio.Synthesis
+use GFX.Audio.Synthesis.EngineParts
+use Interop.C
+use Interop.Boundary
+
+// Run with SDL_AUDIO_DRIVER=dummy: exercise real consumption without speakers.
+let pause = C.function<func(uint32) int32>(library:Boundary.System, name:"usleep")
+func exercise(capacity:int) int {
+    var audio = Audio()
+    var source = Synthesis.Engine.assemble(EngineParts.v8())
+    var producer = Synthesis.StreamProducer.create(audio, source, 480_000,
+        block_frames:480, capacity_frames:capacity)
+    for _ in 0...(capacity / 480) { producer.pump() }
+    let playing = audio.play(producer.stream())
+    var empty = 0
+    for cycle in 0...30 {
+        pause(45_000 as uint32)
+        if audio.stream_info(producer.stream()).starved { empty++ }
+        for refill in 0...(capacity / 480 + 1) {
+            if audio.stream_info(producer.stream()).queued_frames >= capacity { break }
+            producer.pump()
+        }
+    }
+    audio.stop(playing)
+    print("capacity=$(capacity), empty observations=$(empty)")
+    return empty
+}
+func main() {
+    assert(exercise(1_440) > 0)
+    assert(exercise(4_800) == 0)
+}

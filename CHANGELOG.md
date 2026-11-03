@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Corrects part-based exhaust pressure radiation and smooths pulse attacks;
+  adds per-outlet listening levels and preserves unequal bank contributions in
+  the V8 preset. Tests distinguish isolated timbre changes from turbo level changes.
+
 - Adds `Synthesis.Engine.assemble` and typed `EngineParts`: block/cycle/firing,
   head, intake, pipes, silencers, mechanics and optional turbo. Game-controlled
   RPM/load/fuel/boost, branch mixing and bounded crossfades for part replacement;

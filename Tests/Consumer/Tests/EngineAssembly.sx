@@ -44,6 +44,10 @@ test "engine assemblies validate geometry topology and finite controls before mu
     match try invalid.validate() { failure(error) => {}; success => { panic("truncated angles accepted") } }
     invalid = parts; invalid.head.chamber_cc = 1.0
     match try invalid.validate() { failure(error) => {}; success => { panic("excessive compression accepted") } }
+    invalid = parts; invalid.exhausts[0].outlet_level = 1.01
+    match try invalid.validate() { failure(error) => {}; success => { panic("invalid outlet level accepted") } }
+    invalid.exhausts[0].outlet_level = Math.sqrt(-1.0)
+    match try invalid.validate() { failure(error) => {}; success => { panic("NaN outlet level accepted") } }
     match try engine.set_state(800.0, boost:1.1) { failure(error) => {}; success => { panic("invalid boost accepted") } }
     var output = zeros(960); var expected = zeros(960)
     match try engine.render(&output[0:1]) { failure(error) => {}; success => { panic("partial frame accepted") } }
@@ -51,10 +55,9 @@ test "engine assemblies validate geometry topology and finite controls before mu
     for i in 0...960 { assert(output[i] == expected[i], "rejected command changed the engine") }
 }
 
-test "each engine part changes timbre independently of overall gain" {
+test "engine geometry changes the isolated branch and turbo pressure controls its level" {
     var base = EngineParts.v8(); base.turbo = EngineParts.Turbo()
     base.mix = EngineParts.Mix(exhaust:0.8, intake:0.5, mechanics:0.3, turbo:0.5)
-    let reference = sound(base)
     var variants:EngineParts.Assembly[] = []
     var value = base; value.block.bore_mm = 90.0; variants.append(value)
     value = base; value.block.stroke_mm = 70.0; variants.append(value)
@@ -81,7 +84,26 @@ test "each engine part changes timbre independently of overall gain" {
     value = base; value.turbo = EngineParts.Turbo(max_boost_bar:0.3); variants.append(value)
     value = base; value.turbo = EngineParts.Turbo(spool_seconds:1.2); variants.append(value)
     for i, variant in variants.indexed() {
-        let changed = sound(variant)
+        var isolated_base = base; var isolated_variant = variant
+        var mix = EngineParts.Mix(exhaust:1.0, intake:0.0, mechanics:0.0, turbo:0.0)
+        if i >= 7 && i <= 10 { mix = EngineParts.Mix(exhaust:0.0, intake:1.0, mechanics:0.0, turbo:0.0) }
+        if i >= 17 && i <= 18 { mix = EngineParts.Mix(exhaust:0.0, intake:0.0, mechanics:1.0, turbo:0.0) }
+        if i >= 19 { mix = EngineParts.Mix(exhaust:0.0, intake:0.0, mechanics:0.0, turbo:1.0) }
+        isolated_base.mix = mix; isolated_variant.mix = mix
+        let reference = sound(isolated_base); let changed = sound(isolated_variant)
+        if i == 19 {
+            for sample in changed { assert(sample == 0.0 as float32, "absent turbo produced a whistle") }
+            continue
+        }
+        if i == 22 {
+            var original_energy:float64 = 0.0; var changed_energy:float64 = 0.0
+            for frame in 12_000...48_000 {
+                original_energy += reference[frame] as float64 * reference[frame] as float64
+                changed_energy += changed[frame] as float64 * changed[frame] as float64
+            }
+            assert(changed_energy < original_energy * 0.5, "lower turbo pressure did not reduce its level")
+            continue
+        }
         let difference = residual(@reference[0:reference.count()], @changed[0:changed.count()])
         print("part ", i, " residual ", difference)
         assert(difference > 0.000001, "part changed only the overall gain")
@@ -149,6 +171,20 @@ test "identical linear exhausts cannot invent a mono bank signature" {
     parts.block.firing_order = [1, 2, 3, 4, 5, 6, 7, 8]
     let reordered = sound(parts)
     assert(residual(@original[0:original.count()], @reordered[0:reordered.count()]) < 0.000001)
+}
+
+test "outlet balance preserves the cross plane rhythm in mono and zero mutes a path" {
+    var parts = EngineParts.v8()
+    assert(parts.exhausts[0].outlet_level == 1.0 as float32 && parts.exhausts[1].outlet_level == 0.1 as float32)
+    parts.mix = EngineParts.Mix(exhaust:1.0, intake:0.0, mechanics:0.0, turbo:0.0)
+    let original = sound(parts, 900.0)
+    parts.block.firing_order = [1, 2, 3, 4, 5, 6, 7, 8]
+    let reordered = sound(parts, 900.0)
+    assert(residual(@original[0:original.count()], @reordered[0:reordered.count()]) > 0.01,
+        "outlet summing erased the bank firing rhythm")
+    for i in 0...parts.exhausts.count() { parts.exhausts[i].outlet_level = 0.0 }
+    let muted = sound(parts, 900.0)
+    for sample in muted { assert(sample == 0.0 as float32) }
 }
 
 test "engine parts remain finite at supported format and geometry extremes" {
