@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Exposes the validated bench's optional automatic/manual transmission through
+  `Engines.Library.engine`, with gear requests, braking and synchronized road
+  telemetry. Preserves neutral, overspeed rejection and safe reengagement;
+  free-bench generation remains the default.
+
 - Extracts the validated engine-bench chain into `GFX.Audio.Engines`: deployable
   native engine library, eight profiles, original exhaust responses, measured
   4T intake and output processing. Adds synchronous generation and bounded

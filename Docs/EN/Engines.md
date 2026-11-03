@@ -38,7 +38,7 @@ engine.set_controls(controls)
 ```
 
 `library.profiles()` returns profiles with keys, labels, redline, tachometer
-scale, idle speed and stroke cycle. Current keys are `454`, `berline`, `sport`,
+scale, idle speed, gear count and stroke cycle. Current keys are `454`, `berline`, `sport`,
 `cruiser`, `moto`, `truck`, `cross4` and `cross2`. Unknown profiles are rejected.
 Each engine owns its simulation, phases and histories independently.
 
@@ -50,8 +50,8 @@ meaning:
 | --- | --- |
 | `running` | Ignition and starter; switching off retains rotation and acoustic tails |
 | `accelerating` | Open or released throttle with the native engine response |
-| `idle_rpm` | Bench holding speed, 700..4,000 RPM; not an instantaneous RPM override |
-| `load` | Bench load, 0..1 |
+| `idle_rpm` | Free-bench holding speed, 700..4,000 RPM; not an instantaneous RPM override |
+| `load` | Free-bench load, 0..1 |
 | `texture` | Profile air noise and jitter, 0..1; physical combustion remains variable |
 | `exhaust` | Raw/filtered exhaust blend, 0..1, with existing balancing and smoothing |
 | `intake` | Measured `cross4` aspiration, 0..1; other profiles do not supply this branch |
@@ -62,6 +62,38 @@ Initial values match the bench: ignition off, throttle released, holding speed
 800, load 0.2, texture/exhaust 1, volume 0.7 and ambience 0. Initial intake comes
 from the profile. The application owns shortcuts, focus loss and vehicle-change
 guards.
+
+## Add an optional transmission
+
+`library.engine("454")` retains free-bench mode by default. To reuse the original
+bench's road context:
+
+```sx
+var engine = library.engine("454", transmission:Engines.Transmission.automatic)
+var controls = engine.controls()
+controls.running = true
+controls.accelerating = true
+engine.set_controls(controls)
+```
+
+Transmission presence is fixed at creation. `controls.transmission` can then
+switch between `Transmission.automatic` and `Transmission.manual` without
+recreating the simulation. In manual mode, `controls.gear` is the requested gear,
+from 0 (neutral) to `engine.profile.gears`. `controls.braking` brakes the bench
+vehicle. Road mode retains the existing longitudinal calculations without a
+Physics dependency. Free-bench holding speed and load do not drive road mode.
+
+`engine.drive_state()` returns `null` in free mode. In road mode it supplies
+`gear`, `speed_kmh`, `shifting`, `shift_refused` and `shift_count` for the last
+received block. Overspeed protection may reject a request: do not overwrite the
+requested gear with the actual gear on every reply. After selecting N while
+moving, successive + commands can therefore reach a safe gear. A rejected
+request cannot engage later without a fresh command.
+
+To return to free mode, create another engine after switching off and stopping
+the vehicle. Changing transmission presence, requesting an out-of-range gear or
+braking in free mode is rejected before mutation. `reset()` retains mode and
+controls while recreating the stopped context.
 
 ## Produce blocks without blocking the interface
 

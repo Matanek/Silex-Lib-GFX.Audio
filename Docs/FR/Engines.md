@@ -39,7 +39,7 @@ engine.set_controls(controls)
 ```
 
 `library.profiles()` fournit les profils, leurs clés, libellés, zone rouge,
-échelle de compte-tours, régime de ralenti et cycle. Les clés actuelles sont
+échelle de compte-tours, régime de ralenti, nombre de rapports et cycle. Les clés actuelles sont
 `454`, `berline`, `sport`, `cruiser`, `moto`, `truck`, `cross4` et `cross2`.
 Un profil inconnu est refusé. Un moteur possède ses phases, sa simulation et ses
 historiques indépendamment des autres moteurs.
@@ -52,8 +52,8 @@ les effets du banc validé :
 | --- | --- |
 | `running` | Contact, démarreur puis fonctionnement ; couper laisse évoluer rotation et queues acoustiques |
 | `accelerating` | Gaz ouverts ou relâchés, avec la réponse native du moteur |
-| `idle_rpm` | Régime de maintien du banc, 700..4 000 tr/min ; ce n’est pas une imposition instantanée du régime |
-| `load` | Charge du banc, 0..1 |
+| `idle_rpm` | Banc libre : régime de maintien, 700..4 000 tr/min ; ce n’est pas une imposition instantanée du régime |
+| `load` | Charge du banc libre, 0..1 |
 | `texture` | Bruit d’air et jitter du profil, 0..1 ; la combustion physique conserve ses variations |
 | `exhaust` | Mélange échappement brut/filtré, 0..1, avec équilibrage et lissage existants |
 | `intake` | Aspiration mesurée du `cross4`, 0..1 ; les autres profils ne fournissent pas cette voie |
@@ -64,6 +64,38 @@ Les valeurs initiales sont celles du banc : contact coupé, gaz relâchés,
 maintien 800, charge 0,2, texture et échappement 1, volume 0,7, ambiance 0.
 L’aspiration initiale vient du profil. L’application possède les raccourcis,
 la perte de focus et les gardes de changement de véhicule.
+
+## Ajouter une boîte de vitesses optionnelle
+
+Le mode libre reste le défaut de `library.engine("454")`. Pour reprendre le
+contexte Route du banc validé :
+
+```sx
+var engine = library.engine("454", transmission:Engines.Transmission.automatic)
+var controls = engine.controls()
+controls.running = true
+controls.accelerating = true
+engine.set_controls(controls)
+```
+
+La présence de la transmission est fixée à la création. `controls.transmission`
+passe ensuite de `Transmission.automatic` à `Transmission.manual` sans recréer
+la simulation. En manuel, `controls.gear` est le rapport demandé, de 0 (point mort)
+à `engine.profile.gears`. `controls.braking` freine le véhicule du banc. Le mode
+Route conserve les calculs longitudinaux existants ; il ne dépend pas de Physics.
+Régime de maintien et charge du banc libre ne pilotent pas ce contexte Route.
+
+`engine.drive_state()` retourne `null` en mode libre ; en Route, il fournit
+`gear`, `speed_kmh`, `shifting`, `shift_refused` et `shift_count`, synchronisés
+sur le dernier bloc reçu. Le rapport demandé peut être refusé pour surrégime :
+ne pas écraser cette demande avec le rapport réel à chaque réponse. Après N en
+roulant, plusieurs appuis + peuvent ainsi atteindre un rapport sûr. Une demande
+refusée n’est pas engagée plus tard sans nouvelle commande.
+
+Pour revenir au mode libre, créer un autre moteur après extinction et arrêt du
+véhicule. Modifier la présence de transmission, demander un rapport hors plage
+ou freiner en mode libre est refusé avant mutation. `reset()` conserve le mode
+choisi et les commandes, tout en recréant le contexte arrêté.
 
 ## Produire des blocs sans bloquer l’interface
 

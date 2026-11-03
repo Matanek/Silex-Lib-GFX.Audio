@@ -23,11 +23,11 @@ public class Library {
         return Result<Library, Error>.success(Library(root))
     }
     func profiles() Profile[] { return engine_profiles() }
-    func engine(key:str = "454") Result<Engine, Error> {
+    func engine(key:str = "454", transmission:Transmission? = null) Result<Engine, Error> {
         for profile in engine_profiles() {
             if profile.key == key {
-                var worker = try EngineWorker.open(self.root, profile.slot, profile.key) else error { return Result<Engine, Error>.failure(error) }
-                return Result<Engine, Error>.success(Engine(self.root, profile, worker))
+                var worker = try EngineWorker.open(self.root, profile.slot, profile.key, transmission != null) else error { return Result<Engine, Error>.failure(error) }
+                return Result<Engine, Error>.success(Engine(self.root, profile, worker, transmission))
             }
         }
         return Result<Engine, Error>.failure(engine_error("unknown engine profile"))

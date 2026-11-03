@@ -3,6 +3,14 @@ use GFX.Audio.Processing
 use STD.Error
 use STD.Math
 
+public enum Transmission { automatic; manual }
+public struct DriveState {
+    let gear:int
+    let speed_kmh:float
+    let shifting:bool
+    let shift_refused:bool
+    let shift_count:int
+}
 public struct Controls {
     var running:bool = false
     var accelerating:bool = false
@@ -13,6 +21,9 @@ public struct Controls {
     var intake:float = 0.0
     var volume:float = 0.7
     var ambience:float = 0.0
+    var transmission:Transmission? = null
+    var gear:int = 0
+    var braking:bool = false
 }
 
 // Retains the validated simulator and its original output processing.
@@ -29,11 +40,13 @@ public class Engine:Synthesis.Generator {
     private var gain:float32 = 0.7
     private var ambience_gain:float32 = 0.0
     private var remaining:int = 0
+    private let driving:bool
 
-    module init(root:str, profile:Profile, worker:EngineWorker) {
+    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?) {
         self.root = root; self.profile = profile
         self.worker = worker
-        self.control = Controls(intake:profile.intake)
+        self.control = Controls(intake:profile.intake, transmission:transmission)
+        self.driving = transmission != null
         self.airflow = EngineAirflow(self.format)
         self.room = Processing.Reverb.create(self.format, room_size:0.18,
             decay_seconds:0.22, damping:0.65, wet:1.0)
@@ -42,6 +55,10 @@ public class Engine:Synthesis.Generator {
     }
     func controls() Controls { return self.control }
     func set_controls(value:Controls) Result<void, Error> {
+        if (value.transmission != null) != self.driving || value.gear < 0 || value.gear > self.profile.gears ||
+            (!self.driving && (value.gear != 0 || value.braking)) {
+            return Result<void, Error>.failure(engine_error("transmission presence is fixed at creation; valid gear and road mode required"))
+        }
         if !Math.is_finite(value.idle_rpm) || value.idle_rpm < 700.0 || value.idle_rpm > 4_000.0 ||
             !engine_unit(value.load) || !engine_unit(value.texture) || !engine_unit(value.exhaust) ||
             !engine_unit(value.intake) || !engine_unit(value.volume) || !engine_unit(value.ambience) {
@@ -52,6 +69,16 @@ public class Engine:Synthesis.Generator {
     }
     func current_rpm() float { return self.worker.current_rpm() }
     func is_starting() bool { return self.worker.is_starting() }
+    func drive_state() DriveState? {
+        if !self.driving { return null }
+        let flags = self.worker.drive_flags()
+        return DriveState(gear:self.worker.current_gear(), speed_kmh:self.worker.speed_kmh(),
+            shifting:flags % 2 == 1, shift_refused:flags >= 2, shift_count:self.worker.shift_count())
+    }
+    private func drive_mode() int {
+        if self.control.transmission == Transmission.manual { return 2 }
+        return 1
+    }
     func pending_blocks() int { return self.worker.in_flight() }
     func enqueue(depth:int = 4) Result<void, Error> {
         if depth < 1 || depth > 4 || self.remaining != 0 {
@@ -59,7 +86,8 @@ public class Engine:Synthesis.Generator {
         }
         while self.worker.in_flight() < depth {
             try self.worker.request(480, self.control.running, self.control.accelerating, self.control.texture,
-                self.control.exhaust, self.control.idle_rpm, self.control.load) else error { return Result<void, Error>.failure(error) }
+                self.control.exhaust, self.control.idle_rpm, self.control.load,
+                self.drive_mode(), self.control.gear, self.control.braking) else error { return Result<void, Error>.failure(error) }
         }
         return Result<void, Error>.success()
     }
@@ -80,7 +108,8 @@ public class Engine:Synthesis.Generator {
             if frames > self.remaining { frames = self.remaining }
             try self.worker.render(&samples[offset:offset + frames * 2], &self.intake[0:frames],
                 self.control.running, self.control.accelerating, self.control.texture,
-                self.control.exhaust, self.control.idle_rpm, self.control.load) else error { return Result<void, Error>.failure(error) }
+                self.control.exhaust, self.control.idle_rpm, self.control.load,
+                self.drive_mode(), self.control.gear, self.control.braking) else error { return Result<void, Error>.failure(error) }
             self.process_output(&samples[offset:offset + frames * 2])
             self.remaining -= frames; offset += frames * 2
         }
@@ -102,7 +131,7 @@ public class Engine:Synthesis.Generator {
         }
     }
     func reset() {
-        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key)
+        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving)
         self.remaining = 0; self.gain = 0.7; self.ambience_gain = 0.0
         self.airflow.reset(); self.room.reset()
     }
