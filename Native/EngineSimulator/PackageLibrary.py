@@ -4,12 +4,13 @@ from pathlib import Path
 
 def stage(source, output):
     source,output=Path(source).resolve(),Path(output).resolve()
+    expected=json.loads((source/'Provenance.json').read_text())
+    marker='silex-engine-library-v2\n' if 'gearing-v1' in expected.get('features',[]) else 'silex-engine-library-v1\n'
     if source==output:
-        (output/'EngineLibrary.txt').write_text('silex-engine-library-v1\n')
+        (output/'EngineLibrary.txt').write_text(marker)
         return
     if output.exists():
         raise SystemExit('Refusing to overwrite an engine library: '+str(output))
-    expected=json.loads((source/'Provenance.json').read_text())
     binary=source/'RenderReference'
     if hashlib.sha256(binary.read_bytes()).hexdigest()!=expected['binary_sha256']:
         raise SystemExit('Renderer does not match its provenance')
@@ -20,7 +21,7 @@ def stage(source, output):
             destination=output/'Runtime'/path.relative_to(source/'Runtime')
             destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(path,destination)
     shutil.copy2(source/'Provenance.json',output/'Provenance.json')
-    (output/'EngineLibrary.txt').write_text('silex-engine-library-v1\n')
+    (output/'EngineLibrary.txt').write_text(marker)
     files={str(p.relative_to(output)):hashlib.sha256(p.read_bytes()).hexdigest()
            for p in sorted(output.rglob('*')) if p.is_file()}
     (output/'Library-Manifest.json').write_text(json.dumps(dict(schema=1,host=platform.platform(),files=files),indent=2)+'\n')

@@ -30,6 +30,8 @@ public struct Controls {
 public class Engine:Synthesis.Generator {
     let format:Processing.Format = Processing.Format(sample_rate:44_100, channels:2)
     let profile:Profile
+    let gearing:Gearing
+    private let custom_gearing:Gearing?
     private let root:str
     private var worker:EngineWorker
     private var control:Controls
@@ -42,9 +44,10 @@ public class Engine:Synthesis.Generator {
     private var remaining:int = 0
     private let driving:bool
 
-    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?) {
+    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?) {
         self.root = root; self.profile = profile
         self.worker = worker
+        self.custom_gearing = gearing; self.gearing = gearing ?? profile.gearing
         self.control = Controls(intake:profile.intake, transmission:transmission)
         self.driving = transmission != null
         self.airflow = EngineAirflow(self.format)
@@ -55,7 +58,7 @@ public class Engine:Synthesis.Generator {
     }
     func controls() Controls { return self.control }
     func set_controls(value:Controls) Result<void, Error> {
-        if (value.transmission != null) != self.driving || value.gear < 0 || value.gear > self.profile.gears ||
+        if (value.transmission != null) != self.driving || value.gear < 0 || value.gear > self.gearing.ratios.count() ||
             (!self.driving && (value.gear != 0 || value.braking)) {
             return Result<void, Error>.failure(engine_error("transmission presence is fixed at creation; valid gear and road mode required"))
         }
@@ -131,7 +134,7 @@ public class Engine:Synthesis.Generator {
         }
     }
     func reset() {
-        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving)
+        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving, self.custom_gearing)
         self.remaining = 0; self.gain = 0.7; self.ambience_gain = 0.0
         self.airflow.reset(); self.room.reset()
     }

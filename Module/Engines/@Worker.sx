@@ -30,15 +30,20 @@ class EngineWorker {
         self.header_size = size
         self.child = child
     }
-    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false) Result<EngineWorker, Error> {
+    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null) Result<EngineWorker, Error> {
         var script = root + "/Runtime/Profile-$(key).mr"
         var impulse = root + "/Runtime/Impulse-$(key).pcm"
         if profile == 0 { script = root + "/Runtime/Profile454.mr"; impulse = root + "/Runtime/Impulse.pcm" }
         var mode = "serve"; if driving { mode = "drive" }
         if key == "cross4" { mode += "-intake" }
+        var arguments:str[] = [script, impulse, "unused", mode, "$(profile)"]
+        if let value = gearing {
+            arguments.append("--gearing"); arguments.append("$(value.final_drive)")
+            for ratio in value.ratios { arguments.append("$(ratio)") }
+        }
         var child = try Subprocess.spawn(Subprocess.SpawnCommand(
             executable:root + "/RenderReference",
-            arguments:[script, impulse, "unused", mode, "$(profile)"],
+            arguments:arguments,
             current_directory:root + "/Runtime", inherit_environment:true, environment:[])) else error { return Result<EngineWorker, Error>.failure(error) }
         return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving))
     }

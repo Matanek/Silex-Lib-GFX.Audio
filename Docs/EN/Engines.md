@@ -79,7 +79,7 @@ engine.set_controls(controls)
 Transmission presence is fixed at creation. `controls.transmission` can then
 switch between `Transmission.automatic` and `Transmission.manual` without
 recreating the simulation. In manual mode, `controls.gear` is the requested gear,
-from 0 (neutral) to `engine.profile.gears`. `controls.braking` brakes the bench
+from 0 (neutral) to `engine.gearing.ratios.count()`. `controls.braking` brakes the bench
 vehicle. Road mode retains the existing longitudinal calculations without a
 Physics dependency. Free-bench holding speed and load do not drive road mode.
 
@@ -94,6 +94,39 @@ To return to free mode, create another engine after switching off and stopping
 the vehicle. Changing transmission presence, requesting an out-of-range gear or
 braking in free mode is rejected before mutation. `reset()` retains mode and
 controls while recreating the stopped context.
+
+## Choose the gearing
+
+Each profile exposes its original values in `profile.gearing`: `ratios` lists
+the gears from first to last, and `final_drive` is the final-drive ratio. Without
+an override, these values and the bench output remain unchanged.
+`engine.gearing` describes the configuration actually in use.
+
+For shorter gearing, supply a configuration when creating the road engine.
+Fragment after opening `library`:
+
+```sx
+var gearing = Engines.Gearing(ratios:[4.0, 2.5, 1.8, 1.3, 1.0], final_drive:4.5)
+var engine = library.engine("454", transmission:Engines.Transmission.manual, gearing:gearing)
+```
+
+Ratios and final drive accept finite `float64` values in 0.05..20. A gearbox
+contains 1..12 strictly decreasing ratios. Neutral remains command 0, with no
+entry in the list. `validate()` checks a configuration; `library.engine()` also
+validates it before creating an engine. An override requires a rebuilt v2
+native bank. Existing v1 banks remain usable with stock gearing and reject
+custom configurations.
+
+A larger numeric ratio shortens the gearing: at the same wheel speed with the
+clutch engaged, engine RPM increases. Behavior also depends on engine torque,
+the vehicle and drag; a taller gear does not guarantee more acceleration or
+speed. Automatic shifting uses the configured gearbox. The stock gear count
+remains available as `profile.gears`.
+
+The configuration is fixed at creation and retained by `reset()`. Create another
+engine to change it. The demo stages edits until “Appliquer la démultiplication”,
+with the engine and vehicle stopped. It also restores stock ratios. Demo edits
+use 0.001 precision; the API accepts `float64` values directly.
 
 ## Produce blocks without blocking the interface
 

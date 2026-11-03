@@ -81,7 +81,7 @@ engine.set_controls(controls)
 La présence de la transmission est fixée à la création. `controls.transmission`
 passe ensuite de `Transmission.automatic` à `Transmission.manual` sans recréer
 la simulation. En manuel, `controls.gear` est le rapport demandé, de 0 (point mort)
-à `engine.profile.gears`. `controls.braking` freine le véhicule du banc. Le mode
+à `engine.gearing.ratios.count()`. `controls.braking` freine le véhicule du banc. Le mode
 Route conserve les calculs longitudinaux existants ; il ne dépend pas de Physics.
 Régime de maintien et charge du banc libre ne pilotent pas ce contexte Route.
 
@@ -96,6 +96,40 @@ Pour revenir au mode libre, créer un autre moteur après extinction et arrêt d
 véhicule. Modifier la présence de transmission, demander un rapport hors plage
 ou freiner en mode libre est refusé avant mutation. `reset()` conserve le mode
 choisi et les commandes, tout en recréant le contexte arrêté.
+
+## Choisir la démultiplication
+
+Chaque profil fournit ses valeurs d’origine dans `profile.gearing` : `ratios`
+contient les rapports de la première à la dernière vitesse, `final_drive` le
+rapport de pont. Sans option supplémentaire, ces valeurs et le rendu du banc
+restent inchangés. `engine.gearing` décrit la configuration réellement utilisée.
+
+Pour une boîte plus courte, fournir la configuration à la création du moteur
+Route. Fragment après ouverture de `library` :
+
+```sx
+var gearing = Engines.Gearing(ratios:[4.0, 2.5, 1.8, 1.3, 1.0], final_drive:4.5)
+var engine = library.engine("454", transmission:Engines.Transmission.manual, gearing:gearing)
+```
+
+Les rapports et le pont acceptent des `float64` finis dans 0,05..20. La boîte
+contient 1..12 rapports strictement décroissants ; le point mort reste la
+commande 0, sans entrée dans la liste. `validate()` permet de vérifier une
+configuration ; `library.engine()` la vérifie aussi avant de créer le moteur.
+Cette option exige une banque native reconstruite au format v2. Les banques v1
+restent utilisables avec les rapports d’origine et refusent une personnalisation.
+
+Un rapport numérique plus élevé raccourcit la démultiplication : à vitesse de
+roue égale et embrayage engagé, le régime augmente. Le comportement dépend aussi
+du couple moteur, du véhicule et de sa traînée ; allonger un rapport ne garantit
+pas un gain d’accélération ou de vitesse. Le passage automatique utilise la boîte
+configurée. Le nombre de rapports d’origine reste disponible dans `profile.gears`.
+
+La configuration est fixée à la création et conservée par `reset()`. Pour la
+modifier, créer un autre moteur. La démo garde les changements en préparation
+jusqu’à « Appliquer la démultiplication », moteur et véhicule arrêtés. Elle
+permet aussi de rétablir les rapports d’origine ; ses réglages ont une précision
+de 0,001, tandis que l’API accepte les valeurs `float64` directement.
 
 ## Produire des blocs sans bloquer l’interface
 

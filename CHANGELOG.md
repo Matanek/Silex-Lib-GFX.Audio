@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- Adds `Engines.Gearing` for per-gear ratios and final drive at road-engine
+  creation. Exposes stock and active gearing, validates before spawning,
+  preserves configuration on reset, and retains unmodified stock PCM. New
+  native banks support gearing overrides; v1 banks remain usable with defaults.
+
 - Exposes the validated bench's optional automatic/manual transmission through
   `Engines.Library.engine`, with gear requests, braking and synchronized road
   telemetry. Preserves neutral, overspeed rejection and safe reengagement;

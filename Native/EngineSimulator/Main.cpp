@@ -290,9 +290,20 @@ static void renderOffline(CapturingSimulator& simulator, Engine& engine, const s
 
 // -----------------------------------------------------------------------------
 
+static double gearingValue(const char* text) {
+    std::size_t consumed = 0;
+    const double value = std::stod(text, &consumed);
+    if (consumed != std::string(text).size() || !std::isfinite(value) || value < 0.05 || value > 20.0) {
+        throw std::runtime_error("Gearing values must be finite and in 0.05..20");
+    }
+    return value;
+}
+
+// -----------------------------------------------------------------------------
+
 int main(int count, char** arguments) {
     try {
-        if (count != 5 && count != 6) {
+        if (count != 5 && count != 6 && (count < 9 || count > 20)) {
             std::fprintf(stderr, "Usage: RenderReference profile.mr impulse.pcm output-prefix full|base|serve|drive|serve-intake|drive-intake [profile-index]\n");
             return 2;
         }
@@ -300,8 +311,22 @@ int main(int count, char** arguments) {
         const bool withIntake = mode == "serve-intake" || mode == "drive-intake";
         const bool driving = mode == "drive" || mode == "drive-intake";
         if (mode != "full" && mode != "base" && mode != "serve" && !driving && mode != "serve-intake") throw std::runtime_error("Unknown rendering mode");
-        const int profile = count == 6 ? std::stoi(arguments[5]) : 0;
-        const auto settings = profileSettings(profile);
+        const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
+        auto settings = profileSettings(profile);
+        if (count > 6) {
+            if (!driving || std::string(arguments[6]) != "--gearing") {
+                throw std::runtime_error("Gearing configuration requires road mode");
+            }
+            settings.diff = gearingValue(arguments[7]);
+            settings.ratios.clear();
+            for (int i = 8; i < count; ++i) {
+                const double ratio = gearingValue(arguments[i]);
+                if (!settings.ratios.empty() && ratio >= settings.ratios.back()) {
+                    throw std::runtime_error("Gear ratios must decrease from first to last");
+                }
+                settings.ratios.push_back(ratio);
+            }
+        }
         const auto impulse = readImpulse(arguments[2]);
         std::srand(42);
         es_script::Compiler compiler;

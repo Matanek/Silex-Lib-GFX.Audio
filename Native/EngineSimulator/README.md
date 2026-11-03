@@ -27,6 +27,14 @@ file hashes. It refuses an existing destination. No app-specific path is built
 into the public API. The source build also contains a valid library marker, so
 it can be used directly during development.
 
+New builds advertise `gearing-v1` in their provenance and use the
+`silex-engine-library-v2` marker. They accept a cold road-mode override after
+the profile index: `--gearing FINAL_DRIVE FIRST_RATIO ... LAST_RATIO` (1..12
+strictly decreasing ratios, each value finite and in 0.05..20). The streaming
+protocol and stock settings are unchanged. The Silex API retains v1-bank
+compatibility for stock gearing and rejects overrides before spawning a v1
+renderer. Keep the executable, provenance and marker from the same build.
+
 `Catalog.py` maintains the Silex profile projection from `Profiles.json`.
 Keep profile ordering aligned with the native renderer. The original profiles,
 impulses and full thermal simulation are retained: this is an extraction, not a
