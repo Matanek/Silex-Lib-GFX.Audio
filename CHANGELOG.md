@@ -2,8 +2,6 @@
 
 ## [Unreleased]
 
-- `Music.Melody.prepare` borrows the mutable mix and directly accepts Audio resources from application systems, while preserving calls from owned mixes.
-
 - `output_format()` exposes the mix sample rate and channels; `render_f32le()` provides owned offline PCM for encoder integrations, without normalization or timeline changes.
 
 - Adds `Engines.Library.driven_engine` and `OperatingState` for game-owned RPM

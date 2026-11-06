@@ -128,22 +128,13 @@ test "device output format is observable but cannot render offline PCM" {
     match (try audio.render_f32le(0)) { success(bytes) => { panic("device PCM render accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
 }
 
-func prepare_borrowed(audio:&Audio) Audio.Sound {
+func prepare_owned(audio:Audio) Audio.Sound {
     var melody = Music.Melody.create([Music.Note(key:69, beats:0.1)])
     return melody.prepare(audio, using:Music.Timbre.sine())
 }
-test "melody preparation accepts a mutable application resource borrow" {
+test "melody preparation preserves owned mixer parameters" {
     var audio = offline()
-    let sound = prepare_borrowed(audio)
-    let playing = audio.play(sound)
-    assert(audio.render(100).count() == 100)
-}
-
-test "melody preparation preserves owned handle calls" {
-    var audio = offline()
-    var selected = audio
-    var melody = Music.Melody.create([Music.Note(key:69, beats:0.1)])
-    let sound = melody.prepare(selected)
+    let sound = prepare_owned(audio)
     let playing = audio.play(sound)
     assert(audio.render(100).count() == 100)
 }
