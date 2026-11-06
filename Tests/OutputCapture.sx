@@ -104,3 +104,35 @@ test "output capture retains its source and validates reads" {
     assert(samples.frames > 0)
     source.stop()
 }
+
+test "output captures isolate independent Audio mixes and their master gains" {
+    var first_audio = Audio()
+    var second_audio = Audio()
+    let first_format = first_audio.output_format()
+    let second_format = second_audio.output_format()
+    var first_samples:float32[] = []
+    var second_samples:float32[] = []
+    for index in 0...256 * first_format.channels { first_samples.append(0.5) }
+    for index in 0...256 * second_format.channels { second_samples.append(0.5) }
+    let first_sound = first_audio.create(@first_samples[0:first_samples.count()], sample_rate:first_format.sample_rate, channels:first_format.channels)
+    let second_sound = second_audio.create(@second_samples[0:second_samples.count()], sample_rate:second_format.sample_rate, channels:second_format.channels)
+    first_audio.set_master_volume(0.5)
+    let first_playing = first_audio.play(first_sound, Audio.Playback(repeat:Audio.Repeat.forever()))
+    let second_playing = second_audio.play(second_sound, Audio.Playback(repeat:Audio.Repeat.forever()))
+    var first_source = capture(first_audio)
+    var second_source = capture(second_audio)
+    let first = block(first_source)
+    let second = block(second_source)
+    for index in 0...first.bytes.count() / 4 {
+        assert(first.bytes[index * 4 + 2] == 128 as uint8 && first.bytes[index * 4 + 3] == 62 as uint8)
+    }
+    for index in 0...second.bytes.count() / 4 {
+        assert(second.bytes[index * 4 + 2] == 0 as uint8 && second.bytes[index * 4 + 3] == 63 as uint8)
+    }
+    first_source.stop()
+    let remaining = block(second_source)
+    assert(remaining.frames > 0 && !second_source.statistics().stopped)
+    second_source.stop()
+    first_audio.stop(first_playing)
+    second_audio.stop(second_playing)
+}
