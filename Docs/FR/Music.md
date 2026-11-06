@@ -26,6 +26,8 @@ du jeu ; chaque `audio.play(victory)` crée ensuite une lecture indépendante,
 sans recalculer la mélodie. `audio.wait` sert seulement à cette démonstration
 autonome : le jeu poursuit sa boucle après `play`.
 
+La préparation emprunte le mix via `audio:&Audio` sans le conserver. Elle est donc utilisable depuis un système recevant une ressource Audio mutable, ainsi que depuis une variable Audio possédée.
+
 ## Écrire les notes par leur nom
 
 `Music.Key.C5`, `Cs5` et `Bb4` sont des constantes `int`, directement utilisables

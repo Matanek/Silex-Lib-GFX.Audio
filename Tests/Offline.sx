@@ -1,3 +1,4 @@
+use GFX.Audio.Music
 use GFX.Audio
 use STD.Error.Kind
 use STD.Math
@@ -103,4 +104,46 @@ test "offline owned stream survives device shutdown and retains its pending fram
             assert(audio.release(stream))
         }
     }
+}
+
+test "offline output format and floating PCM bytes preserve sample representation" {
+    var audio = offline(rate:44_100, channels:2)
+    let format = audio.output_format()
+    assert(format.sample_rate == 44_100 && format.channels == 2)
+    var input:float32[] = [0.5 as float32, -0.5 as float32]
+    let sound = audio.create(@input[0:2], sample_rate:44_100, channels:2)
+    let playing = audio.play(sound)
+    var bytes = audio.render_f32le(1)
+    assert(bytes.count() == 8)
+    let expected:uint8[8] = [0, 0, 0, 63, 0, 0, 0, 191]
+    for index in 0...8 { assert(bytes[index] == expected[index]) }
+    assert(audio.rendered_frames() == 1)
+    assert(audio.render_f32le(0).is_empty())
+}
+
+test "device output format is observable but cannot render offline PCM" {
+    var audio = Audio()
+    let format = audio.output_format()
+    assert(format.sample_rate > 0 && format.channels > 0)
+    match (try audio.render_f32le(0)) { success(bytes) => { panic("device PCM render accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
+}
+
+func prepare_borrowed(audio:&Audio) Audio.Sound {
+    var melody = Music.Melody.create([Music.Note(key:69, beats:0.1)])
+    return melody.prepare(audio, using:Music.Timbre.sine())
+}
+test "melody preparation accepts a mutable application resource borrow" {
+    var audio = offline()
+    let sound = prepare_borrowed(audio)
+    let playing = audio.play(sound)
+    assert(audio.render(100).count() == 100)
+}
+
+test "melody preparation preserves owned handle calls" {
+    var audio = offline()
+    var selected = audio
+    var melody = Music.Melody.create([Music.Note(key:69, beats:0.1)])
+    let sound = melody.prepare(selected)
+    let playing = audio.play(sound)
+    assert(audio.render(100).count() == 100)
 }

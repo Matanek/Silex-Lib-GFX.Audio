@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- `Music.Melody.prepare` emprunte le mix mutable et accepte directement les ressources Audio des systèmes applicatifs, tout en conservant les appels depuis un mix possédé.
+
+- `output_format()` expose la fréquence et les canaux du mix ; `render_f32le()` fournit le PCM hors ligne possédé pour les intégrations d’encodeurs, sans normalisation ni changement de chronologie.
+
 - Ajoute `Synthesis.Engine`, prototype de moteur quatre temps commandé par
   régime, accélérateur, charge et frein moteur : profil V8 à deux échappements,
   1 à 12 cylindres, texture bruitée et coloration réglables, rampes continues,

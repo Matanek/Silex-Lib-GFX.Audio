@@ -70,7 +70,7 @@ public class Melody {
         }
         return Result<void, Error>.success()
     }
-    private func finish(audio:Audio, samples:&float32[..], format:Processing.Format, effects:Processing.Processor[]) Result<Audio.Sound, Error> {
+    private func finish(audio:&Audio, samples:&float32[..], format:Processing.Format, effects:Processing.Processor[]) Result<Audio.Sound, Error> {
         var treatments = effects
         for var effect in treatments { effect.reset(); try effect.process(samples) else error { return Result<Audio.Sound,Error>.failure(error) } }
         for sample in samples {
@@ -79,7 +79,7 @@ public class Melody {
         return Result<Audio.Sound, Error>.success(audio.create(@samples[0:samples.count()], format.sample_rate, format.channels))
     }
 
-    func prepare(audio:Audio, using:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
+    func prepare(audio:&Audio, using:Timbre = Timbre.retro(), tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
         var tail = using.release_seconds
         if let seconds = tail_seconds { tail = seconds }
         let plan = try self.plan(format, tail, max_seconds) else error { return Result<Audio.Sound,Error>.failure(error) }
@@ -121,7 +121,7 @@ public class Melody {
         return (try self.finish(audio, &output[0:output.count()], format, effects))
     }
 
-    func prepare(audio:Audio, using:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
+    func prepare(audio:&Audio, using:Synthesis.Instrument, tail_seconds:float64? = null, effects:Processing.Processor[] = [], format:Processing.Format = Processing.Format(sample_rate:48_000, channels:1), max_seconds:float64 = 30.0) Result<Audio.Sound, Error> {
         var tail:float64 = 0.1
         if let seconds = tail_seconds { tail = seconds }
         let plan = try self.plan(format, tail, max_seconds) else error { return Result<Audio.Sound,Error>.failure(error) }

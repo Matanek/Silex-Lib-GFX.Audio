@@ -400,3 +400,10 @@ func render(mixer:uint, samples:int) Result<float32[], Error> {
 let mix_generate = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"MIX_Generate")
 
 let sdl_get_audio_stream_properties = C.function<func(C.Pointer<uint8>) uint32>(library:Boundary.SDL3, name:"SDL_GetAudioStreamProperties")
+
+func output_format(mixer:uint) SourceFormat {
+    var spec:uint[2]
+    let ptr = C.address_bits(C.mutable_pointer(spec))
+    require(mix_get_mixer_format(C.pointer_bits(mixer), C.pointer_bits(ptr)) != 0, "query mixer format")
+    return SourceFormat(sample_rate:C.load<int32>(ptr, 8 as uint) as int, channels:C.load<int32>(ptr, 4 as uint) as int)
+}

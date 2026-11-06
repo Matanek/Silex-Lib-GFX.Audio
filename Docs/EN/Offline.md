@@ -35,3 +35,17 @@ With identical format and commands, one large block or successive blocks
 preserve PCM within absolute 10⁻⁶ for qualified unit-level fixtures. Changing
 controls between blocks defines a different sequence; spatial transitions can
 depend on block size.
+
+## Output format and PCM transport
+
+`output_format()` returns `Audio.OutputFormat` (`sample_rate`, `channels`). An
+offline mix fixes this format at creation; a device mix may change with its
+output. Querying it renders no samples.
+
+For encoder integration or advanced export, `render_f32le(frames)` renders the
+same samples as `render`, as IEEE float32 little-endian bytes interleaved by
+channel. The counter advances once; no clipping or normalization is added.
+The bytes own their storage and remain valid after the mix is destroyed.
+This form serves transport integrations; ordinary video export accepts the
+Audio mix directly. A device-backed Audio also rejects this rendering,
+including a zero-frame request.

@@ -73,6 +73,8 @@ class GroupEntry {
     init(volume:float) { self.volume = volume; self.paused = false; self.active = true; self.generation = 1 }
 }
 
+public struct OutputFormat { let sample_rate:int; let channels:int }
+
 public enum Duration { unknown; infinite; frames(int) }
 public struct SoundInfo {
     let sample_rate:int
@@ -332,6 +334,28 @@ public class Audio {
         }
         return Result<Audio, Error>.success(Audio(native_mixer:mixer, offline:true, channels:channels, sample_rate:sample_rate))
     }
+    func output_format() OutputFormat {
+        let format = Native.output_format(self.mixer)
+        return OutputFormat(sample_rate:format.sample_rate, channels:format.channels)
+    }
+
+    // Advanced transport form of render: interleaved IEEE float32, little endian.
+    // Keep native scalar representation and storage access in the audio owner.
+    func render_f32le(frames:int) Result<uint8[], Error> {
+        var samples = try self.render(frames) else error { return Result<uint8[], Error>.failure(error) }
+        var bytes:uint8[] = []
+        for sample in samples {
+            var value:float32 = sample
+            let address = C.address_bits(C.mutable_pointer(value))
+            let bits = C.load<uint32>(address, 0 as uint)
+            bytes.append((bits & 255 as uint32) as uint8)
+            bytes.append(((bits >> 8) & 255 as uint32) as uint8)
+            bytes.append(((bits >> 16) & 255 as uint32) as uint8)
+            bytes.append(((bits >> 24) & 255 as uint32) as uint8)
+        }
+        return Result<uint8[], Error>.success(bytes)
+    }
+
     func rendered_frames() int { return self.rendered }
     func render(frames:int) Result<float32[], Error> {
         if !self.offline_mode { return Result<float32[], Error>.failure(stream_error(Kind.unsupported(), "audio.render", "render requires Audio.offline")) }

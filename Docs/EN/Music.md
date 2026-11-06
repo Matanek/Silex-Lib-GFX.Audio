@@ -26,6 +26,8 @@ and a 30 ms retro release. Prepare at game loading time; each subsequent
 the melody. `audio.wait` is only for this standalone demonstration; a game
 continues its loop after `play`.
 
+Preparation borrows the mix through `audio:&Audio` without retaining it. It can therefore be used from a system receiving a mutable Audio resource, as well as from an owned Audio variable.
+
 ## Write notes by name
 
 `Music.Key.C5`, `Cs5` and `Bb4` are `int` constants, usable directly as `key`.

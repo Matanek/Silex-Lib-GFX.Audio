@@ -39,3 +39,17 @@ Le même propriétaire applicatif doit piloter ses opérations séquentiellement
 conserve le PCM dans une tolérance absolue de 10⁻⁶ sur les fixtures qualifiées
 à niveau unitaire. Modifier les commandes entre blocs définit une autre
 séquence ; les transitions spatiales peuvent dépendre de la taille d'un bloc.
+
+## Format de sortie et transport PCM
+
+`output_format()` fournit `Audio.OutputFormat` (`sample_rate`, `channels`). Pour
+un mix hors ligne, ce format est fixé à sa création ; sur périphérique, il peut
+changer avec la sortie. Le getter ne rend pas de samples.
+
+Pour une intégration d’encodeur ou un export avancé, `render_f32le(frames)` rend
+les mêmes samples que `render`, sous forme d’octets IEEE float32 little endian,
+entrelacés par canal. Le compteur avance une seule fois ; aucun écrêtage ni
+normalisation n’est ajouté. Les octets possèdent leur stockage et restent valides
+après destruction du mix. Cette forme est réservée aux intégrations de transport ;
+l’export vidéo ordinaire prend directement le mix Audio. Un Audio avec
+périphérique refuse aussi ce rendu, y compris une demande nulle.
