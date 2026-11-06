@@ -1,7 +1,7 @@
 # Build the private streaming provider
 
 `build-stream-provider.py` is the recorded portable build for the
-`SDL3_mixer-3.2.4-silex.6` candidate. It requires Python 3.12 or newer and
+`SDL3_mixer-3.2.4-silex.7` candidate. It requires Python 3.12 or newer and
 the official Zig **0.16.0** distribution used by the workflow. Its release
 checksum is verified there; a separately built Zig can produce different
 compiler-identification metadata. Download the upstream source archives from the official releases:
@@ -9,7 +9,7 @@ compiler-identification metadata. Download the upstream source archives from the
 - [SDL 3.4.10](https://github.com/libsdl-org/SDL/releases/download/release-3.4.10/SDL3-3.4.10.tar.gz)
 - [SDL_mixer 3.2.4](https://github.com/libsdl-org/SDL_mixer/releases/download/release-3.2.4/SDL3_mixer-3.2.4.tar.gz)
 
-The script checks both source hashes and the complete patch hash before
+The script checks both upstream hashes, the complete patch hash and CaptureTap.c/.h hashes before
 extracting or compiling. For example, from the package directory:
 
 ```sh
@@ -25,16 +25,16 @@ COFF source/object names. Set `ZIG` to the recorded official executable.
 manifest record the resulting checksums.
 
 The manual `build-portability.yml` workflow rebuilds each target twice and
-checks byte equality, the recorded manifest hash and the private close and drain symbols.
+checks byte equality, the recorded manifest hash and the private close, drain and capture symbols.
 It uploads workflow artifacts; it does not publish a release. Candidate
-`silex.6` URLs are reserved for a subsequent authorized provider publication.
+`silex.7` URLs are reserved for a subsequent authorized provider publication.
 Local development requires the verified archives present at their manifest
 paths, or a local rebuild. Do not claim remote installability before that
 publication is complete.
 
 `build-sdl3-mixer.sh` retains the native CMake comparison route for macOS X64
-and Linux ARM64. It applies the same patch, but its toolchain produces separate
-checksums; it is not the source of the Zig candidate hashes. The previous
+and Linux ARM64. It applies the mixer patch without the separate capture adapter, and its toolchain produces separate
+checksums; it is a historical comparison, not the source of current provider hashes. The previous
 spatial-only provider was reproduced for those two targets by GitHub Actions
 run `33908070086`; that historical proof does not qualify this streaming patch.
 
@@ -70,3 +70,32 @@ SDL_MixAudio, which clips each addition. Device mixers retain their previous
 saturation behavior. A regression requires a rendered amplitude of 2, and
 compares block layouts across sample-rate conversion. Offline initialization
 calls MIX_Init alone; it never initializes or opens an audio driver.
+
+## Observe the final device mix
+
+`CaptureTap.c` is a separate adapter compiled into the provider alongside the
+unchanged `silex.6` mixer patch. Its header and source hashes are pinned in each
+artifact record. The post-mix callback copies whole float32 frames to a
+preallocated SPSC ring. It uses always-lock-free atomic loads/stores, without
+Silex callbacks, allocation, file IO or waiting. An overflow latches failure
+while playback and its production counter continue. Stop detaches under the
+mixer lock; the binding retains Audio until the capture handle is destroyed.
+Only one reader and one capture per mixer are supported.
+
+## Native capture regression (macOS ARM64)
+
+From the workspace or Spec group root, with the extracted, verified upstream
+sources used by the builder:
+
+```sh
+python3 Packages/GFX.Audio/Native/Tests/run-capture.py /path/SDL3-3.4.10 /path/SDL3_mixer-3.2.4
+python3 Packages/GFX.Audio/Native/Tests/run-capture.py /path/SDL3-3.4.10 /path/SDL3_mixer-3.2.4 --archive --hardware
+```
+
+The first run includes the adapter for deterministic ring wrap/overflow checks
+and exercises known PCM through the dummy device. The second links the actual
+provider archive and uses silent PCM through CoreAudio. It checks post-mix
+identity, gain, concurrent reads, stop/restart, metadata and continued playback
+after overflow. It captures no microphone or system audio. Dummy-device timing
+is not a real-time synchronization oracle. Public Silex coverage lives in
+`Tests/OutputCapture.sx` and `Tests/Consumer/Smokes/OutputCapture.sx`.

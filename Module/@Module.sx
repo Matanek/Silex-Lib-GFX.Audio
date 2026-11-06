@@ -339,6 +339,19 @@ public class Audio {
         return OutputFormat(sample_rate:format.sample_rate, channels:format.channels)
     }
 
+    // Observe this device mix without replacing or consuming its playback.
+    func capture_output(capacity_frames:int = 96_000) Result<OutputCapture, Error> {
+        if self.offline_mode { return Result<OutputCapture, Error>.failure(stream_error(Kind.unsupported(), "audio.capture", "output capture requires device playback; use render for Audio.offline")) }
+        let format = self.output_format()
+        if capacity_frames <= 0 || capacity_frames > 9_223_372_036_854_775_807 / (format.channels * 4) {
+            return Result<OutputCapture, Error>.failure(stream_error(Kind.invalid_input(), "audio.capture", "invalid output capture capacity"))
+        }
+        if Native.capture_active(self.mixer) { return Result<OutputCapture, Error>.failure(stream_error(Kind.resource_busy(), "audio.capture", "the mix already has an output capture")) }
+        let handle = Native.capture_create(self.mixer, capacity_frames as uint)
+        if handle == 0 as uint { return Result<OutputCapture, Error>.failure(stream_error(Kind.resource_exhausted(), "audio.capture", Native.error())) }
+        return Result<OutputCapture, Error>.success(OutputCapture(self, handle))
+    }
+
     // Advanced transport form of render: interleaved IEEE float32, little endian.
     // Keep native scalar representation and storage access in the audio owner.
     func render_f32le(frames:int) Result<uint8[], Error> {

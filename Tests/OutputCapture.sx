@@ -1,0 +1,106 @@
+use GFX.Audio
+use GFX.Audio.Native
+use STD.Error.Kind
+use STD.Time.Clock
+
+func capture(audio:Audio, capacity:int = 96_000) Audio.OutputCapture {
+    match (try audio.capture_output(capacity_frames:capacity)) {
+        success(value) => { return value }
+        failure(error) => { panic(error.detail) }
+    }
+}
+func block(source:Audio.OutputCapture) Audio.CaptureBlock {
+    var clock = Clock()
+    let first = clock.tick()
+    while clock.get_total_seconds() < 4.0 {
+        match (try source.read_f32le(4096)) {
+            failure(error) => { panic(error.detail) }
+            success(value) => { if value.frames > 0 { return value } }
+        }
+        Native.wait()
+    }
+    panic("output capture produced no block")
+}
+func source_with_owned_lifetime() Audio.OutputCapture {
+    var audio = Audio()
+    return capture(audio)
+}
+
+test "output capture rejects offline and invalid capacities without changing playback" {
+    var offline = try Audio.offline(48_000) else error { panic(error.detail) }
+    match (try offline.capture_output()) { success(value) => { panic("offline capture accepted") }; failure(error) => { assert(error.kind == Kind.unsupported()) } }
+    var audio = Audio()
+    match (try audio.capture_output(0)) { success(value) => { panic("empty capacity accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try audio.capture_output(-1)) { success(value) => { panic("negative capacity accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+}
+
+test "output capture observes final gain and owns contiguous packed blocks" {
+    var audio = Audio()
+    let format = audio.output_format()
+    var samples:float32[] = []
+    for index in 0...256 * format.channels { samples.append(0.5 as float32) }
+    let sound = audio.create(@samples[0:samples.count()], sample_rate:format.sample_rate, channels:format.channels)
+    audio.set_master_volume(0.5)
+    let playing = audio.play(sound, Audio.Playback(repeat:Audio.Repeat.forever()))
+    var source = capture(audio)
+    let first = block(source)
+    let second = block(source)
+    assert(first.bytes.count() == first.frames * format.channels * 4)
+    assert(second.first_frame == first.first_frame + first.frames)
+    for index in 0...first.bytes.count() / 4 {
+        assert(first.bytes[index * 4] == 0 as uint8 && first.bytes[index * 4 + 1] == 0 as uint8)
+        assert(first.bytes[index * 4 + 2] == 128 as uint8 && first.bytes[index * 4 + 3] == 62 as uint8)
+    }
+    let info = source.statistics()
+    assert(info.pending_frames <= info.capacity_frames && info.peak_pending_frames <= info.capacity_frames)
+    assert(info.produced_frames >= info.read_frames && info.dropped_frames == 0 && !info.failed)
+    source.stop()
+    let stopped = source.statistics()
+    Native.wait()
+    assert(source.statistics().elapsed_seconds == stopped.elapsed_seconds && source.statistics().stopped)
+    assert(audio.is_playing(playing))
+    assert(first.bytes[2] == 128 as uint8 && first.bytes[3] == 62 as uint8)
+    audio.stop(playing)
+}
+
+test "output capture exclusivity and repeated sessions preserve the next observer" {
+    var audio = Audio()
+    var next:Audio.OutputCapture? = null
+    {
+        var source = capture(audio)
+        match (try audio.capture_output()) { success(value) => { panic("two captures accepted") }; failure(error) => { assert(error.kind == Kind.resource_busy()) } }
+        source.stop()
+        source.stop()
+        next = capture(audio)
+    }
+    if var source = next { let samples = block(source); assert(samples.frames > 0); source.stop() }
+    else { panic("next capture missing") }
+}
+
+test "output capture overflow is observable and playback continues" {
+    var audio = Audio()
+    var source = capture(audio, capacity:1)
+    var clock = Clock()
+    let first = clock.tick()
+    while !source.statistics().failed && clock.get_total_seconds() < 4.0 { Native.wait() }
+    let info = source.statistics()
+    assert(info.failed && info.dropped_frames > 0 && info.pending_frames <= 1)
+    match (try source.read_f32le()) { success(value) => { panic("overflow hidden") }; failure(error) => { assert(error.kind == Kind.resource_exhausted()) } }
+    source.stop()
+    var next = capture(audio)
+    let samples = block(next)
+    assert(samples.frames > 0 && !next.statistics().failed)
+    next.stop()
+}
+
+test "output capture retains its source and validates reads" {
+    var source = source_with_owned_lifetime()
+    let format = source.output_format()
+    assert(format.sample_rate > 0 && format.channels > 0)
+    match (try source.read_f32le(-1)) { success(value) => { panic("negative read accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try source.read_f32le(2_147_483_647)) { success(value) => { panic("oversized read accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    match (try source.read_f32le(0)) { failure(error) => { panic(error.detail) }; success(value) => { assert(value.frames == 0 && value.bytes.is_empty()) } }
+    let samples = block(source)
+    assert(samples.frames > 0)
+    source.stop()
+}

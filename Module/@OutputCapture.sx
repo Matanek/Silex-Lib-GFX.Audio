@@ -1,0 +1,98 @@
+use GFX.Audio.Native
+use STD.Error
+use STD.Error.Kind
+
+// Packed transport form; the block owns its bytes independently of later reads.
+public struct CaptureBlock {
+    let first_frame:int
+    let frames:int
+    let bytes:uint8[]
+}
+
+public struct OutputCaptureInfo {
+    let capacity_frames:int
+    let pending_frames:int
+    let peak_pending_frames:int
+    let produced_frames:int
+    let read_frames:int
+    let dropped_frames:int
+    let max_block_frames:int
+    let elapsed_seconds:float64
+    let first_frame_seconds:float64
+    let stopped:bool
+    let failed:bool
+}
+
+// The source stays alive until this handle is destroyed, including after stop
+// while its remaining samples are drained. Exactly one consumer may read it.
+public nocopy class OutputCapture {
+    private var audio:Audio
+    private let handle:uint
+    private let format:OutputFormat
+
+    module init(audio:Audio, handle:uint) {
+        self.audio = audio
+        self.handle = handle
+        self.format = OutputFormat(sample_rate:Native.capture_sample_rate(handle), channels:Native.capture_channels(handle))
+    }
+
+    func output_format() OutputFormat { return self.format }
+    func stop() { Native.capture_stop(self.handle) }
+    func statistics() OutputCaptureInfo {
+        return OutputCaptureInfo(
+            capacity_frames:Native.capture_capacity(self.handle) as int,
+            pending_frames:Native.capture_available(self.handle) as int,
+            peak_pending_frames:Native.capture_peak(self.handle) as int,
+            produced_frames:Native.capture_produced(self.handle) as int,
+            read_frames:Native.capture_read_frames(self.handle) as int,
+            dropped_frames:Native.capture_dropped(self.handle) as int,
+            max_block_frames:Native.capture_max_block(self.handle) as int,
+            elapsed_seconds:capture_seconds(Native.capture_elapsed_ns(self.handle)),
+            first_frame_seconds:capture_seconds(Native.capture_first_offset_ns(self.handle)),
+            stopped:!Native.capture_running(self.handle), failed:Native.capture_error(self.handle) != 0)
+    }
+
+    // Returns immediately with up to max_frames; an empty block means no data
+    // is currently available. Stopping does not discard already captured data.
+    func read_f32le(max_frames:int = 4096) Result<CaptureBlock, Error> {
+        if max_frames < 0 || max_frames > 2_147_483_647 / (self.format.channels * 4) {
+            return Result<CaptureBlock, Error>.failure(stream_error(Kind.invalid_input(), "audio.capture.read", "frame count is outside the capture range"))
+        }
+        let initial_error = Native.capture_error(self.handle)
+        if initial_error != 0 { return Result<CaptureBlock, Error>.failure(capture_fault(initial_error)) }
+        let first = Native.capture_read_frames(self.handle) as int
+        var count = Native.capture_available(self.handle) as int
+        if count > max_frames { count = max_frames }
+        let bytes = try Native.capture_read_bytes(self.handle, count, self.format.channels) else error { return Result<CaptureBlock, Error>.failure(error) }
+        let final_error = Native.capture_error(self.handle)
+        if final_error != 0 { return Result<CaptureBlock, Error>.failure(capture_fault(final_error)) }
+        let offset = try capture_frame_offset(Native.capture_first_offset_ns(self.handle), self.format.sample_rate) else error { return Result<CaptureBlock, Error>.failure(error) }
+        if offset > 9_223_372_036_854_775_807 - first { return Result<CaptureBlock, Error>.failure(stream_error(Kind.limit_exceeded(), "audio.capture.read", "capture timestamp exceeds the frame range")) }
+        return Result<CaptureBlock, Error>.success(CaptureBlock(first_frame:offset + first, frames:bytes.count() / (self.format.channels * 4), bytes:bytes))
+    }
+
+    drop { self.stop(); Native.capture_destroy(self.handle) }
+}
+
+func capture_frame_offset(nanoseconds:uint, sample_rate:int) Result<int, Error> {
+    let whole = nanoseconds / 1_000_000_000 as uint
+    let fraction = ((nanoseconds % 1_000_000_000 as uint) * (sample_rate as uint) / 1_000_000_000 as uint) as int
+    let limit = ((9_223_372_036_854_775_807 - fraction) / sample_rate) as uint
+    if whole > limit { return Result<int, Error>.failure(stream_error(Kind.limit_exceeded(), "audio.capture.read", "capture timestamp exceeds the frame range")) }
+    return Result<int, Error>.success((whole as int) * sample_rate + fraction)
+}
+
+func capture_fault(code:int) Error {
+    if code == 1 { return stream_error(Kind.resource_exhausted(), "audio.capture.read", "output capture buffer overflowed; playback continued") }
+    if code == 2 { return stream_error(Kind.unsupported(), "audio.capture.read", "output mix format changed during capture") }
+    if code == 3 { return stream_error(Kind.limit_exceeded(), "audio.capture.read", "output capture frame counter is exhausted") }
+    return stream_error(Kind.other(), "audio.capture.read", "output capture failed")
+}
+
+// Split before conversion: every integer part is exactly representable in
+// float64, including the complete native uint64 nanosecond range.
+func capture_seconds(nanoseconds:uint) float64 {
+    let whole = nanoseconds / 1_000_000_000 as uint
+    let remainder = nanoseconds % 1_000_000_000 as uint
+    return (whole as float64) + (remainder as float64) / 1_000_000_000.0
+}

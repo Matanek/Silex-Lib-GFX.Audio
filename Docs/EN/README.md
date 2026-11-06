@@ -263,3 +263,5 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 [Build an engine from a block, head, intake, exhaust and turbo](EngineParts.md).
 
 [Reuse the validated engine-bench sounds](Engines.md).
+
+[Observe the mix during playback](OutputCapture.md).

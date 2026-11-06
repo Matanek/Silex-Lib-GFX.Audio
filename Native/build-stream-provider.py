@@ -1,4 +1,4 @@
-"""Build the private streaming provider from verified upstream source archives.
+"""Build the private streaming and output capture provider from verified upstream source archives.
 
 Requires Python 3.12+ and Zig 0.16.0. No SDL device or SDL build is needed.
 """
@@ -48,6 +48,11 @@ def main():
     # The artifact metadata pins the complete patch, including the existing spatial fix.
     if digest(patch) != json.loads(metadata.read_text())["patch_sha256"]:
         parser.error("private provider patch checksum mismatch")
+    capture_source = package / "Native/CaptureTap.c"
+    capture_header = package / "Native/CaptureTap.h"
+    recorded = json.loads(metadata.read_text())
+    if digest(capture_source) != recorded["capture_source_sha256"] or digest(capture_header) != recorded["capture_header_sha256"]:
+        parser.error("private capture adapter checksum mismatch")
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="gfx-audio-provider-") as temporary:
@@ -58,6 +63,8 @@ def main():
         sdl = root / "SDL3-3.4.10"
         mixer = root / "SDL3_mixer-3.2.4"
         subprocess.run(["patch", "-s", "-d", str(mixer), "-p1", "-i", str(patch)], check=True)
+        shutil.copyfile(capture_source, mixer / "src/Silex_audio_capture.c")
+        shutil.copyfile(capture_header, mixer / "src/CaptureTap.h")
         flags = ["-target", TARGETS[args.target], "-O3", "-g0", "-DNDEBUG", "-DBUILD_SDL",
                  "-DSDL_BUILD_MAJOR_VERSION=3", "-DSDL_BUILD_MINOR_VERSION=2", "-DSDL_BUILD_MICRO_VERSION=4",
                  f"-ffile-prefix-map={root}=/silex-audio-provider"]

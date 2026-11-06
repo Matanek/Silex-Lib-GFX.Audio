@@ -268,3 +268,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Assembler un moteur avec bloc, culasse, admission, échappement et turbo](EngineParts.md).
 
 [Réutiliser les moteurs du banc validé](Engines.md).
+
+- [Observer le mix pendant sa lecture](OutputCapture.md) : blocs possédés, chronologie, tampon borné et erreurs de capture de sortie.

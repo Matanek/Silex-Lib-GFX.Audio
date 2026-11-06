@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `capture_output()` observe le mix du périphérique en blocs PCM possédés et horodatés, avec file bornée, arrêt/vidange et débordement explicite sans arrêter la lecture sonore. Provider privé `silex.7` reproductible pour six cibles.
+
 - `output_format()` expose la fréquence et les canaux du mix ; `render_f32le()` fournit le PCM hors ligne possédé pour les intégrations d’encodeurs, sans normalisation ni changement de chronologie.
 
 - Ajoute `Synthesis.Engine`, prototype de moteur quatre temps commandé par

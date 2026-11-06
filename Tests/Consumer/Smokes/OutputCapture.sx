@@ -1,0 +1,32 @@
+use GFX.Audio
+use STD.Error.Kind
+use STD.Time.Clock
+
+func owned_capture() Audio.OutputCapture {
+    var audio = Audio()
+    return try audio.capture_output() else error { panic(error.detail) }
+}
+
+func main() {
+    var source = owned_capture()
+    let format = source.output_format()
+    assert(format.sample_rate > 0 && format.channels > 0)
+    var clock = Clock()
+    let initial = clock.tick()
+    var observed = false
+    while !observed && clock.get_total_seconds() < 4.0 {
+        let block = try source.read_f32le(max_frames:127) else error { panic(error.detail) }
+        if block.frames > 0 {
+            assert(block.bytes.count() == block.frames * format.channels * 4)
+            for byte in block.bytes { assert(byte == 0 as uint8) }
+            print("CAPTURE frames=$(block.frames) first=$(block.first_frame) rate=$(format.sample_rate) channels=$(format.channels)")
+            observed = true
+        }
+    }
+    assert(observed)
+    source.stop()
+    let info = source.statistics()
+    assert(info.stopped && !info.failed && info.peak_pending_frames <= info.capacity_frames)
+    match (try source.read_f32le(-1)) { success(value) => { panic("invalid read accepted") }; failure(error) => { assert(error.kind == Kind.invalid_input()) } }
+    print("output-capture-ok")
+}

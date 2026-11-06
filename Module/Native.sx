@@ -407,3 +407,52 @@ func output_format(mixer:uint) SourceFormat {
     require(mix_get_mixer_format(C.pointer_bits(mixer), C.pointer_bits(ptr)) != 0, "query mixer format")
     return SourceFormat(sample_rate:C.load<int32>(ptr, 8 as uint) as int, channels:C.load<int32>(ptr, 4 as uint) as int)
 }
+
+
+// Native post-mix observation: one producer, one reader, no managed callback.
+func capture_create(mixer:uint, capacity:uint) uint { return C.address_bits(mix_capture_create(C.pointer_bits(mixer), capacity)) }
+func capture_active(mixer:uint) bool { return mix_capture_active(C.pointer_bits(mixer)) != 0 }
+func capture_stop(handle:uint) { mix_capture_stop(C.pointer_bits(handle)) }
+func capture_destroy(handle:uint) { mix_capture_destroy(C.pointer_bits(handle)) }
+func capture_sample_rate(handle:uint) int { return mix_capture_sample_rate(C.pointer_bits(handle)) as int }
+func capture_channels(handle:uint) int { return mix_capture_channels(C.pointer_bits(handle)) as int }
+func capture_error(handle:uint) int { return mix_capture_error(C.pointer_bits(handle)) as int }
+func capture_running(handle:uint) bool { return mix_capture_running(C.pointer_bits(handle)) != 0 }
+func capture_produced(handle:uint) uint { return mix_capture_produced(C.pointer_bits(handle)) }
+func capture_read_frames(handle:uint) uint { return mix_capture_read_frames(C.pointer_bits(handle)) }
+func capture_available(handle:uint) uint { return mix_capture_available(C.pointer_bits(handle)) }
+func capture_dropped(handle:uint) uint { return mix_capture_dropped(C.pointer_bits(handle)) }
+func capture_capacity(handle:uint) uint { return mix_capture_capacity(C.pointer_bits(handle)) }
+func capture_peak(handle:uint) uint { return mix_capture_peak(C.pointer_bits(handle)) }
+func capture_max_block(handle:uint) uint { return mix_capture_max_block(C.pointer_bits(handle)) }
+func capture_first_offset_ns(handle:uint) uint { return mix_capture_first_offset(C.pointer_bits(handle)) }
+func capture_elapsed_ns(handle:uint) uint { return mix_capture_elapsed(C.pointer_bits(handle)) }
+func capture_read_bytes(handle:uint, frames:int, channels:int) Result<uint8[], Error> {
+    if frames == 0 { return Result<uint8[], Error>.success([]) }
+    let data = C.address_bits(sdl_malloc((frames * channels * 4) as C.Size))
+    if data == 0 as uint { return Result<uint8[], Error>.failure(Error(kind:Kind.resource_exhausted(), operation:"audio.capture.read", subject:null, detail:"could not allocate a capture block")) }
+    let count = mix_capture_read(C.pointer_bits(handle), C.pointer_bits(data), frames as int32)
+    if count < 0 { sdl_free(C.pointer_bits(data)); return Result<uint8[], Error>.failure(Error(kind:Kind.other(), operation:"audio.capture.read", subject:null, detail:"native output capture read failed")) }
+    var bytes:uint8[] = []
+    for index in 0...(count as int) * channels * 4 { bytes.append(C.load<uint8>(data, index as uint)) }
+    sdl_free(C.pointer_bits(data))
+    return Result<uint8[], Error>.success(bytes)
+}
+let mix_capture_create = C.function<func(C.Pointer<uint8>, uint) C.Pointer<uint8> >(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureCreate")
+let mix_capture_active = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureActive")
+let mix_capture_stop = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureStop")
+let mix_capture_destroy = C.function<func(C.Pointer<uint8>) void>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureDestroy")
+let mix_capture_read = C.function<func(C.Pointer<uint8>, C.Pointer<uint8>, int32) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureRead")
+let mix_capture_sample_rate = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureSampleRate")
+let mix_capture_channels = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureChannels")
+let mix_capture_error = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureError")
+let mix_capture_running = C.function<func(C.Pointer<uint8>) int32>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureRunning")
+let mix_capture_produced = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureProduced")
+let mix_capture_read_frames = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureReadFrames")
+let mix_capture_available = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureAvailable")
+let mix_capture_dropped = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureDropped")
+let mix_capture_capacity = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureCapacity")
+let mix_capture_peak = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CapturePeak")
+let mix_capture_max_block = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureMaxBlock")
+let mix_capture_first_offset = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureFirstOffsetNS")
+let mix_capture_elapsed = C.function<func(C.Pointer<uint8>) uint>(library:Boundary.SDL3_mixer, name:"Silex_MIX_CaptureElapsedNS")

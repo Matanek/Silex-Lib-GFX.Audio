@@ -12,14 +12,35 @@
     "voc",
     "wave"
   ],
-  "sha256": "739a81a7dda9606d7d2e219d2a87a9ccffec045d8245dd378acb16ff99ad4883",
+  "sha256": "f013c4fae9d7ecbff4b13bb138e55e4bea3d02123ecf5cc74cc0acf395c7618a",
   "source_sha256": "182a07c745375e113dc740d43964ff21b0be29f29f59876c4dbc4db3d32f6901",
   "patch_sha256": "a61fe36c902cf95191d15ee39d5c5c538c840cdd634b7c245564bea23e40fe27",
-  "provenance": "Official SDL_mixer 3.2.4 source with SDL3_mixer-3.2.4-silex.6.patch, SDL 3.4.10 headers and the Zig 0.16.0 portable build",
+  "provenance": "Official SDL_mixer 3.2.4 with SDL3_mixer-3.2.4-silex.6.patch and the private bounded output capture adapter, SDL 3.4.10 headers and official Zig 0.16.0",
   "private_extensions": [
     "Silex_MIX_CloseTrackStream",
-    "Silex_MIX_TrackDrained"
+    "Silex_MIX_TrackDrained",
+    "Silex_MIX_CaptureCreate",
+    "Silex_MIX_CaptureStop",
+    "Silex_MIX_CaptureDestroy",
+    "Silex_MIX_CaptureRead",
+    "Silex_MIX_CaptureProduced",
+    "Silex_MIX_CaptureReadFrames",
+    "Silex_MIX_CaptureAvailable",
+    "Silex_MIX_CaptureDropped",
+    "Silex_MIX_CaptureError",
+    "Silex_MIX_CaptureSampleRate",
+    "Silex_MIX_CaptureChannels",
+    "Silex_MIX_CaptureFirstOffsetNS",
+    "Silex_MIX_CaptureElapsedNS",
+    "Silex_MIX_CaptureCapacity",
+    "Silex_MIX_CapturePeak",
+    "Silex_MIX_CaptureMaxBlock",
+    "Silex_MIX_CaptureRunning",
+    "Silex_MIX_CaptureActive"
   ],
   "build_tool": "Official Zig 0.16.0",
-  "build_tool_archive_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489"
+  "build_tool_archive_sha256": "b23d70deaa879b5c2d486ed3316f7eaa53e84acf6fc9cc747de152450d401489",
+  "capture_source_sha256": "6ab7e1def1c30abc57a9cd56b0c9858d311b9ce0f7786261adb5263f1beb5db4",
+  "capture_header_sha256": "294563b382db396b0e092b2aabbb39ce99470bb4398eec18348f5398dd1c8aca",
+  "provider_revision": "silex.7"
 }

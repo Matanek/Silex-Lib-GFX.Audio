@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `capture_output()` observes the device mix as owned, timestamped PCM blocks, with a bounded queue, stop/drain and explicit overflow while playback continues. Private `silex.7` provider reproduced for six targets.
+
 - `output_format()` exposes the mix sample rate and channels; `render_f32le()` provides owned offline PCM for encoder integrations, without normalization or timeline changes.
 
 - Adds `Engines.Library.driven_engine` and `OperatingState` for game-owned RPM

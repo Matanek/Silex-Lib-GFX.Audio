@@ -63,8 +63,11 @@ jobs:
           nm -g "$RUNNER_TEMP/output-a/$archive" > "$RUNNER_TEMP/symbols.txt"
           grep -q Silex_MIX_CloseTrackStream "$RUNNER_TEMP/symbols.txt"
           grep -q Silex_MIX_TrackDrained "$RUNNER_TEMP/symbols.txt"
+          grep -q Silex_MIX_CaptureCreate "$RUNNER_TEMP/symbols.txt"
+          grep -q Silex_MIX_CaptureRead "$RUNNER_TEMP/symbols.txt"
+          grep -q Silex_MIX_CaptureStop "$RUNNER_TEMP/symbols.txt"
       - uses: actions/upload-artifact@v7
         with:
-          name: SDL3_mixer-3.2.4-silex.6-${{ matrix.target }}
+          name: SDL3_mixer-3.2.4-silex.7-${{ matrix.target }}
           path: ${{ runner.temp }}/output-a/*
           if-no-files-found: error
