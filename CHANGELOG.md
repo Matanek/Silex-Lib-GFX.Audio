@@ -4,6 +4,10 @@
 
 - `Engines.Library.open()` supplies the eight standard engines on macOS ARM64 without a directory or extra preparation. The simulator and resources are embedded, retained for the engines’ lifetime and cleaned up on release; custom library loading remains optional. All eight profiles preserve sample-exact PCM in the comparison scenarios.
 
+## [0.5.0] - 2026-11-08
+
+- Provide reusable procedural engine libraries, optional automatic or manual transmission, and configurable gear ratios. Games can provide crank speed and effort; documented model limits still apply.
+
 - `capture_output()` observes the device mix as owned, timestamped PCM blocks, with a bounded queue, stop/drain and explicit overflow while playback continues. Private `silex.7` provider reproduced for six targets.
 
 - `output_format()` exposes the mix sample rate and channels; `render_f32le()` provides owned offline PCM for encoder integrations, without normalization or timeline changes.
@@ -51,9 +55,8 @@
 
 - Adopts one `Result` declaration: an ordinary call returns the value or
   stops the program on failure; `try call()` keeps the `Result`. Existing calls
-  storing results and propagating failures are made explicit. This revision
-  requires the development toolchain with these `try` semantics; publication
-  must coordinate compiler and package versions.
+  storing results and propagating failures are made explicit. This version
+  requires Silex 0.48.0 or newer and the coordinated dependency versions.
   Recoverable `try_*` variants and direct wrappers with the same signature
   converge under the ordinary name. Boolean, optional, and native variants
   retain their contracts.

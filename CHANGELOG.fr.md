@@ -4,6 +4,10 @@
 
 - `Engines.Library.open()` fournit les huit moteurs standard sur macOS ARM64 sans dossier ni préparation supplémentaire. Le simulateur et ses ressources sont embarqués, gardés pendant la vie des moteurs et nettoyés à leur libération ; le chargement d’une bibliothèque personnalisée reste optionnel. Le PCM des huit profils est conservé échantillon par échantillon dans les scénarios de comparaison.
 
+## [0.5.0] - 2026-11-08
+
+- Fournir des bibliothèques réutilisables de moteurs procéduraux, une transmission automatique ou manuelle optionnelle et des rapports de boîte configurables. Le jeu peut fournir le régime de vilebrequin et l’effort ; les modèles et limites restent ceux documentés.
+
 - `capture_output()` observe le mix du périphérique en blocs PCM possédés et horodatés, avec file bornée, arrêt/vidange et débordement explicite sans arrêter la lecture sonore. Provider privé `silex.7` reproductible pour six cibles.
 
 - `output_format()` expose la fréquence et les canaux du mix ; `render_f32le()` fournit le PCM hors ligne possédé pour les intégrations d’encodeurs, sans normalisation ni changement de chronologie.
@@ -19,9 +23,8 @@
 - Adopte la déclaration `Result` unique : l’appel ordinaire rend la valeur
   ou arrête le programme sur erreur ; `try appel()` conserve le `Result`. Les
   anciens appels stockant un résultat et propagations deviennent explicites.
-  Cette révision requiert la toolchain de développement avec cette sémantique
-  de `try` ; sa publication doit coordonner les versions du compilateur et des
-  packages.
+  Cette version requiert Silex 0.48.0 ou supérieur et les versions coordonnées
+  de ses dépendances.
   Les variantes récupérables `try_*` et wrappers directs de même signature
   sont réunis sous le nom ordinaire. Les variantes booléennes, optionnelles ou
   natives gardent leur contrat.

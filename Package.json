@@ -1,15 +1,15 @@
 {
   "name": "GFX.Audio",
   "sources": "Module",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": {
     "en": "Procedural synthesis and sound playback with envelopes, fades, routing, spatial position, and GFX integration.",
     "fr": "Synthèse procédurale et lecture audio avec enveloppes, fondus, routage, position spatiale et intégration GFX."
   },
   "authors": ["Matanek"],
-  "requires": { "silex": ">=0.47.1" },
+  "requires": { "silex": ">=0.48.0" },
   "dependencies": {
-    "GFX": "^0.40.0",
+    "GFX": "^0.41.0",
     "STD": "^0.23.0"
   },
   "boundary": {
