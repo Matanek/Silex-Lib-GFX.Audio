@@ -1,6 +1,8 @@
 use GFX.Audio.Engines
 use STD.Math
 use STD.Process
+use STD.System
+use STD.Error
 use STD.Time.Stopwatch
 
 func detached() Engines.DrivenEngine {
@@ -51,7 +53,15 @@ func verify(directory:str? = null) {
     }
     print("Default engines passed: eight profiles, exact PCM, async feed, lifetime and reset")
 }
-test "default vehicle engine library" { verify() }
+test "default vehicle engine library" {
+    if System.target_name(System.target()) == "macos-arm64" { verify() }
+    else {
+        match try Engines.Library.open() {
+            failure(error) => { assert(error.kind == Error.Kind.unsupported()) }
+            success(value) => { panic("an unqualified default engine target must be rejected") }
+        }
+    }
+}
 func main() {
     let arguments = Process.arguments()
     var directory:str? = null
