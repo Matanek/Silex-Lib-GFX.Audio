@@ -1,10 +1,8 @@
 # Historique
 
-## [Unreleased]
+## [0.5.0] - 2026-11-08
 
 - `Engines.Library.open()` fournit les huit moteurs standard sur macOS ARM64 sans dossier ni préparation supplémentaire. Le simulateur et ses ressources sont embarqués, gardés pendant la vie des moteurs et nettoyés à leur libération ; le chargement d’une bibliothèque personnalisée reste optionnel. Le PCM des huit profils est conservé échantillon par échantillon dans les scénarios de comparaison.
-
-## [0.5.0] - 2026-11-08
 
 - Fournir des bibliothèques réutilisables de moteurs procéduraux, une transmission automatique ou manuelle optionnelle et des rapports de boîte configurables. Le jeu peut fournir le régime de vilebrequin et l’effort ; les modèles et limites restent ceux documentés.
 

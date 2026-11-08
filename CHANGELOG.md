@@ -1,10 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.5.0] - 2026-11-08
 
 - `Engines.Library.open()` supplies the eight standard engines on macOS ARM64 without a directory or extra preparation. The simulator and resources are embedded, retained for the engines’ lifetime and cleaned up on release; custom library loading remains optional. All eight profiles preserve sample-exact PCM in the comparison scenarios.
-
-## [0.5.0] - 2026-11-08
 
 - Provide reusable procedural engine libraries, optional automatic or manual transmission, and configurable gear ratios. Games can provide crank speed and effort; documented model limits still apply.
 
