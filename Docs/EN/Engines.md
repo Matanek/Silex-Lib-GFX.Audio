@@ -5,31 +5,43 @@ profiles, exhaust responses, four-stroke intake and output mixing. Consumers
 copy neither its calculations nor the demo's filters. The eight profiles and
 existing controls are preserved independently of the experimental parts workshop.
 
-## Prepare the library
+## Use the supplied engines
 
-The library is a deployable directory containing the renderer and its resources.
-Build and stage it using the package-owned tools described in
-[native preparation](../../Native/EngineSimulator/README.md). They use no files
-from Silex-Examples. Deploy the whole directory with the application; its path
-may be absolute or relative to the current directory. The API does not implicitly
-search the demo repository.
-
-The [standalone example](../../Examples/EngineLibrary.sx) consumes only this
-package. From the workspace root:
+`Library.open()` opens the eight standard profiles with their simulator and
+resources included in the package. The application needs no native preparation
+or library path. From the workspace root:
 
 ```sh
-silex compile Packages/GFX.Audio/Examples/EngineLibrary.sx --release -o Build/EngineLibrary-Consumer
-Build/EngineLibrary-Consumer /absolute/path/to/EngineLibrary
+silex run Packages/GFX.Audio/Examples/EngineLibrary.sx
 ```
 
-It exercises the engine offline without a window or audio device.
+This example produces sound offline, without a window or audio device. The
+compiled program contains the required resources and works without the package
+sources or its original working directory. The package automatically prepares
+its files in a temporary directory owned by the library and retains them while
+any engine uses them, including across `reset()`. Releasing them cleans up that
+directory. Execution performs no download or native build.
+
+The standard engine is currently supplied and verified on macOS ARM64. On other
+targets, `Library.open()` returns `unsupported`; explicit library loading remains
+available with the qualification limits below.
+
+## Load a custom library
+
+An external directory remains an advanced option: `Library.open(directory)`
+opens a library explicitly supplied by the application. Its absolute path or
+path relative to the current directory must be valid; no replacement directory
+is searched. Deploy the whole directory with the application.
+The [native preparation tools](../../Native/EngineSimulator/README.md) rebuild
+the simulator and its resources. They serve package maintenance or preparation
+of a custom library.
 
 ## Select an engine and its controls
 
 Fragment after `use GFX.Audio.Engines`:
 
 ```sx
-var library = Engines.Library.open("Audio/EngineLibrary")
+var library = Engines.Library.open()
 var engine = library.engine("454")
 var controls = engine.controls()
 controls.running = true
@@ -160,9 +172,9 @@ neither another gearbox nor another vehicle. `render`, `enqueue`, `render_ready`
 state. Existing v1/v2 banks still support the previous benches and reject
 `driven_engine`.
 
-The Silex-Examples MonsterTruck demo uses this input. Its driving model has no
-crankshaft or gearbox: an acoustic adapter reads rim rotation and wheel-motor
-effort without changing forces. That derivation remains a demo approximation.
+The Silex-Examples MonsterTruck demo uses this input with the standard engine
+supplied by the package. It passes physical engine RPM and normalized combustion
+torque without simulating a second gearbox.
 
 ## Produce blocks without blocking the interface
 
@@ -201,5 +213,5 @@ This version retains the full simulator and one process per engine. It allocates
 and uses IPC; it is unsuitable for a real-time audio callback. External RPM has
 an offline-tested path; listening quality and heavy-application qualification
 remain open. This extraction has been built and executed on macOS ARM64; other targets remain to be prepared
-and tested. Installing the package alone does not yet supply prebuilt native
-banks for every OS.
+and tested. The embedded standard library retains this qualification scope
+and changes neither profiles nor audio calculations.

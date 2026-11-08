@@ -6,7 +6,11 @@ preparation. The old bench remains an independent, frozen comparison witness.
 `Module/Engines` owns the Silex-facing protocol, intake-flow sound and output mix.
 No source in this package imports Silex-Examples.
 
-Build on macOS ARM64 with Xcode/Clang/Flex, CMake and Bison 3.2 or newer:
+This is the package-maintenance build path. Ordinary consumers call
+`Engines.Library.open()` without preparing a directory.
+
+Rebuild the existing renderer on macOS ARM64 with Xcode/Clang/Flex, CMake and
+Bison 3.2 or newer:
 
 ```sh
 python3 Packages/GFX.Audio/Native/EngineSimulator/Catalog.py --check
@@ -57,3 +61,23 @@ provider is selected unconditionally by the portable SDL audio package.
 The upstream renderer and assets are covered by `LICENSE.engine-sim`; generated
 banks include that license. Sources and pinned provenance are retained so a bank
 can be rebuilt without the old demo. See the public Engines guide for use.
+
+## Refresh the default embedded library
+
+From the workspace root, after a successful v3 build:
+
+```sh
+python3 Packages/GFX.Audio/Native/EngineSimulator/BundleLibrary.py \
+  --from-build .silex/engine-simulator-build
+```
+
+The bundler verifies renderer provenance and architecture, stages the existing
+complete library, and concatenates its files without changing any byte. It
+writes `Assets/Engines/macos-arm64/Library.bin`, its per-file SHA-256 manifest
+and the target fragment that embeds and restores those exact byte ranges.
+The asset and its checksum manifest are included in Git. The `embed_bytes`
+reference makes it a package resource, so publication includes it in the package
+snapshot and ordinary installation supplies it automatically. Do not also declare
+this same file under `artifacts`: it already belongs to the source resources.
+The Silex wrapper owns temporary deployment and lifetime; no acoustic code changes.
+Other targets explicitly retain their previous unqualified status.

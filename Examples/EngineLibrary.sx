@@ -2,10 +2,10 @@ use GFX.Audio.Engines
 use STD.Process
 use STD.Math
 
-// Offline consumer: the library directory can be deployed next to any application.
+// Offline consumer: the standard engine and resources are included by the package.
 func main() {
     let arguments = Process.arguments()
-    var directory = "Build/EngineLibrary"
+    var directory:str? = null
     if arguments.count() > 1 { directory = arguments[1] }
     var library = Engines.Library.open(directory)
     assert(library.profiles().count() == 8)

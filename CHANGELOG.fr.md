@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Engines.Library.open()` fournit les huit moteurs standard sur macOS ARM64 sans dossier ni préparation supplémentaire. Le simulateur et ses ressources sont embarqués, gardés pendant la vie des moteurs et nettoyés à leur libération ; le chargement d’une bibliothèque personnalisée reste optionnel. Le PCM des huit profils est conservé échantillon par échantillon dans les scénarios de comparaison.
+
 - `capture_output()` observe le mix du périphérique en blocs PCM possédés et horodatés, avec file bornée, arrêt/vidange et débordement explicite sans arrêter la lecture sonore. Provider privé `silex.7` reproductible pour six cibles.
 
 - `output_format()` expose la fréquence et les canaux du mix ; `render_f32le()` fournit le PCM hors ligne possédé pour les intégrations d’encodeurs, sans normalisation ni changement de chronologie.

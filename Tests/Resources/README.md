@@ -112,7 +112,10 @@ macOS-only test instrumentation, never part of the installed package.
 
 ## Validated engine library lifecycle
 
-After preparing the bank described in the Engines guide:
+The legacy compatibility checks below explicitly load custom bank directories.
+Ordinary consumers use the bundled default through `Library.open()`;
+`Tests/Consumer/Tests/EngineDefaults.sx` covers its PCM and lifetime.
+For these legacy checks, prepare the banks with the native maintenance tools:
 
 ```sh
 silex compile Packages/GFX.Audio/Tests/Resources/EngineLibrary.sx --release -o Build/EngineLibrary-Checks

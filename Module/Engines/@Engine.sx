@@ -32,6 +32,7 @@ public class Engine:Synthesis.Generator {
     let profile:Profile
     let gearing:Gearing
     private let custom_gearing:Gearing?
+    private var files:EngineFiles
     private let root:str
     private var worker:EngineWorker
     private var control:Controls
@@ -45,8 +46,8 @@ public class Engine:Synthesis.Generator {
     private let driving:bool
     private var operating:OperatingState?
 
-    module init(root:str, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?, operating:OperatingState? = null) {
-        self.root = root; self.profile = profile
+    module init(files:EngineFiles, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?, operating:OperatingState? = null) {
+        self.files = files; self.root = files.root; self.profile = profile
         self.worker = worker
         self.operating = operating
         self.custom_gearing = gearing; self.gearing = gearing ?? profile.gearing

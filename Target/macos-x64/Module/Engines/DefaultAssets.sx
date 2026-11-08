@@ -1,0 +1,7 @@
+use GFX.Audio.Engines.EngineFiles
+use STD.Error
+
+func populate(files:&EngineFiles) Result<void, Error> {
+    return Result<void,Error>.failure(Error(kind:Error.Kind.unsupported(), operation:"audio.engines",
+        subject:"macos-x64", detail:"the default native engine library has not been qualified for this target"))
+}

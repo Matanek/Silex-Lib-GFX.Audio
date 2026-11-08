@@ -1,0 +1,60 @@
+use GFX.Audio.Engines
+use STD.Math
+use STD.Process
+use STD.Time.Stopwatch
+
+func detached() Engines.DrivenEngine {
+    var library = Engines.Library.open()
+    return library.driven_engine()
+}
+func lifetime() {
+    var engine = detached()
+    var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+    engine.set_state(Engines.OperatingState(rpm:2_500.0, load:0.7))
+    for _ in 0...40 { engine.render(&samples[0:960]) }
+    assert(Math.abs(engine.current_rpm() - 2_500.0) < 10.0)
+    engine.enqueue(); engine.reset()
+    assert(engine.pending_blocks() == 0)
+    for _ in 0...40 { engine.render(&samples[0:960]) }
+    assert(Math.abs(engine.current_rpm() - 2_500.0) < 10.0, "default engine must retain its resources after the library is dropped and across reset")
+}
+func verify(directory:str? = null) {
+    var standard = Engines.Library.open()
+    var reference = Engines.Library.open(directory)
+    var a:float32[] = []; var b:float32[] = []
+    for _ in 0...960 { a.append(0.0); b.append(0.0) }
+    for profile in standard.profiles() {
+        var engine = standard.driven_engine(profile.key)
+        var other = reference.driven_engine(profile.key)
+        var energy:float64 = 0.0
+        let states:Engines.OperatingState[] = [Engines.OperatingState(rpm:850.0,load:0.1), Engines.OperatingState(rpm:2_500.0,load:0.8), Engines.OperatingState(rpm:1_200.0)]
+        for state in states {
+            engine.set_state(state); other.set_state(state)
+            for _ in 0...40 {
+                other.enqueue(1); engine.render(&a[0:960])
+                var clock = Stopwatch(); clock.start()
+                while !other.render_ready(&b[0:960]) { assert(clock.get_elapsed_seconds() < 5.0) }
+                assert(engine.current_rpm() == other.current_rpm())
+                for i in 0...960 {
+                    assert(Math.is_finite(a[i]) && a[i] == b[i], "embedding the engine must preserve every PCM sample")
+                    energy += a[i] as float64 * a[i] as float64
+                }
+            }
+        }
+        assert(energy > 0.001)
+        print("Default engine PCM parity passed: ",profile.key," energy=",energy)
+    }
+    lifetime()
+    match try Engines.Library.open("missing-custom-engine-library") {
+        failure(error) => {}
+        success(value) => { panic("an invalid custom library must remain an explicit error") }
+    }
+    print("Default engines passed: eight profiles, exact PCM, async feed, lifetime and reset")
+}
+test "default vehicle engine library" { verify() }
+func main() {
+    let arguments = Process.arguments()
+    var directory:str? = null
+    if arguments.count() > 1 { directory = arguments[1] }
+    verify(directory)
+}

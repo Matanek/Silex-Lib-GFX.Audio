@@ -1,0 +1,427 @@
+{
+  "schema": 1,
+  "target": "macos-arm64",
+  "sha256": "3cc879d44eeafc875dcbe4585ab1f02952a2df0f30b477e39e1fe8b746343cdd",
+  "files": [
+    {
+      "path": "EngineLibrary.txt",
+      "offset": 0,
+      "size": 24,
+      "sha256": "752bf57fa320a0e3a048b83fd038ed44f4484017c6b8ec7e2f0c1bb01e4a514e"
+    },
+    {
+      "path": "Library-Manifest.json",
+      "offset": 24,
+      "size": 7719,
+      "sha256": "06879f3dc3093acab11080177cc7a6bf6aa6e149cfb1ae038114d13f1a35ba17"
+    },
+    {
+      "path": "Provenance.json",
+      "offset": 7743,
+      "size": 6000,
+      "sha256": "13e335b72dfda4e714e5f262f728faacbd5efaa901ad9f919ace383541e58f4b"
+    },
+    {
+      "path": "RenderReference",
+      "offset": 13743,
+      "size": 825504,
+      "sha256": "c08b50e25aaeffb9c0b7351fbe935e6d952a98f6d83411d1a8d8f03a22ef6dae"
+    },
+    {
+      "path": "Runtime/Impulse-454.pcm",
+      "offset": 839247,
+      "size": 67410,
+      "sha256": "b8fa28e3b9611cd20c7db47e952e3ea3469664f977bc43b958fa4371d3416110"
+    },
+    {
+      "path": "Runtime/Impulse-berline.pcm",
+      "offset": 906657,
+      "size": 67410,
+      "sha256": "b8fa28e3b9611cd20c7db47e952e3ea3469664f977bc43b958fa4371d3416110"
+    },
+    {
+      "path": "Runtime/Impulse-cross2.pcm",
+      "offset": 974067,
+      "size": 3968,
+      "sha256": "c9921dc4f65edc493784f45c8becb61dd85124b26c4500f4d685ec650b834865"
+    },
+    {
+      "path": "Runtime/Impulse-cross4.pcm",
+      "offset": 978035,
+      "size": 5292,
+      "sha256": "ffe773526f9b6a7b32f1ec0644564e3d897605b0486195e549a435af8bef382f"
+    },
+    {
+      "path": "Runtime/Impulse-cruiser.pcm",
+      "offset": 983327,
+      "size": 18726,
+      "sha256": "e289b983937ffb547091192372ea498700bf51209fe8afaa79d1c0e79d129c90"
+    },
+    {
+      "path": "Runtime/Impulse-moto.pcm",
+      "offset": 1002053,
+      "size": 25848,
+      "sha256": "2ccc5146c5aedbb6ac1767a33de34b595e435ba7b7296b0432067bb87ca49443"
+    },
+    {
+      "path": "Runtime/Impulse-sport.pcm",
+      "offset": 1027901,
+      "size": 18726,
+      "sha256": "e289b983937ffb547091192372ea498700bf51209fe8afaa79d1c0e79d129c90"
+    },
+    {
+      "path": "Runtime/Impulse-truck.pcm",
+      "offset": 1046627,
+      "size": 67410,
+      "sha256": "b8fa28e3b9611cd20c7db47e952e3ea3469664f977bc43b958fa4371d3416110"
+    },
+    {
+      "path": "Runtime/Impulse.pcm",
+      "offset": 1114037,
+      "size": 67410,
+      "sha256": "b8fa28e3b9611cd20c7db47e952e3ea3469664f977bc43b958fa4371d3416110"
+    },
+    {
+      "path": "Runtime/LICENSE.engine-sim",
+      "offset": 1181447,
+      "size": 1065,
+      "sha256": "9f64449d4ef2db6b57d6af9d36e5eca5b6de3ece2db14a847ae71d4e0dcbff15"
+    },
+    {
+      "path": "Runtime/Profile-454.mr",
+      "offset": 1182512,
+      "size": 101,
+      "sha256": "1534742ed31a847343ca4e90aaa96a941fe5ab50df853ea26421943c343572b0"
+    },
+    {
+      "path": "Runtime/Profile-berline.mr",
+      "offset": 1182613,
+      "size": 75,
+      "sha256": "f2ea4b11f43333c2e8f3039906ef7633bf0af8be5790b2673cfa2ba3083f2343"
+    },
+    {
+      "path": "Runtime/Profile-cross2.mr",
+      "offset": 1182688,
+      "size": 102,
+      "sha256": "c3a208aac8a86cbe8de588e4eb0dfab18deb4ebc5a22f3339ab48750437f78ed"
+    },
+    {
+      "path": "Runtime/Profile-cross4.mr",
+      "offset": 1182790,
+      "size": 82,
+      "sha256": "35e3c4ff7f0c1446e4c5f9f4c27656714e904253618df67d20327496616e3542"
+    },
+    {
+      "path": "Runtime/Profile-cruiser.mr",
+      "offset": 1182872,
+      "size": 126,
+      "sha256": "c870b15fd3026e698355af9ae60e0957be2146274abbadfcef4370376f57909a"
+    },
+    {
+      "path": "Runtime/Profile-moto.mr",
+      "offset": 1182998,
+      "size": 93,
+      "sha256": "1dd004006e286e3c1c3cad8e3652397f8c737efb3bce5e9ceac04a213ec457b9"
+    },
+    {
+      "path": "Runtime/Profile-sport.mr",
+      "offset": 1183091,
+      "size": 96,
+      "sha256": "5bada8d551cc1ecc84cf0dd4653e7b0b44fa82c3cf6feb2d7b81857ab45dc4fa"
+    },
+    {
+      "path": "Runtime/Profile-truck.mr",
+      "offset": 1183187,
+      "size": 97,
+      "sha256": "1f14bd42193dee74fe2887e261d6b072bd6738560584a6204c86ffe991951a04"
+    },
+    {
+      "path": "Runtime/Profile454.mr",
+      "offset": 1183284,
+      "size": 101,
+      "sha256": "1534742ed31a847343ca4e90aaa96a941fe5ab50df853ea26421943c343572b0"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/01_honda_trx520.mr",
+      "offset": 1183385,
+      "size": 4626,
+      "sha256": "63546d57f1792c29e4eb1e8898e3b6c691ff1b244c9c9037d82339c24c27a6a0"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/02_kohler_ch750.mr",
+      "offset": 1188011,
+      "size": 5118,
+      "sha256": "88bf9d5a8c1a4fb8b45fda1fc8633b03155f09e35a3ce068e83c4cde541b30a8"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/03_harley_davidson_shovelhead.mr",
+      "offset": 1193129,
+      "size": 6610,
+      "sha256": "7f21e09146adb08692553dbbda8e497ad3a0ae6d57034e6c17538556cb1c9f04"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/04_hayabusa.mr",
+      "offset": 1199739,
+      "size": 10668,
+      "sha256": "b55704d59a9dd7003227831d851407aebf95659a808bdcf0aa62edaf54273d99"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/05_honda_vtec.mr",
+      "offset": 1210407,
+      "size": 12402,
+      "sha256": "602b02e44b97e7b9a3b50a5569cf6f8f0fbd0373a68f3058b449b93503a167c6"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/06_subaru_ej25.mr",
+      "offset": 1222809,
+      "size": 11654,
+      "sha256": "5f649ee9eaeae800309f4fecb7fef4eaa404d491b2113573c5e7399f33bab546"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/07_audi_i5.mr",
+      "offset": 1234463,
+      "size": 12184,
+      "sha256": "329cea51613679ace19d6465d92cd8342d4b3acf7ab8b5ecfb915a37cd54658a"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/08_radial_5.mr",
+      "offset": 1246647,
+      "size": 8254,
+      "sha256": "a15d01f9d80374b0dd47ba933d4442d7acff4816f8a614f90336c93b2099a010"
+    },
+    {
+      "path": "Runtime/engines/atg-video-1/radial.mr",
+      "offset": 1254901,
+      "size": 1609,
+      "sha256": "4729f4ae881ab1a04750f333b176ec1d94ea0b166d36f9fe74e1433e858bba59"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/01_subaru_ej25_eh.mr",
+      "offset": 1256510,
+      "size": 12553,
+      "sha256": "04eba9d5e0f8fa2d1b2d6bfc89ee09cd1a414ecbd81d2b39f6cfd6c04fcdcb5a"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/02_subaru_ej25_uh.mr",
+      "offset": 1269063,
+      "size": 12542,
+      "sha256": "9f3e0c1355b2851f8a22c1adb0f8d9f06531017c5af046d281b205d71ed9f1b2"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/03_2jz.mr",
+      "offset": 1281605,
+      "size": 13057,
+      "sha256": "15c013c726f5a2461817296fec6ab97bd8510ed23a9d0c85b9e72b5228ad5f54"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/04_60_degree_v6.mr",
+      "offset": 1294662,
+      "size": 13157,
+      "sha256": "18c335f3bdd40f02d6f02e2afb4900247be7e8382e6aa558bc80e7e279a7c2aa"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/05_odd_fire_v6.mr",
+      "offset": 1307819,
+      "size": 13160,
+      "sha256": "cb3d761a7aff3ff8ba7d41af694251494c12e04a081030cce7bbf2462de43f96"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/06_even_fire_v6.mr",
+      "offset": 1320979,
+      "size": 13424,
+      "sha256": "4e08a7c58c16c6a815445bfb2f63567d6438683bbde04271a342d9af494e2a66"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/07_gm_ls.mr",
+      "offset": 1334403,
+      "size": 15514,
+      "sha256": "bbef3ac6280243833393367736eafda6281fd772e5183910cc0464c423fcb1df"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/08_ferrari_f136_v8.mr",
+      "offset": 1349917,
+      "size": 15273,
+      "sha256": "3281838e387d27cb72f0002422055ddf8cc5800ae906cc122ab971cc180307b3"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/09_radial_9.mr",
+      "offset": 1365190,
+      "size": 11624,
+      "sha256": "b80ae9107f2ba97f2deecec3904389a1c02101c2c7ae192aadecb134cb44120d"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/10_lfa_v10.mr",
+      "offset": 1376814,
+      "size": 15801,
+      "sha256": "c446c4644bae13c5763c20721d60ec37d36725d7da2b8646fb720cf3bb267491"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/11_merlin_v12.mr",
+      "offset": 1392615,
+      "size": 16879,
+      "sha256": "50a389da82f287cc48786bd7cc3e2b075733398e401f34c7ad196067511c25d0"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/12_ferrari_412_t2.mr",
+      "offset": 1409494,
+      "size": 18080,
+      "sha256": "677e1d526c5259e519e08975e6b18d39489eab223786714cf2c5de2b47062bdd"
+    },
+    {
+      "path": "Runtime/engines/atg-video-2/radial.mr",
+      "offset": 1427574,
+      "size": 1609,
+      "sha256": "4729f4ae881ab1a04750f333b176ec1d94ea0b166d36f9fe74e1433e858bba59"
+    },
+    {
+      "path": "Runtime/engines/audi/i5.mr",
+      "offset": 1429183,
+      "size": 7054,
+      "sha256": "780fc0804fafaae52bbc5b112f48ba750901aa03024a69eadad0f35985e89fc8"
+    },
+    {
+      "path": "Runtime/engines/bmw/M52B28.mr",
+      "offset": 1436237,
+      "size": 10984,
+      "sha256": "d562bf5d75d960d2fe53a8d2e10fd70c6f0e5657753f0814b70a12f31e36ba20"
+    },
+    {
+      "path": "Runtime/engines/chevrolet/chev_truck_454.mr",
+      "offset": 1447221,
+      "size": 6923,
+      "sha256": "95cec6f2feb5a0fece909805af4e172d2feaf12d316eb42c48f4cf49858b2304"
+    },
+    {
+      "path": "Runtime/engines/chevrolet/engine_03_for_e1.mr",
+      "offset": 1454144,
+      "size": 6127,
+      "sha256": "b971ecb29b42184c34c62ece74aa59341ce747463985d09b16bd525730f1bec5"
+    },
+    {
+      "path": "Runtime/engines/kohler/kohler_ch750.mr",
+      "offset": 1460271,
+      "size": 4110,
+      "sha256": "551866178b9323b0dff6f83e10bd520a4ccff346f2421d2ab9725c2a02d43917"
+    },
+    {
+      "path": "Runtime/engines/local/Cross250TwoStroke.mr",
+      "offset": 1464381,
+      "size": 3894,
+      "sha256": "e27d5179269f0572c0147722e9bdc630fb717af60d7cc99d0eec09098a3b8a1b"
+    },
+    {
+      "path": "Runtime/engines/local/Cross450.mr",
+      "offset": 1468275,
+      "size": 3887,
+      "sha256": "63c44751ed92538ca4d1e0ab67247425c1f31f81be23ad680b0f9a459773b1b2"
+    },
+    {
+      "path": "Runtime/es/actions/actions.mr",
+      "offset": 1472162,
+      "size": 5518,
+      "sha256": "95510e0e7e9252a28c02a2f07da9e31e9ffcadd5e32666f5e1170c0932e33d49"
+    },
+    {
+      "path": "Runtime/es/constants/constants.mr",
+      "offset": 1477680,
+      "size": 256,
+      "sha256": "d95f82158aaea275abe5ff79d1d59c53f33bdaf68dd22602ee7eaeaae3ab1665"
+    },
+    {
+      "path": "Runtime/es/constants/units.mr",
+      "offset": 1477936,
+      "size": 2628,
+      "sha256": "98ef4c60a833d00380a73442cd31de2596b4aa2d75674bb757b81785e637e89b"
+    },
+    {
+      "path": "Runtime/es/engine_sim.mr",
+      "offset": 1480564,
+      "size": 740,
+      "sha256": "699fdf93f3424854cdc14308bcf4358810ee12ec9fd6f3630cf27ad4090882e0"
+    },
+    {
+      "path": "Runtime/es/infrastructure/infrastructure.mr",
+      "offset": 1481304,
+      "size": 188,
+      "sha256": "4988985564c1b2b489e3b1ca66e73aa331d89adafbd554116832475efede6e5d"
+    },
+    {
+      "path": "Runtime/es/objects/objects.mr",
+      "offset": 1481492,
+      "size": 20805,
+      "sha256": "608bcdbd47d2f3c57ad141608ce966f817765ca71b9861f31a9189de58459e0d"
+    },
+    {
+      "path": "Runtime/es/part-library/part_library.mr",
+      "offset": 1502297,
+      "size": 176,
+      "sha256": "ee5f46958e0481608b5d34edd6b6a22274acefe5c09459acf70d239e2c38888f"
+    },
+    {
+      "path": "Runtime/es/part-library/parts/cam_lobes.mr",
+      "offset": 1502473,
+      "size": 1264,
+      "sha256": "2495f2e6f49000eeb14adbd492e5b71d9e29e8d8bd7af32d86c81f2a45c8747a"
+    },
+    {
+      "path": "Runtime/es/part-library/parts/camshafts.mr",
+      "offset": 1503737,
+      "size": 5381,
+      "sha256": "221bf3b4a4fbf160bad0f07f9f3976d781e4517b6facfab7b203d6164d629291"
+    },
+    {
+      "path": "Runtime/es/part-library/parts/heads.mr",
+      "offset": 1509118,
+      "size": 6753,
+      "sha256": "0cc883c53713615e62326281ec231c1bbd397083198a29e24c390dc857a53b97"
+    },
+    {
+      "path": "Runtime/es/part-library/parts/ignition_modules.mr",
+      "offset": 1515871,
+      "size": 1657,
+      "sha256": "50163f63bb5c99775899a2f30e883eff3cb4b5dd7ae5d51f8bbf63c2017de49a"
+    },
+    {
+      "path": "Runtime/es/part-library/parts/intakes.mr",
+      "offset": 1517528,
+      "size": 1358,
+      "sha256": "f2331225d54ec56da44b5b658cfd51b859eb77c9bc5700a8dcace7513f5f8b1e"
+    },
+    {
+      "path": "Runtime/es/settings/application_settings.mr",
+      "offset": 1518886,
+      "size": 804,
+      "sha256": "43ee0fd9556223336cf9d6a26f6ce6dea5007c396355599aec6b4ffa38262cb0"
+    },
+    {
+      "path": "Runtime/es/sound-library/impulse_responses.mr",
+      "offset": 1519690,
+      "size": 1179,
+      "sha256": "950c218503510a516cf7766cc5a9125409ed37eb8fb3519b1a4535dfdb7e2df8"
+    },
+    {
+      "path": "Runtime/es/types/atomic_types.mr",
+      "offset": 1520869,
+      "size": 2059,
+      "sha256": "6b7e85d514eb62506b2c8b83af198cdfaf9e9987f93e7393f164e92cdc8ffc7e"
+    },
+    {
+      "path": "Runtime/es/types/conversions.mr",
+      "offset": 1522928,
+      "size": 569,
+      "sha256": "f42e170fba81db25a5c7ce05d9a1de31bd52c6d74c2224c836225b96a692726a"
+    },
+    {
+      "path": "Runtime/es/types/operations.mr",
+      "offset": 1523497,
+      "size": 1700,
+      "sha256": "e82e413b4159b7e59e541014f714f2b9f2e61cf76c2b293ab3993353971a57a8"
+    },
+    {
+      "path": "Runtime/es/utilities/utilities.mr",
+      "offset": 1525197,
+      "size": 307,
+      "sha256": "d07e34efcd8c9b20b27f4533501dabd37af03ad9b84772d22be09efd4aa03157"
+    }
+  ]
+}

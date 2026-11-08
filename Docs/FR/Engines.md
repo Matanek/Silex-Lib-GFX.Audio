@@ -6,31 +6,44 @@ Le consommateur ne recopie ni ces calculs ni les filtres de la démo. Les huit
 profils et les réglages existants sont conservés ; ce parcours ne dépend pas de
 l’atelier expérimental par pièces.
 
-## Préparer la bibliothèque
+## Utiliser les moteurs fournis
 
-La bibliothèque est un dossier déployable contenant le moteur de calcul et ses
-ressources. Construire puis préparer ce dossier avec les outils du package,
-décrits dans [la préparation native](../../Native/EngineSimulator/README.md).
-Les scripts n’utilisent aucun fichier de Silex-Examples. Copier ensuite ce dossier
-complet avec l’application ; l’API accepte son chemin absolu ou relatif au
-répertoire courant. Il n’existe pas de recherche implicite dans le dépôt de la démo.
-
-L’[exemple autonome](../../Examples/EngineLibrary.sx) emploie exclusivement le
-package. Depuis la racine du workspace :
+`Library.open()` ouvre les huit profils standard avec leur simulateur et leurs
+ressources inclus dans le package. Aucune préparation native ni chemin de
+bibliothèque n’est demandé à l’application. Depuis la racine du workspace :
 
 ```sh
-silex compile Packages/GFX.Audio/Examples/EngineLibrary.sx --release -o Build/EngineLibrary-Consumer
-Build/EngineLibrary-Consumer /chemin/absolu/vers/EngineLibrary
+silex run Packages/GFX.Audio/Examples/EngineLibrary.sx
 ```
 
-Il exerce le moteur hors ligne, sans ouvrir de fenêtre ou de périphérique sonore.
+Cet exemple produit le son hors ligne, sans fenêtre ni périphérique sonore.
+Le programme compilé contient les ressources nécessaires ; il reste utilisable
+sans les sources du package et depuis un autre répertoire courant. Le package
+prépare automatiquement ses fichiers dans un dossier temporaire propre à la
+bibliothèque et les conserve tant qu’un moteur les utilise, y compris après
+`reset()`. Leur libération nettoie ce dossier. Aucun téléchargement ni build
+n’est effectué pendant l’exécution.
+
+Le moteur standard est actuellement fourni et vérifié sur macOS ARM64. Sur les
+autres cibles, `Library.open()` rend `unsupported` ; le chargement explicite
+d’une bibliothèque reste disponible avec les limites de qualification ci-dessous.
+
+## Charger une bibliothèque personnalisée
+
+Le dossier externe reste une option avancée : `Library.open(directory)` ouvre
+une bibliothèque explicitement fournie par l’application. Son chemin absolu ou
+relatif au répertoire courant doit être valide ; aucun autre dossier n’est
+recherché en remplacement. Copier le dossier complet avec l’application.
+Les [outils de préparation native](../../Native/EngineSimulator/README.md)
+permettent de reconstruire le simulateur et ses ressources. Ils servent à la
+maintenance du package ou à la préparation d’une bibliothèque personnalisée.
 
 ## Choisir le moteur et ses commandes
 
 Fragment après `use GFX.Audio.Engines` :
 
 ```sx
-var library = Engines.Library.open("Audio/EngineLibrary")
+var library = Engines.Library.open()
 var engine = library.engine("454")
 var controls = engine.controls()
 controls.running = true
@@ -165,10 +178,9 @@ Les méthodes `render`, `enqueue`, `render_ready`, `pending_blocks` et `reset`
 suivent les règles ci-dessous ; `reset()` conserve la consigne. Les banques v1/v2
 restent utilisables pour les bancs précédents et refusent `driven_engine`.
 
-La démo MonsterTruck de Silex-Examples emploie cette entrée. Sa conduite n’a
-pas de vilebrequin ni de boîte : un adaptateur acoustique lit la rotation des
-jantes et l’effort de leur commande, sans changer les forces. Cette dérivation
-reste une approximation de démo.
+La démo MonsterTruck de Silex-Examples emploie cette entrée avec le moteur
+standard fourni par le package. Elle transmet le régime et le couple de
+combustion normalisé de son moteur physique, sans simuler une seconde boîte.
 
 ## Produire des blocs sans bloquer l’interface
 
@@ -207,5 +219,5 @@ alloue et communique entre processus ; elle n’est pas adaptée à un callback
 audio temps réel. Le régime externe dispose d’un parcours contrôlé hors ligne ;
 sa qualité à l’écoute et la tenue dans une application lourde restent à qualifier.
 La construction et l’exécution de cette extraction sont vérifiées sur macOS ARM64 ; les autres cibles restent à préparer
-et à tester. L’installation du package seule ne fournit pas encore une banque
-native préconstruite pour chaque OS.
+et à tester. La bibliothèque standard embarquée conserve ce même périmètre de
+qualification ; elle ne modifie ni les profils ni le calcul audio.

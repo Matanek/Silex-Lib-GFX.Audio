@@ -6,14 +6,18 @@ use STD.Process
 
 // A deployed bank owns the validated profiles, impulse responses and renderer.
 public class Library {
-    private let root:str
+    private var files:EngineFiles
     private let gearing_supported:bool
     private let driven_supported:bool
-    private init(root:str, gearing_supported:bool, driven_supported:bool) {
-        self.root = root; self.gearing_supported = gearing_supported; self.driven_supported = driven_supported
+    private init(files:EngineFiles, gearing_supported:bool, driven_supported:bool) {
+        self.files = files; self.gearing_supported = gearing_supported; self.driven_supported = driven_supported
     }
-    static func open(directory:str) Result<Library, Error> {
-        var root = directory
+    static func open(directory:str? = null) Result<Library, Error> {
+        if directory == null {
+            var files = try EngineFiles.bundled() else error { return Result<Library,Error>.failure(error) }
+            return Result<Library,Error>.success(Library(files, true, true))
+        }
+        var root = directory!
         let absolute = try Path.is_absolute(root) else error { return Result<Library, Error>.failure(error) }
         if !absolute {
             let current = try Process.current_directory() else error { return Result<Library, Error>.failure(error) }
@@ -24,15 +28,15 @@ public class Library {
         if marker != "silex-engine-library-v1\n" && marker != "silex-engine-library-v2\n" && marker != "silex-engine-library-v3\n" {
             return Result<Library, Error>.failure(engine_error("unsupported engine library version"))
         }
-        return Result<Library, Error>.success(Library(root, marker != "silex-engine-library-v1\n", marker == "silex-engine-library-v3\n"))
+        return Result<Library, Error>.success(Library(EngineFiles(root), marker != "silex-engine-library-v1\n", marker == "silex-engine-library-v3\n"))
     }
     func profiles() Profile[] { return engine_profiles() }
     func driven_engine(key:str = "454") Result<DrivenEngine, Error> {
         if !self.driven_supported { return Result<DrivenEngine, Error>.failure(engine_error("game-driven RPM requires a rebuilt v3 engine library")) }
         for profile in engine_profiles() {
             if profile.key == key {
-                var worker = try EngineWorker.open(self.root, profile.slot, profile.key, following:true) else error { return Result<DrivenEngine, Error>.failure(error) }
-                return Result<DrivenEngine, Error>.success(DrivenEngine(Engine(self.root, profile, worker, null, null,
+                var worker = try EngineWorker.open(self.files.root, profile.slot, profile.key, following:true) else error { return Result<DrivenEngine, Error>.failure(error) }
+                return Result<DrivenEngine, Error>.success(DrivenEngine(Engine(self.files, profile, worker, null, null,
                     OperatingState(rpm:0.0, running:false))))
             }
         }
@@ -47,8 +51,8 @@ public class Library {
         }
         for profile in engine_profiles() {
             if profile.key == key {
-                var worker = try EngineWorker.open(self.root, profile.slot, profile.key, transmission != null, gearing) else error { return Result<Engine, Error>.failure(error) }
-                return Result<Engine, Error>.success(Engine(self.root, profile, worker, transmission, gearing))
+                var worker = try EngineWorker.open(self.files.root, profile.slot, profile.key, transmission != null, gearing) else error { return Result<Engine, Error>.failure(error) }
+                return Result<Engine, Error>.success(Engine(self.files, profile, worker, transmission, gearing))
             }
         }
         return Result<Engine, Error>.failure(engine_error("unknown engine profile"))

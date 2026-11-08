@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- `Engines.Library.open()` supplies the eight standard engines on macOS ARM64 without a directory or extra preparation. The simulator and resources are embedded, retained for the engines’ lifetime and cleaned up on release; custom library loading remains optional. All eight profiles preserve sample-exact PCM in the comparison scenarios.
+
 - `capture_output()` observes the device mix as owned, timestamped PCM blocks, with a bounded queue, stop/drain and explicit overflow while playback continues. Private `silex.7` provider reproduced for six targets.
 
 - `output_format()` exposes the mix sample rate and channels; `render_f32le()` provides owned offline PCM for encoder integrations, without normalization or timeline changes.

@@ -1,5 +1,6 @@
 {
   "name": "GFX.Audio",
+  "sources": "Module",
   "version": "0.4.0",
   "description": {
     "en": "Procedural synthesis and sound playback with envelopes, fades, routing, spatial position, and GFX integration.",
@@ -9,7 +10,7 @@
   "requires": { "silex": ">=0.47.1" },
   "dependencies": {
     "GFX": "^0.40.0",
-    "STD": "^0.22.0"
+    "STD": "^0.23.0"
   },
   "boundary": {
     "macos-arm64": {

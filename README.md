@@ -37,7 +37,8 @@ instruments keep their own musical settings and the existing extension protocol.
 
 [Reuse the validated engine-bench sounds](Docs/EN/Engines.md) through
 `GFX.Audio.Engines`: package-owned simulation, profiles, exhaust responses,
-intake and output processing, with an independently deployable native bank.
+intake and output processing. `Library.open()` supplies the standard engines on
+macOS ARM64; an external native library is optional.
 
 The [parts workshop](Docs/EN/EngineParts.md) remains experimental and separate
 from the validated engine library.

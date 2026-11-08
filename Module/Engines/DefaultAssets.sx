@@ -1,0 +1,4 @@
+use GFX.Audio.Engines.EngineFiles
+use STD.Error
+
+func populate(files:&EngineFiles) Result<void, Error> { return try Target.populate(files) }
