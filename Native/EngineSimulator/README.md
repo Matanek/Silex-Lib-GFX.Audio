@@ -9,6 +9,13 @@ No source in this package imports Silex-Examples.
 This is the package-maintenance build path. Ordinary consumers call
 `Engines.Library.open()` without preparing a directory.
 
+`DefaultParity.py --output /tmp/engine-packet-parity` extracts and verifies the
+bundled library, then compares repeated native packets for all eight profiles
+using the consumer's three operating states. It bypasses Silex PCM decoding and
+mixing; a failure records both packet streams and the first differing byte.
+The public consumer independently checks exact processed PCM and reports the
+profile, operating state, block and sample on a mismatch.
+
 Rebuild the existing renderer on macOS ARM64 with Xcode/Clang/Flex, CMake and
 Bison 3.2 or newer:
 
