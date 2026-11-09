@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - 2026-11-08
+## [0.5.0] - 2026-11-09
 
 - `Engines.Library.open()` supplies the eight standard engines on macOS ARM64 without a directory or extra preparation. The simulator and resources are embedded, retained for the engines’ lifetime and cleaned up on release; custom library loading remains optional. All eight profiles preserve sample-exact PCM in the comparison scenarios.
 

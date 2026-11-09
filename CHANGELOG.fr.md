@@ -1,6 +1,18 @@
 # Historique
 
-## [0.5.0] - 2026-11-08
+## [0.5.0] - 2026-11-09
+
+- Ajouter `Engines.Library.driven_engine` et `OperatingState` pour piloter régime et effort de combustion depuis le jeu. La chaîne thermique et acoustique conserve les phases de vilebrequin continues, borne les changements de régime et utilise le rendu FIFO existant. Les banques natives v3 exposent cette entrée ; les banques v1/v2 gardent leurs modes antérieurs.
+
+- Ajouter `Engines.Gearing` pour régler rapports de boîte et pont à la création d’un moteur routier. Les rapports d’origine et actifs sont consultables, validés avant création et conservés au reset ; les réglages d’origine gardent leur PCM. Les nouvelles banques acceptent ces réglages ; les banques v1 conservent les valeurs par défaut.
+
+- Exposer la transmission automatique ou manuelle optionnelle du banc validé par `Engines.Library.engine`, avec demandes de rapport, freinage et télémétrie routière synchronisée. Point mort, refus des surrégimes et réengagement sûr sont préservés ; le mode banc libre reste le défaut.
+
+- Extraire la chaîne validée du banc moteur dans `GFX.Audio.Engines` : bibliothèque native distribuable, huit profils, réponses d’échappement d’origine, admission 4T mesurée et traitement de sortie. Génération synchrone et demandes asynchrones bornées ; le banc autonome reste l’oracle PCM et l’atelier par pièces reste expérimental. La banque native est actuellement qualifiée sur macOS ARM64, sans distribution complète sur les autres cibles.
+
+- Corriger le rayonnement de pression des échappements par pièces et lisser les attaques des impulsions. Ajouter les niveaux d’écoute par sortie et conserver les contributions inégales des bancs du V8. Les tests distinguent les changements de timbre isolés du niveau du turbo.
+
+- Ajouter `Synthesis.Engine.assemble` et les types `EngineParts` : bloc, cycle, allumage, culasse, admission, tuyaux, silencieux, mécanique et turbo optionnel. Régime, charge, carburant et suralimentation sont pilotés par le jeu ; mélange des branches et transitions de remplacement sont bornés. Consommateur indépendant, atelier et guides FR/EN ; le prototype `Engine.create` et le banc engine-sim autonome sont conservés.
 
 - `Engines.Library.open()` fournit les huit moteurs standard sur macOS ARM64 sans dossier ni préparation supplémentaire. Le simulateur et ses ressources sont embarqués, gardés pendant la vie des moteurs et nettoyés à leur libération ; le chargement d’une bibliothèque personnalisée reste optionnel. Le PCM des huit profils est conservé échantillon par échantillon dans les scénarios de comparaison.
 
