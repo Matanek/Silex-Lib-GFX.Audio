@@ -32,17 +32,12 @@ func verify(directory:str? = null) {
         let states:Engines.OperatingState[] = [Engines.OperatingState(rpm:850.0,load:0.1), Engines.OperatingState(rpm:2_500.0,load:0.8), Engines.OperatingState(rpm:1_200.0)]
         for state in states {
             engine.set_state(state); other.set_state(state)
-            for block in 0...40 {
+            for _ in 0...40 {
                 other.enqueue(1); engine.render(&a[0:960])
                 var clock = Stopwatch(); clock.start()
                 while !other.render_ready(&b[0:960]) { assert(clock.get_elapsed_seconds() < 5.0) }
                 assert(engine.current_rpm() == other.current_rpm())
                 for i in 0...960 {
-                    if !Math.is_finite(a[i]) || a[i] != b[i] {
-                        print("PCM mismatch profile=", profile.key, " rpm=", state.rpm,
-                            " load=", state.load, " block=", block, " sample=", i,
-                            " synchronous=", a[i], " asynchronous=", b[i])
-                    }
                     assert(Math.is_finite(a[i]) && a[i] == b[i], "embedding the engine must preserve every PCM sample")
                     energy += a[i] as float64 * a[i] as float64
                 }
