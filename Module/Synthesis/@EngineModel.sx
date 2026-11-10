@@ -41,6 +41,12 @@ class EngineModel:Generator {
     private let mechanical_damping:float32
     private var mechanical_low:float32 = 0.0
     private let mechanical_step:float32
+    private var clatter_pulse:EnginePulse
+    private var clatter_body:EngineResonance
+    private var clatter_metal:EngineResonance
+    private let clatter_gain:float32
+    private let whine_gain:float32
+    private var whine_phase:float64 = 0.0
     private var turbo_speed:float32 = 0.0
     private var turbo_phase:float64 = 0.0
     private var release:float32 = 0.0
@@ -60,7 +66,8 @@ class EngineModel:Generator {
         self.energy = 0.55 * Math.sqrt(cylinder_litres / 0.5) * Math.sqrt(parts.compression_ratio() / 10.0)
         let duration = Math.clamp(6.0 * Math.sqrt(cylinder_litres / 0.5) * Math.sqrt(10.0 / parts.compression_ratio()), 2.0, 18.0)
         for exhaust in parts.exhausts {
-            self.pulses.append(EnginePulse(rate, duration * Math.sqrt(45.0 / exhaust.header.diameter_mm), parts.head.burn_ms * 0.3))
+            self.pulses.append(EnginePulse(rate, duration * Math.sqrt(45.0 / exhaust.header.diameter_mm) * (1.0 - 0.55 * parts.head.sharpness),
+                parts.head.burn_ms * (0.3 - 0.24 * parts.head.sharpness)))
             self.exhausts.append(EngineExhaustPath(rate, exhaust))
         }
         self.intake_pulse = EnginePulse(rate, duration * 1.8, 1.0)
@@ -69,6 +76,13 @@ class EngineModel:Generator {
         self.mechanical_body = EngineResonance(rate, 240.0 * Math.sqrt(100.0 / parts.mechanics.block_mass_kg), 1.8)
         self.mechanical_damping = parts.mechanics.damping
         self.mechanical_step = 1.0 - Math.exp(-6.28318530718 * (800.0 + 4_000.0 * (1.0 - parts.mechanics.damping)) / rate)
+        var diesel:float32 = 0.0
+        if parts.head.ignition == EngineParts.Ignition.compression { diesel = 1.0 }
+        self.clatter_pulse = EnginePulse(rate, 1.2 + diesel * 1.8, 0.06)
+        self.clatter_body = EngineResonance(rate, 1_200.0 + diesel * 600.0, 2.0)
+        self.clatter_metal = EngineResonance(rate, 3_400.0, 2.8)
+        self.clatter_gain = parts.mechanics.clatter + diesel * 0.8
+        self.whine_gain = parts.mechanics.whine
         self.exhaust_mix = RampState(parts.mix.exhaust); self.intake_mix = RampState(parts.mix.intake)
         self.mechanics_mix = RampState(parts.mix.mechanics); self.turbo_mix = RampState(parts.mix.turbo)
         if let turbo = parts.turbo {
@@ -118,6 +132,7 @@ class EngineModel:Generator {
         if self.aspiration == self.angles.count() { self.aspiration = 0; self.next_intake += 1.0 }
         self.next_intake += self.angles[self.aspiration]
         self.turbo_speed = other.turbo_speed; self.turbo_phase = other.turbo_phase
+        self.whine_phase = other.whine_phase
     }
     private func noise() float32 {
         self.random = (self.random * 48_271) % 2_147_483_647
@@ -133,10 +148,11 @@ class EngineModel:Generator {
             let roughness = self.roughness.next(); let openness = self.openness.next()
             if rpm > 0.0 {
                 while self.next_fire <= self.phase {
-                    let signature = 1.0 + roughness * (0.15 * self.signatures[self.cylinders[self.firing]] + 0.08 * self.noise())
+                    let signature = 1.0 + roughness * (0.45 * self.signatures[self.cylinders[self.firing]] + 0.3 * self.noise())
                     let energy = self.energy * fuel * (0.25 + 0.4 * throttle + 0.75 * load) * (1.0 - 0.6 * brake) * signature
                     self.pulses[self.banks[self.firing]].fire(energy)
                     self.mechanical_pulse.fire(self.energy * (0.15 + rpm / 12_000.0))
+                    self.clatter_pulse.fire(self.energy * (0.2 + 0.5 * fuel + 0.7 * load * fuel))
                     let previous = self.angles[self.firing]
                     self.firing++; var step:float64 = 0.0
                     if self.firing == self.angles.count() { self.firing = 0; step = 1.0 }
@@ -149,7 +165,8 @@ class EngineModel:Generator {
                     if self.aspiration == self.angles.count() { self.aspiration = 0; step = 1.0 }
                     self.next_intake += step + self.angles[self.aspiration] - previous
                 }
-                self.phase += rpm as float64 / (60.0 * self.revolutions * rate as float64)
+                let ripple = 1.0 + roughness as float64 * 0.015 * Math.sin(6.28318530718 * self.phase)
+                self.phase += rpm as float64 * ripple / (60.0 * self.revolutions * rate as float64)
                 if self.phase >= 1.0 { self.phase -= 1.0; self.next_fire -= 1.0; self.next_intake -= 1.0 }
             }
             let exhaust_gain = self.exhaust_mix.next() * openness
@@ -165,7 +182,13 @@ class EngineModel:Generator {
             let mechanical = self.mechanical_pulse.next()
             self.mechanical_low += self.mechanical_step * (mechanical - self.mechanical_low)
             let body = self.mechanical_body.next(mechanical)
-            let mechanics = ((1.0 - self.mechanical_damping * 0.7) * self.mechanical_low + body) * self.mechanics_mix.next()
+            let rattle = self.clatter_pulse.next() * (0.4 + 0.6 * self.noise())
+            let clatter = (self.clatter_body.next(rattle) + 0.5 * self.clatter_metal.next(rattle)) * self.clatter_gain
+            self.whine_phase += rpm as float64 * 12.0 / (60.0 * rate as float64)
+            self.whine_phase -= Math.floor(self.whine_phase)
+            let whine = self.whine_gain * Math.min(1.0, rpm / 8_000.0) * 0.08 *
+                round_float<float32>(Math.sin(6.28318530718 * self.whine_phase))
+            let mechanics = ((1.0 - self.mechanical_damping * 0.7) * self.mechanical_low + body + clatter + whine) * self.mechanics_mix.next()
             var turbo:float32 = 0.0
             let turbo_gain = self.turbo_mix.next()
             if self.turbo_step > 0.0 {
@@ -184,7 +207,9 @@ class EngineModel:Generator {
                 left *= absorption; right *= absorption
             }
             let common = aspiration + mechanics + turbo
-            let a = left + common; let b = right + common
+            // Leave transient headroom before the final bounded soft limiter.
+            // Summing several open cylinders must not flatten every attack.
+            let a = (left + common) * 0.18; let b = (right + common) * 0.18
             if self.format.channels == 1 {
                 let mono = (a + b) * 0.5
                 samples[i] = self.amplitude * mono / (1.0 + Math.abs(mono))
@@ -206,5 +231,6 @@ class EngineModel:Generator {
         for var path in self.exhausts { path.reset() }
         self.intake_pulse.reset(); self.intake.reset(); self.mechanical_pulse.reset(); self.mechanical_body.reset()
         self.mechanical_low = 0.0; self.turbo_speed = 0.0; self.turbo_phase = 0.0; self.release = 0.0
+        self.clatter_pulse.reset(); self.clatter_body.reset(); self.clatter_metal.reset(); self.whine_phase = 0.0
     }
 }

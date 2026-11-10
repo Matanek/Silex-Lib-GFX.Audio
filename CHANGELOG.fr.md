@@ -1,5 +1,10 @@
 # Historique
 
+## [Unreleased]
+
+- Ajouter `Synthesis.EngineVehicles.catalogue()` : 17 profils procéduraux de citadines essence/diesel, sportives, motocross 2T/4T, motos de course et customs, avec cylindrée, régime et réponse propres à chaque archétype. Les profils restent des inspirations sonores à qualifier par l’écoute.
+- Enrichir le parcours `Engine.assemble` : attaque de combustion, allumage par compression et claquement, chicanes acoustiques, résonance de détente, sifflement mécanique et irrégularité de rotation. Valider les nouveaux réglages avant mutation ; conserver phases, rendu déterministe et stockage préparé. Réduire le niveau avant le limiteur du parcours par pièces pour préserver ses transitoires en charge ; son niveau de sortie change. `Engine.create` et la bibliothèque native `Engines` restent séparés.
+
 ## [0.5.0] - 2026-11-09
 
 - Ajouter `Engines.Library.driven_engine` et `OperatingState` pour piloter régime et effort de combustion depuis le jeu. La chaîne thermique et acoustique conserve les phases de vilebrequin continues, borne les changements de régime et utilise le rendu FIFO existant. Les banques natives v3 exposent cette entrée ; les banques v1/v2 gardent leurs modes antérieurs.

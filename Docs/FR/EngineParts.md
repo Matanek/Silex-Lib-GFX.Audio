@@ -14,6 +14,32 @@ silex run Packages/GFX.Audio/Examples/EngineAssembly.sx --release
 Ajouter `--check` au binaire compilé permet d’exercer le même consommateur
 sans ouvrir de périphérique audio.
 
+## Partir d’une signature de véhicule
+
+`GFX.Audio.Synthesis.EngineVehicles.catalogue()` fournit 17 profils acoustiques :
+citadines essence trois/quatre cylindres et turbodiesel, sportives I4 turbo,
+flat-six, V8 cross-plane, V10 et V12, cross 125/250/500 deux temps et 250/500
+quatre temps, motos de course I4/V4 et customs bicylindres 1 200/1 800 cm³.
+Chaque `Profile` contient `id`, `name`, `parts`, `idle_rpm`, `redline_rpm`,
+`response_seconds` et `roughness`. Les identifiants restent indépendants des
+libellés d’interface. Les régimes et le temps de réponse sont des indications
+pour le banc du consommateur ; le générateur ne simule pas une transmission.
+
+Fragment après les imports `GFX.Audio.Synthesis` et
+`GFX.Audio.Synthesis.EngineVehicles` :
+
+```sx
+let profile = EngineVehicles.catalogue()[9]
+var engine = Synthesis.Engine.assemble(profile.parts)
+engine.set_character(1.0, profile.roughness, ramp_frames:0)
+engine.set_state(6_000.0, throttle:0.85, load:0.7)
+```
+
+Ce profil est un mono cross 250 deux temps. La génération demeure entièrement
+procédurale. Les profils sont des archétypes stylisés, sans enregistrements ni
+reproduction certifiée de véhicules commerciaux. L’[atelier des véhicules](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop)
+permet de les comparer, d’ajuster leur cylindrée totale et d’exporter un WAV.
+
 ## Choisir un assemblage puis remplacer une pièce
 
 Fragment après les imports `GFX.Audio.Synthesis` et
@@ -47,11 +73,11 @@ Les commandes et le rendu appartiennent au même thread applicatif.
 | Pièce | Paramètres | Effet du modèle |
 | --- | --- | --- |
 | `Block` | Cylindres, alésage/course en mm, cycle, allumage, bancs | Cylindrée, cadence et distribution des impulsions |
-| `Head` | Chambre en cm³, combustion en ms | Compression géométrique, énergie et forme de la détente |
+| `Head` | Chambre en cm³, combustion en ms, `ignition`, `sharpness` | Compression géométrique, énergie et attaque ; claquement propre à l’allumage par compression |
 | `Intake` | Conduit `Pipe`, boîte à air en litres, absorption du filtre | Propagation, résonance et bruit pulsé d’aspiration |
-| `Exhaust` | Collecteur et ligne `Pipe`, `Silencer`, `outlet_level` | Retards, réflexions aux changements de section et coloration |
-| `Silencer` | Litres et absorption 0..1 | Résonance de chambre et atténuation des aigus |
-| `Mechanics` | Masse du bloc en kg, amortissement 0..1 | Résonance du bloc et atténuation des vibrations |
+| `Exhaust` | Collecteur et ligne `Pipe`, `Silencer`, `outlet_level`, `expansion_litres` | Retards, réflexions et résonance de détente optionnelle |
+| `Silencer` | Litres, absorption 0..1, `baffles` | Résonance de chambre, atténuation et filtrages successifs des chicanes |
+| `Mechanics` | Masse du bloc en kg, amortissement, `clatter`, `whine` | Résonance du bloc, claquement bruité et sifflement lié à la rotation |
 | `Turbo` facultatif | Roue en mm, pales, pression maximale en bar, inertie en secondes | Sifflement, montée/retombée et bruit de décharge |
 
 Les combustions et aspirations partagent l’horloge du vilebrequin. À régime
@@ -69,8 +95,9 @@ Les conduits utilisent des retards aller-retour à 343 m/s et des réflexions
 atténuées ; les chambres utilisent des résonances préparées. L’excitation,
 les pertes, le bruit mécanique et le turbo sont des approximations acoustiques.
 Le modèle ne calcule pas les soupapes, les écoulements, le couple ou la
-thermodynamique complète. Le deux temps ne possède pas encore un pot de détente
-à cônes ni un balayage détaillé. La qualité et la couverture des timbres se
+thermodynamique complète. La détente du deux temps ajoute une résonance liée
+au volume ; elle ne simule ni les cônes ni le balayage. Les chicanes sont des
+étages de filtrage acoustique, sans calcul de contre-pression. La qualité et la couverture des timbres se
 qualifient à l’écoute, indépendamment de la disponibilité des pièces.
 
 ## Piloter le moteur et isoler les voies
@@ -84,7 +111,8 @@ configurée dans le turbo. Le jeu reste propriétaire de la dynamique du véhicu
 `intake`, `mechanics` et `turbo`, chacun entre 0 et 1. Mettre trois voies à zéro
 permet d’écouter la quatrième. `set_character(exhaust, roughness)` conserve ses
 commandes 0..1 : niveau d’ouverture global et variations entre combustions.
-Les rampes n’effacent ni les phases, ni les queues acoustiques.
+Les variations de `roughness` agissent sur l’énergie des combustions et une
+petite ondulation de la rotation. Les rampes n’effacent ni les phases, ni les queues acoustiques.
 
 `fuel:0` arrête les futures combustions. Pour un arrêt complet, fournir aussi
 un régime qui descend vers zéro, puis rendre la queue. `current_rpm()` décrit
@@ -129,6 +157,13 @@ pour une définition invalide. `try` conserve l’erreur pour la traiter.
 - masse mécanique 1..2 000 kg ; amortissement 0..1 ;
 - turbo : roue 20..150 mm, 2..16 pales, pression 0,1..4 bar, inertie 0,01..5 s.
 
+`Head.ignition` vaut `Ignition.spark` par défaut ou `Ignition.compression`.
+`Head.sharpness`, `Mechanics.clatter` et `Mechanics.whine` vont de 0 à 1
+(défaut 0). `Silencer.baffles` accepte 0..8 (défaut 0) ;
+`Exhaust.expansion_litres` accepte 0..30 L (défaut 0, résonance désactivée).
+Les valeurs non finies sont refusées. La mécanique reste une approximation
+du bruit rayonné : les réglages ne déterminent pas une puissance moteur.
+
 Un ordre d’allumage explicite est une permutation des numéros 1..N. Les angles
 explicites, un par événement, commencent à zéro et croissent dans le cycle de
 720° ou 360°. Une liste vide signifie des événements régulièrement espacés.
@@ -142,7 +177,9 @@ approximation acoustique ; il ne garantit pas un effet perceptible de chaque
 petite variation de géométrie dans un mélange complet. Isoler la voie et comparer
 à régime/charge identiques avant de juger un réglage.
 
-La sortie est bornée par l’amplitude, par défaut
+Une marge de niveau avant le limiteur préserve davantage les attaques en
+charge ; le niveau du parcours par pièces est réduit par rapport au précédent
+modèle. La sortie est bornée par l’amplitude, par défaut
 0,4. Les blocs doivent contenir des frames complètes ; un bloc vide n’avance rien.
 L’ancienne fabrique `Engine.create()` conserve le prototype quatre temps et son
 contrat [existant](Engine.md) ; `assemble` ouvre le parcours par pièces.

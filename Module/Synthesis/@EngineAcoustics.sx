@@ -67,6 +67,10 @@ class EngineExhaustPath {
     private let radiation_gain:float32
     private var radiation:float32 = 0.0
     private var previous:float32 = 0.0
+    private var baffle_low:float32[] = []
+    private let baffle_step:float32
+    private var expansion:EngineResonance
+    private let expansion_gain:float32
     init(rate:float32, parts:EngineParts.Exhaust) {
         let a = parts.header.diameter_mm * parts.header.diameter_mm
         let b = parts.pipe.diameter_mm * parts.pipe.diameter_mm
@@ -80,6 +84,16 @@ class EngineExhaustPath {
         self.chamber = EngineResonance(rate, frequency, 0.6 + 2.5 * (1.0 - self.absorption))
         self.step = 1.0 - Math.exp(-6.28318530718 * Math.min(rate * 0.4, 700.0 + 5_500.0 * (1.0 - self.absorption)) / rate)
         self.gain = parts.outlet_level * Math.sqrt(50.0 / parts.pipe.diameter_mm)
+        self.baffle_step = 1.0 - Math.exp(-6.28318530718 * (1_800.0 - 1_200.0 * self.absorption) / rate)
+        for _ in 0...parts.silencer.baffles { self.baffle_low.append(0.0) }
+        // An acoustic expansion-chamber approximation. Its volume tunes a
+        // second resonance; it does not claim to simulate two-stroke scavenging.
+        let expansion_frequency = Math.clamp(343.0 / 6.28318530718 * Math.sqrt(area /
+            (Math.max(0.05, parts.expansion_litres) * 0.001 * Math.max(0.02, neck * 0.12))), 80.0, rate * 0.2)
+        self.expansion = EngineResonance(rate, expansion_frequency, 3.5)
+        var expansion_gain:float32 = 0.0
+        if parts.expansion_litres > 0.0 { expansion_gain = 2.5 }
+        self.expansion_gain = expansion_gain
         // Pressure inside the pipe is not the radiated sound. A small outlet
         // differentiates it below c/(2*pi*radius), with bounded high-frequency gain.
         self.radiation_decay = Math.exp(-343_000.0 / (0.5 * parts.pipe.diameter_mm * rate))
@@ -89,7 +103,12 @@ class EngineExhaustPath {
         let input = self.pipe.next(self.header.next(pressure))
         let body = self.chamber.next(input)
         self.low += self.step * (input - self.low)
-        let pressure_out = (1.0 - 0.55 * self.absorption) * self.low + 0.65 * body
+        var pressure_out = (1.0 - 0.55 * self.absorption) * self.low + 0.65 * body
+        if self.expansion_gain > 0.0 { pressure_out += self.expansion_gain * self.expansion.next(input) }
+        for i in 0...self.baffle_low.count() {
+            self.baffle_low[i] += self.baffle_step * (pressure_out - self.baffle_low[i])
+            pressure_out = self.baffle_low[i] * 0.88
+        }
         self.radiation = pressure_out - self.previous + self.radiation_decay * self.radiation
         self.previous = pressure_out
         return self.gain * self.radiation_gain * self.radiation
@@ -97,6 +116,8 @@ class EngineExhaustPath {
     func reset() {
         self.header.reset(); self.pipe.reset(); self.chamber.reset(); self.low = 0.0
         self.previous = 0.0; self.radiation = 0.0
+        self.expansion.reset()
+        for i in 0...self.baffle_low.count() { self.baffle_low[i] = 0.0 }
     }
 }
 

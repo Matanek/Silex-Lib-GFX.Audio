@@ -260,7 +260,7 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 
 [Play guitar, violin and drums](Catalogue.md), with built-in instruments and audible examples.
 
-[Build an engine from a block, head, intake, exhaust and turbo](EngineParts.md).
+[Choose a vehicle signature and assemble its engine sound](EngineParts.md).
 
 [Reuse the validated engine-bench sounds](Engines.md).
 

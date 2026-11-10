@@ -41,4 +41,5 @@ intake and output processing. `Library.open()` supplies the standard engines on
 macOS ARM64; an external native library is optional.
 
 The [parts workshop](Docs/EN/EngineParts.md) remains experimental and separate
-from the validated engine library.
+from the validated engine library. `Synthesis.EngineVehicles.catalogue()` supplies
+17 editable procedural vehicle archetypes, including diesel, motocross and V-twins.

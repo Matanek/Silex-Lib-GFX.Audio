@@ -12,6 +12,11 @@ func main() {
     phase(); assert(positive[1_023] == 1_023.0 as float32)
     print("assembly preparation"); phase()
     var parts = EngineParts.v8(); parts.turbo = EngineParts.Turbo()
+    parts.head.ignition = EngineParts.Ignition.compression; parts.head.sharpness = 0.8
+    parts.mechanics.clatter = 0.7; parts.mechanics.whine = 0.6
+    for i in 0...parts.exhausts.count() {
+        parts.exhausts[i].silencer.baffles = 8; parts.exhausts[i].expansion_litres = 3.0
+    }
     var source = Synthesis.Engine.assemble(parts)
     var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
     phase()

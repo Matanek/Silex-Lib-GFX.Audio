@@ -14,6 +14,32 @@ silex run Packages/GFX.Audio/Examples/EngineAssembly.sx --release
 Pass `--check` to its compiled executable to exercise the same consumer without
 opening an audio device.
 
+## Start from a vehicle signature
+
+`GFX.Audio.Synthesis.EngineVehicles.catalogue()` supplies 17 acoustic profiles:
+three/four-cylinder petrol and turbo diesel city cars, turbo I4, flat-six,
+cross-plane V8, V10 and V12 sports cars, 125/250/500 two-stroke and 250/500
+four-stroke motocross bikes, I4/V4 race motorcycles and 1,200/1,800 cc V-twin
+customs. Each `Profile` contains `id`, `name`, `parts`, `idle_rpm`, `redline_rpm`,
+`response_seconds` and `roughness`. IDs are independent of interface labels.
+RPM limits and response time guide the consumer's bench; the generator does
+not simulate a transmission.
+
+Fragment after importing `GFX.Audio.Synthesis` and
+`GFX.Audio.Synthesis.EngineVehicles`:
+
+```sx
+let profile = EngineVehicles.catalogue()[9]
+var engine = Synthesis.Engine.assemble(profile.parts)
+engine.set_character(1.0, profile.roughness, ramp_frames:0)
+engine.set_state(6_000.0, throttle:0.85, load:0.7)
+```
+
+This profile is a 250 cc two-stroke motocross single. Generation remains fully
+procedural. Profiles are stylized archetypes without recordings or certified
+reproduction of commercial vehicles. The [vehicle workshop](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop)
+compares them, adjusts total displacement and exports WAV audio.
+
 ## Choose an assembly and replace a part
 
 Fragment after importing `GFX.Audio.Synthesis` and
@@ -47,11 +73,11 @@ same application thread.
 | Part | Parameters | Model effect |
 | --- | --- | --- |
 | `Block` | Cylinders, bore/stroke in mm, cycle, firing, banks | Displacement, pulse cadence and distribution |
-| `Head` | Chamber in cc, combustion in ms | Geometric compression, release energy and shape |
+| `Head` | Chamber in cc, combustion in ms, `ignition`, `sharpness` | Geometric compression, energy and attack; compression ignition clatter |
 | `Intake` | Runner `Pipe`, airbox litres, filter absorption | Propagation, resonance and pulsed intake noise |
-| `Exhaust` | Header and main `Pipe`, `Silencer`, `outlet_level` | Delays, area-change reflections and coloration |
-| `Silencer` | Litres and absorption 0..1 | Chamber resonance and high-frequency attenuation |
-| `Mechanics` | Block mass in kg, damping 0..1 | Block resonance and vibration attenuation |
+| `Exhaust` | Header and main `Pipe`, `Silencer`, `outlet_level`, `expansion_litres` | Delays, reflections and optional expansion resonance |
+| `Silencer` | Litres, absorption 0..1, `baffles` | Chamber resonance, attenuation and successive baffle filters |
+| `Mechanics` | Block mass in kg, damping, `clatter`, `whine` | Block resonance, noisy clatter and rotation-related whine |
 | Optional `Turbo` | Wheel mm, blades, maximum bar, inertia seconds | Whistle, spool response and release noise |
 
 Combustion and intake share the crankshaft clock. At equal RPM, a two-stroke
@@ -67,8 +93,9 @@ compression would also depend on port timing.
 Ducts use attenuated reflections and round-trip delays at 343 m/s; chambers use
 prepared resonances. Excitation, losses, mechanics and turbo are acoustic
 approximations. The model does not calculate valves, gas flow, torque or full
-thermodynamics. Two-stroke exhausts do not yet include conical expansion chambers
-or detailed scavenging. Timbre quality and coverage require listening separately
+thermodynamics. Two-stroke expansion adds a volume-related resonance; it does
+not simulate cones or scavenging. Baffles are acoustic filtering stages without
+back-pressure calculations. Timbre quality and coverage require listening separately
 from the availability of configurable parts.
 
 ## Drive the engine and isolate branches
@@ -81,7 +108,8 @@ The game owns vehicle dynamics.
 `set_mix(EngineParts.Mix(...), ramp_frames:480)` sets `exhaust`, `intake`,
 `mechanics` and `turbo` levels separately, each in 0..1. Set three to zero to
 isolate the fourth. `set_character(exhaust, roughness)` retains its 0..1 controls:
-global exhaust openness and combustion variation. Ramps preserve phases and
+global exhaust openness and combustion variation. `roughness` varies combustion
+energy and adds a small rotation ripple. Ramps preserve phases and
 acoustic tails.
 
 `fuel:0` stops future combustion. For a full stop, also supply falling RPM and
@@ -126,6 +154,13 @@ invalid definitions. Use `try` to retain and handle the error.
 - mechanical mass 1..2,000 kg, damping 0..1;
 - turbo wheel 20..150 mm, 2..16 blades, pressure 0.1..4 bar, inertia 0.01..5 s.
 
+`Head.ignition` defaults to `Ignition.spark`, or can be `Ignition.compression`.
+`Head.sharpness`, `Mechanics.clatter` and `Mechanics.whine` span 0..1
+(default 0). `Silencer.baffles` accepts 0..8 (default 0);
+`Exhaust.expansion_litres` accepts 0..30 L (default 0, resonance disabled).
+Non-finite values are rejected. Mechanics approximate radiated noise;
+these controls do not determine engine power.
+
 An explicit firing order is a permutation of cylinder numbers 1..N. Explicit
 angles, one per event, start at zero and increase within the 720° or 360° cycle.
 An empty angle list means evenly spaced events. `exhaust_banks` maps each
@@ -138,6 +173,8 @@ a common playback calibration. This remains an acoustic approximation; it does
 not guarantee that every small geometry change will be audible in a full mix.
 Isolate the branch and compare at identical RPM/load before judging a control.
 
+Headroom before the limiter preserves more of the loaded attacks; the parts
+path's level is reduced relative to the previous model.
 Output is bounded by amplitude, default 0.4. Blocks must contain
 complete frames; empty blocks do not advance state. The original `Engine.create()`
 factory retains the four-stroke prototype and its [existing contract](Engine.md);

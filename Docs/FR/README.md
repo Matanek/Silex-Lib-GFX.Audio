@@ -265,7 +265,7 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 
 [Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.
 
-[Assembler un moteur avec bloc, culasse, admission, échappement et turbo](EngineParts.md).
+[Choisir une signature de véhicule et assembler son moteur sonore](EngineParts.md).
 
 [Réutiliser les moteurs du banc validé](Engines.md).
 

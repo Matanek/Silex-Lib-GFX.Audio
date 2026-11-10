@@ -3,6 +3,7 @@ use STD.Error.Kind
 use STD.Math
 
 public enum Cycle { four_stroke; two_stroke }
+public enum Ignition { spark; compression }
 
 public struct Block {
     var cylinders:int = 1
@@ -19,6 +20,8 @@ public struct Block {
 public struct Head {
     var chamber_cc:float32 = 55.0
     var burn_ms:float32 = 1.2
+    var ignition:Ignition = Ignition.spark
+    var sharpness:float32 = 0.0
 }
 public struct Pipe {
     var length_mm:float32 = 800.0
@@ -27,12 +30,14 @@ public struct Pipe {
 public struct Silencer {
     var volume_litres:float32 = 8.0
     var absorption:float32 = 0.65
+    var baffles:int = 0
 }
 public struct Exhaust {
     var header:Pipe = Pipe(length_mm:600.0, diameter_mm:40.0)
     var pipe:Pipe = Pipe()
     var silencer:Silencer = Silencer()
     var outlet_level:float32 = 1.0
+    var expansion_litres:float32 = 0.0
 }
 public struct Intake {
     var runner:Pipe = Pipe(length_mm:300.0, diameter_mm:40.0)
@@ -42,6 +47,8 @@ public struct Intake {
 public struct Mechanics {
     var block_mass_kg:float32 = 100.0
     var damping:float32 = 0.65
+    var clatter:float32 = 0.0
+    var whine:float32 = 0.0
 }
 public struct Turbo {
     var wheel_mm:float32 = 50.0
@@ -70,17 +77,19 @@ public struct Assembly {
     func validate() Result<void, Error> {
         if self.block.cylinders < 1 || self.block.cylinders > 16 || !in_range(self.block.bore_mm, 20.0, 200.0) ||
             !in_range(self.block.stroke_mm, 20.0, 250.0) || !in_range(self.head.chamber_cc, 1.0, 500.0) ||
-            !in_range(self.head.burn_ms, 0.1, 8.0) || !in_range(self.compression_ratio(), 2.0, 25.0) ||
+            !in_range(self.head.burn_ms, 0.1, 8.0) || !unit(self.head.sharpness) || !in_range(self.compression_ratio(), 2.0, 25.0) ||
             self.exhausts.count() < 1 || self.exhausts.count() > 4 {
             return Result<void, Error>.failure(invalid("invalid block, head, compression ratio or exhaust count"))
         }
         if !pipe_valid(self.intake.runner) || !in_range(self.intake.airbox_litres, 0.05, 100.0) ||
-            !unit(self.intake.filter_absorption) || !in_range(self.mechanics.block_mass_kg, 1.0, 2_000.0) || !unit(self.mechanics.damping) || !mix_valid(self.mix) {
+            !unit(self.intake.filter_absorption) || !in_range(self.mechanics.block_mass_kg, 1.0, 2_000.0) || !unit(self.mechanics.damping) ||
+            !unit(self.mechanics.clatter) || !unit(self.mechanics.whine) || !mix_valid(self.mix) {
             return Result<void, Error>.failure(invalid("invalid intake, mechanics or mix"))
         }
         for exhaust in self.exhausts {
             if !pipe_valid(exhaust.header) || !pipe_valid(exhaust.pipe) ||
-                !in_range(exhaust.silencer.volume_litres, 0.05, 100.0) || !unit(exhaust.silencer.absorption) || !unit(exhaust.outlet_level) {
+                !in_range(exhaust.silencer.volume_litres, 0.05, 100.0) || !unit(exhaust.silencer.absorption) || !unit(exhaust.outlet_level) ||
+                exhaust.silencer.baffles < 0 || exhaust.silencer.baffles > 8 || !in_range(exhaust.expansion_litres, 0.0, 30.0) {
                 return Result<void, Error>.failure(invalid("invalid exhaust pipe or silencer"))
             }
         }

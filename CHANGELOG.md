@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+- Add `Synthesis.EngineVehicles.catalogue()`: 17 procedural city petrol/diesel, sports car, 2T/4T motocross, race motorcycle and custom profiles, with displacement, RPM and response settings for each archetype. Profiles remain sonic inspirations requiring listening qualification.
+- Extend `Engine.assemble` with combustion attack, compression ignition clatter, acoustic baffles, expansion resonance, mechanical whine and rotation irregularity. Validate settings before mutation and preserve phases, deterministic rendering and prepared storage. Lower the parts path's pre-limiter level to preserve loaded transients; its output level changes. `Engine.create` and the native `Engines` library remain separate.
+
 ## [0.5.0] - 2026-11-09
 
 - `Engines.Library.open()` supplies the eight standard engines on macOS ARM64 without a directory or extra preparation. The simulator and resources are embedded, retained for the engines’ lifetime and cleaned up on release; custom library loading remains optional. All eight profiles preserve sample-exact PCM in the comparison scenarios.
