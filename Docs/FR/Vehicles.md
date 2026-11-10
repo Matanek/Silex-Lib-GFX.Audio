@@ -1,9 +1,9 @@
 # Créer un moteur de véhicule avec la chaîne de référence
 
-`GFX.Audio.Engines.Vehicles` prépare un moteur thermique avec le même
-simulateur, les réponses d’échappement et le traitement de sortie qu’EngineLibrary.
-Le profil `454` conserve sa définition d’origine et son PCM ; les autres
-profils sont des variantes acoustiques à qualifier par l’écoute.
+`GFX.Audio.Engines.Vehicles` prépare un moteur thermique avec le simulateur
+d’EngineLibrary. Le profil `454` conserve sa définition d’origine et son PCM.
+Les citadines ajoutent un rendu extérieur feutré ; le diesel utilise une voix
+hybride issue d’un enregistrement TDI. Les profils restent à qualifier par l’écoute.
 
 Depuis la racine du workspace, l’[exemple sans périphérique](../../Examples/VehicleEngine.sx)
 produit des blocs PCM et affiche le régime final :
@@ -70,6 +70,26 @@ V8 modifiable. Les V10/V12, I4 de course et customs réutilisent les définition
 LFA, Ferrari 412 T2, Hayabusa et Harley de la banque. Les géométries et chambres
 peuvent être adaptées ; ces noms ne certifient pas une reproduction commerciale.
 
+## Écouter les citadines
+
+Les citadines essence utilisent une admission moins ouverte, un calage plus
+court et une ligne plus restrictive que l’I4 de sportive. Leur rendu extérieur
+atténue le niveau et les harmoniques aiguës. Cette écoute proche n’est pas un
+modèle de propagation spatiale ou d’habitacle. Les niveaux ne sont pas normalisés :
+une citadine reste plus discrète qu’une sportive au même volume d’écoute.
+
+`city-diesel` combine ce fond d’échappement assourdi avec huit excitations
+acoustiques tirées de la référence TDI fournie. Le régime simulé pilote leur
+cadence, la charge leur niveau, et la coupure fait décroître cette voix.
+`texture` règle la variation entre excitations ; `exhaust` assourdit également
+leur réponse. Le rendu est hybride et contient du son enregistré transformé ;
+il ne rejoue pas le montage complet. Le reset remet à zéro filtres et phases.
+
+Le nom du moteur enregistré n’est pas identifié. L’extrait ne certifie donc
+ni une cylindrée de 1,6 L ni un modèle Volkswagen précis. `note` et le libellé
+du catalogue indiquent ce parcours hybride. La voix n’intervient pas sur le
+454, les sportives, les motos ou la cross 500 4T.
+
 ## Préparation et limites
 
 La création prépare une copie privée des ressources natives et démarre un
@@ -84,15 +104,18 @@ cibles retournent l’erreur de disponibilité de `Engines.Library.open()`.
 Le binaire et les ressources standard embarqués sont conservés ; la fabrique
 personnalise uniquement sa copie temporaire.
 
-Le diesel reste une approximation sonore avec compression et calage adaptés :
-le simulateur conserve l’allumage commandé et ne modélise pas l’auto-inflammation
-ni l’injection diesel. Le profil I4 de sportive ne simule pas la suralimentation.
+La mécanique diesel reste approximative : le simulateur conserve l’allumage
+commandé et ne modélise pas l’auto-inflammation ni l’injection diesel. La voix
+enregistrée corrige sa texture acoustique, pas cette thermodynamique.
+Le profil I4 de sportive ne simule pas la suralimentation.
 Le 2T conserve le modèle simplifié de lumières et de balayage de la banque,
 sans pot de détente à cônes. Ces limites sont aussi indiquées dans `note`.
 
 Le test consommateur compare chaque échantillon du `454` à `Library.engine("454")`
 sur démarrage, accélération et coupure. Il exerce aussi les 18 architectures,
 la pédale continue, les erreurs et le reset d’une cylindrée personnalisée.
+`CityVoices.sx` mesure le niveau des essences, distingue les transitoires diesel
+et vérifie reset, extinction et parité entre rendu synchrone et rendu prêt.
 Cette preuve préserve la référence et le fonctionnement ; elle ne remplace
 pas l’écoute des variantes. Le prototype `Synthesis.EngineVehicles` reste un
 générateur distinct et n’est plus la source sonore de l’atelier.

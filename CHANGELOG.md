@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Separate city cars from the sports I4 through milder intake/valve timing, a more restrictive exhaust and quiet exterior rendering. Diesel gains a hybrid voice built from eight excitations extracted from the supplied TDI reference, driven by native RPM with deterministic shutdown/reset. Labels identify the recorded source and its unidentified engine; mechanical simulation does not become diesel combustion. The 454, sports cars and 500 four-stroke motocross retain their sound paths.
+
 - Correct native RPM decoding during small crankshaft rebounds and round positive telemetry after unit conversion. The workshop retains free bench idle: a profile's nominal idle no longer automatically engages the dynamometer.
 
 - Add `Engines.Vehicles`: sample-exact Chevrolet 454 reference and 17 variants prepared with the thermal simulator, native definitions and exhaust responses. Total displacement in cc, mechanical scaling for singles, optional continuous throttle and private definitions retained across reset. The embedded native binary remains unchanged and qualified on macOS ARM64; diesel, turbo and two-stroke limitations are explicit in the guide. EngineWorkshop now uses this chain and checks 454 PCM parity; the pulse generator remains a separate prototype.

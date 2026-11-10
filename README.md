@@ -43,6 +43,8 @@ macOS ARM64; an external native library is optional.
 [Create vehicle variants with the reference sound chain](Docs/EN/Vehicles.md)
 through `Engines.Vehicles`, preserving the Chevrolet 454 reference and preparing
 17 additional thermal-engine profiles. The vehicle workshop uses this path.
+City petrol profiles add quiet exterior rendering; diesel combines the simulator
+with a sampled acoustic voice from a TDI reference, identified as hybrid.
 
 The [parts synthesizer](Docs/EN/EngineParts.md), including
 `Synthesis.EngineVehicles`, remains a separate experimental prototype.

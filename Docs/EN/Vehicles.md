@@ -1,9 +1,9 @@
 # Create a vehicle engine with the reference sound chain
 
-`GFX.Audio.Engines.Vehicles` prepares a thermal engine using the same simulator,
-exhaust responses and output processing as EngineLibrary. The `454` profile
-preserves its original definition and PCM; other profiles are acoustic variants
-that require listening qualification.
+`GFX.Audio.Engines.Vehicles` prepares a thermal engine with EngineLibrary's
+simulator. The `454` profile preserves its original definition and PCM. City
+cars add a quiet exterior rendering; diesel uses a hybrid voice derived from
+a TDI recording. Profiles still require listening qualification.
 
 From the workspace root, the [device-free example](../../Examples/VehicleEngine.sx)
 produces PCM blocks and prints final RPM:
@@ -68,6 +68,26 @@ V10/V12, race I4 and custom profiles reuse the bank's LFA, Ferrari 412 T2,
 Hayabusa and Harley definitions. Geometry and chambers may be adapted;
 these names do not certify a commercial reproduction.
 
+## Listen to city cars
+
+Petrol city cars use a smaller intake, shorter valve timing and more restrictive
+exhaust than the sports I4. Exterior rendering attenuates level and upper
+harmonics. This close listening perspective does not model spatial propagation
+or a cabin. Levels are not normalized: a city car remains quieter than a sports
+car at the same listening volume.
+
+`city-diesel` combines that muffled exhaust bed with eight acoustic excitations
+derived from the supplied TDI reference. Simulated RPM drives their cadence,
+load their level, and ignition cut fades the voice. `texture` controls variation
+between excitations; `exhaust` also muffles their response. This hybrid rendering
+contains transformed recorded sound and does not replay the full montage.
+Reset clears filters and phases.
+
+The recorded engine is unidentified. Its excerpt therefore certifies neither
+1.6 L displacement nor a specific Volkswagen model. Catalogue labels and `note`
+identify the hybrid path. The voice does not affect the 454, sports cars,
+motorcycles or 500 four-stroke motocross profile.
+
 ## Preparation and limits
 
 Creation prepares a private copy of native resources and starts one process
@@ -81,15 +101,18 @@ The native bank remains available only on macOS ARM64. Other targets return
 the availability error from `Engines.Library.open()`. Standard embedded binary
 and assets are retained; the factory edits only its temporary copy.
 
-Diesel remains a sonic approximation with adapted compression and timing:
-the simulator still uses spark ignition and does not model diesel auto-ignition
-or injection. The sports I4 does not simulate boost. Two-strokes retain the
+Diesel mechanics remain approximate: the simulator still uses spark ignition
+and does not model diesel auto-ignition or injection. The recorded voice changes
+acoustic texture, not the thermodynamic model. The sports I4 does not simulate
+boost. Two-strokes retain the
 bank's simplified port/scavenging model without conical expansion chambers.
 These limits also appear in `note`.
 
 The consumer test compares every `454` sample with `Library.engine("454")`
 during startup, acceleration and ignition cut. It also exercises all 18
 architectures, continuous throttle, errors and reset of a customized capacity.
+`CityVoices.sx` measures petrol levels, distinguishes diesel transients and
+checks reset, shutdown and parity between synchronous and ready rendering.
 This proves reference preservation and operation; it does not replace listening
 to variants. The `Synthesis.EngineVehicles` prototype remains a separate
 generator and no longer supplies the workshop's sound.

@@ -2,6 +2,7 @@ use GFX.Audio.Engines
 use GFX.Audio.Engines.EngineFiles
 use GFX.Audio.Engines.EngineWorker
 use GFX.Audio.Engines.VehicleDefinition
+use GFX.Audio.Engines.VehicleVoice
 use STD.Error
 use STD.Error.Kind
 use STD.File
@@ -22,10 +23,12 @@ public struct Profile {
 public func catalogue() Profile[] {
     return [
         Profile(key:"454", name:"Référence · Chevrolet 454", displacement_cc:displacement(8, 107.95, 101.6), cylinders:8, redline_rpm:5_500.0),
-        Profile(key:"city-i3", name:"Citadine essence · 3 cylindres", displacement_cc:1_000.0, cylinders:3, redline_rpm:6_500.0),
-        Profile(key:"city-i4", name:"Citadine essence · 4 cylindres", displacement_cc:1_400.0, cylinders:4, idle_rpm:800.0, redline_rpm:6_500.0),
-        Profile(key:"city-diesel", name:"Citadine diesel · prototype", displacement_cc:1_600.0, cylinders:4, idle_rpm:800.0, redline_rpm:4_800.0,
-            note:"Approximation sonore : la combustion native reste à allumage commandé ; l’auto-inflammation diesel n’est pas simulée."),
+        Profile(key:"city-i3", name:"Citadine essence · 3 cylindres / extérieur feutré", displacement_cc:1_000.0, cylinders:3, redline_rpm:6_500.0,
+            note:"Écoute extérieure proche et atténuée, échappement fermé ; signature générique, sans modèle commercial attribué."),
+        Profile(key:"city-i4", name:"Citadine essence · 4 cylindres / extérieur feutré", displacement_cc:1_400.0, cylinders:4, idle_rpm:800.0, redline_rpm:6_500.0,
+            note:"Écoute extérieure proche et atténuée, échappement fermé ; signature générique, sans modèle commercial attribué."),
+        Profile(key:"city-diesel", name:"Citadine diesel · voix TDI hybride", displacement_cc:1_600.0, cylinders:4, idle_rpm:800.0, redline_rpm:4_800.0,
+            note:"Excitations tirées de la référence TDI et pilotées par le régime ; modèle enregistré non identifié. La mécanique native reste à allumage commandé."),
         Profile(key:"sport-turbo-i4", name:"Sportive · 4 cylindres / esprit GTI", displacement_cc:2_000.0, cylinders:4,
             note:"Architecture I4 thermique ; la suralimentation n’est pas simulée."),
         Profile(key:"sport-flat6", name:"Sportive · flat-six / esprit 911", displacement_cc:3_200.0, cylinders:6, idle_rpm:900.0, redline_rpm:8_000.0),
@@ -71,7 +74,7 @@ public func create(key:str = "454", displacement_cc:float? = null) Result<Engine
         var worker = try EngineWorker.open(files.root, definition, key, capture_intake:intake_level > 0.0) else error { return Result<Engines.Engine,Error>.failure(error) }
         // The legacy dyno has a 25 Nm minimum. Scale that floor for small
         // engines so a 125 cc does not receive the 250 cc bench's torque.
-        return Result<Engines.Engine,Error>.success(Engines.Engine(files, native, worker, null, null, load_scale:Math.min(1.0, cc / 250.0)))
+        return Result<Engines.Engine,Error>.success(Engines.Engine(files, native, worker, null, null, load_scale:Math.min(1.0, cc / 250.0), voice:VehicleVoice.city(key)))
     }
     return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles", detail:"unknown vehicle profile"))
 }

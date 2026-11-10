@@ -1,0 +1,73 @@
+use GFX.Audio.Processing
+use STD.Math
+
+// Acoustic delivery is separate from the crank/gas simulation. Only city
+// profiles opt in; stock engines and the accepted 500 4T never enter this path.
+class VehicleVoice {
+    private var first:Processing.LowPass
+    private var second:Processing.LowPass
+    private let level:float32
+    private let sampled:bool
+    private var waves:float32[] = []
+    private var phase:float64 = 0.0
+    private var cycle:int = 0
+    private var gain:float32 = 0.0
+    private var speed:float64 = 0.0
+    private var clatter:float32 = 0.0
+
+    static func city(key:str) VehicleVoice? {
+        if key == "city-i3" { return VehicleVoice(950.0, 0.16, false) }
+        if key == "city-i4" { return VehicleVoice(700.0, 0.12, false) }
+        if key == "city-diesel" { return VehicleVoice(650.0, 0.08, true) }
+        return null
+    }
+    private init(cutoff:float32, level:float32, sampled:bool) {
+        let format = Processing.Format(sample_rate:44_100, channels:2)
+        self.first = Processing.LowPass.create(format, cutoff)
+        self.second = Processing.LowPass.create(format, cutoff)
+        self.level = level; self.sampled = sampled
+        if sampled {
+            let bytes = embed_bytes("../../Assets/Engines/Voices/Diesel.pcm")
+            assert(bytes.count() == 16_384)
+            for i in 0...8_192 {
+                var word = bytes[i * 2] as int + bytes[i * 2 + 1] as int * 256
+                if word >= 32_768 { word -= 65_536 }
+                self.waves.append(word as float32 / 32_768.0)
+            }
+        }
+    }
+    func apply(samples:&float32[..], rpm:float, control:Controls) {
+        self.first.process(&samples[0:samples.count()]); self.second.process(&samples[0:samples.count()])
+        let target_speed = Math.clamp(rpm as float64 / 30.0, 0.0, 160.0)
+        var target_gain:float32 = 0.0
+        if control.running && rpm > 450.0 { target_gain = 0.3 * (0.8 + 0.2 * control.load) as float32 }
+        for frame in 0...samples.count() / 2 {
+            var excitation:float32 = 0.0
+            if self.sampled {
+                self.speed += 0.001 * (target_speed - self.speed)
+                self.gain += 0.001 * (target_gain - self.gain)
+                let position = self.phase * 1_024.0
+                let index = Math.floor(position) as int
+                let fraction = round_float<float32>(position - index as float64)
+                let offset = self.cycle * 1_024
+                var next = index + 1; if next == 1_024 { next = 0 }
+                excitation = self.waves[offset + index] + fraction * (self.waves[offset + next] - self.waves[offset + index])
+                let regular = self.waves[index] + fraction * (self.waves[next] - self.waves[index])
+                excitation = regular + control.texture as float32 * (excitation - regular)
+                excitation *= self.gain
+                self.clatter += 0.3 * (excitation - self.clatter)
+                excitation += control.exhaust as float32 * (self.clatter - excitation)
+                self.phase += self.speed / 44_100.0
+                if self.phase >= 1.0 { self.phase -= 1.0; self.cycle = (self.cycle + 1) % 8 }
+            }
+            for channel in 0...2 {
+                let i = frame * 2 + channel
+                samples[i] = samples[i] * self.level + excitation
+            }
+        }
+    }
+    func reset() {
+        self.first.reset(); self.second.reset()
+        self.phase = 0.0; self.cycle = 0; self.gain = 0.0; self.speed = 0.0; self.clatter = 0.0
+    }
+}

@@ -15,6 +15,28 @@ and exercises every variant. Run it after changing the pinned source templates,
 their parameter spelling, or the bundled resources. The parts-based pulse
 synthesizer is not an acoustic substitute for this chain.
 
+City profiles have their own intake/valve/exhaust definition and private
+`VehicleVoice` exterior processing. `city-diesel` additionally uses a sampled
+acoustic voice, not a new diesel combustion solver. Its eight short excitations
+are derived from a user-supplied TDI recording; `Assets/Engines/Voices/Diesel.json`
+records source hashes, extraction positions, periodicity and the PCM checksum.
+Engine identity is unconfirmed. No consumer reads the original recording.
+
+Rebuild the voice from the same decoded 44.1 kHz PCM16 WAV with
+`PrepareDieselVoice.py reference.wav output-directory --source-recording original.mp3`.
+The tool reads those inputs and writes only the destination. It removes DC,
+closes each repeat and limits it to 128 harmonics. Playback is capped at 160 Hz
+firing frequency, keeping retained harmonics below Nyquist. Run
+`python3 Packages/GFX.Audio/Native/EngineSimulator/VehicleVoiceChecks.py` and the
+consumer vehicle tests after modifying this resource. The native renderer and
+the original engine bank remain unchanged.
+
+Qualify an acoustic label against a recording with an explicit listening
+perspective. Shared simulation, cylinder count and displacement do not establish
+vehicle identity. Nonzero PCM, reset and parity tests prove operation and
+preservation; recognition and realism require listening. Preserve relative
+levels when comparing quiet production exhausts with open sports exhausts.
+
 This is the package-maintenance build path. Ordinary consumers call
 `Engines.Library.open()` without preparing a directory.
 

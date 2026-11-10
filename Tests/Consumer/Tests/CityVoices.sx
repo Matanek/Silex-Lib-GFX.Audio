@@ -1,0 +1,66 @@
+use GFX.Audio.Engines
+use GFX.Audio.Engines.Vehicles
+use STD.Math
+use STD.System
+use STD.Time.Stopwatch
+
+func zeros() float32[] { var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+    return samples }
+
+test "city petrol is quiet and the sampled diesel has distinct transient energy" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    let keys:str[] = ["city-i3", "city-i4", "city-diesel", "sport-turbo-i4"]
+    var energies:float64[] = []; var differences:float64[] = []
+    var samples = zeros()
+    for key in keys {
+        var engine = Vehicles.create(key)
+        engine.set_controls(Engines.Controls(running:true, throttle:0.02))
+        var energy:float64 = 0.0; var difference:float64 = 0.0; var previous:float64 = 0.0
+        for block in 0...400 {
+            engine.render(&samples[0:960])
+            for frame in 0...480 {
+                let value = samples[frame * 2] as float64
+                assert(Math.is_finite(value) && Math.abs(value) <= 1.0)
+                if block >= 260 { energy += value * value; difference += (value - previous) * (value - previous) }
+                previous = value
+            }
+        }
+        print(key, " energy=", energy, " transient ratio=", difference / Math.max(energy, 0.0000001))
+        energies.append(energy); differences.append(difference / Math.max(energy, 0.0000001))
+    }
+    assert(energies[0] > 0.0001 && energies[1] > 0.0001 && energies[2] > 0.0001)
+    assert(energies[0] < energies[3] * 0.12 && energies[1] < energies[3] * 0.12,
+        "city petrol lost its exterior attenuation")
+    assert(differences[2] > differences[1] * 2.0, "diesel lost its recorded mechanical transients")
+}
+
+test "sampled diesel retains its voice across reset and shuts down without a stale loop" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var engine = Vehicles.create("city-diesel")
+    engine.set_controls(Engines.Controls(running:true, throttle:0.02))
+    var first = zeros(); var again = zeros()
+    for _ in 0...180 { engine.render(&first[0:960]) }
+    engine.reset()
+    for _ in 0...180 { engine.render(&again[0:960]) }
+    for i in 0...960 { assert(first[i] == again[i], "reset lost sampled voice state") }
+    engine.set_controls(Engines.Controls()); engine.reset()
+    for _ in 0...120 {
+        engine.render(&again[0:960])
+        for sample in again { assert(sample == 0.0 as float32, "stopped engine retained a recorded loop") }
+    }
+}
+
+test "sampled diesel synchronous and ready rendering retain identical PCM" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var synchronous = Vehicles.create("city-diesel"); var ready = Vehicles.create("city-diesel")
+    let controls = Engines.Controls(running:true, throttle:0.02)
+    synchronous.set_controls(controls); ready.set_controls(controls)
+    var a = zeros(); var b = zeros(); var energy:float64 = 0.0
+    for _ in 0...100 {
+        ready.enqueue(1); synchronous.render(&a[0:960])
+        var clock = Stopwatch(); clock.start()
+        while !ready.render_ready(&b[0:960]) { assert(clock.get_elapsed_seconds() < 5.0) }
+        for i in 0...960 { assert(a[i] == b[i], "interactive sampled voice diverged from offline PCM"); energy += a[i] as float64 * a[i] as float64 }
+    }
+    assert(energy > 0.001)
+}

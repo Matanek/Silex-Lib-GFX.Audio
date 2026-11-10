@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Différencier les citadines de l’I4 de sportive : admission et calage plus sages, échappement plus restrictif et rendu extérieur feutré. Le diesel reçoit une voix hybride issue de huit excitations extraites de la référence TDI fournie, pilotées par le régime natif, avec extinction et reset déterministes. Le libellé signale cette source enregistrée et son modèle non identifié ; la simulation mécanique ne devient pas une combustion diesel. Le 454, les sportives et la cross 500 4T conservent leur parcours sonore.
+
 - Corriger le décodage du régime natif lors des petits retours arrière du vilebrequin et arrondir les télémétries positives après conversion d’unité. L’atelier conserve le ralenti libre du banc : le ralenti nominal d’un profil n’engage plus automatiquement le dynamomètre.
 
 - Ajouter `Engines.Vehicles` : référence Chevrolet 454 conservée échantillon par échantillon et 17 variantes préparées avec le simulateur thermique, ses définitions natives et ses réponses d’échappement. Cylindrée en cm³, adaptations mécaniques des monos, pédale continue optionnelle et définitions privées conservées au reset. Le binaire natif embarqué reste inchangé et qualifié sur macOS ARM64 ; diesel, turbo et 2T gardent les limites explicites du guide. EngineWorkshop utilise désormais cette chaîne, avec contrôle de parité du 454 ; le générateur par impulsions reste un prototype séparé.
