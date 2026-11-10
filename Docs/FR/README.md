@@ -269,4 +269,6 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 
 [Réutiliser les moteurs du banc validé](Engines.md).
 
+[Créer des variantes de véhicules avec la chaîne de référence](Vehicles.md).
+
 - [Observer le mix pendant sa lecture](OutputCapture.md) : blocs possédés, chronologie, tampon borné et erreurs de capture de sortie.

@@ -1,0 +1,81 @@
+use GFX.Audio.Engines
+use GFX.Audio.Engines.EngineFiles
+use GFX.Audio.Engines.EngineWorker
+use GFX.Audio.Engines.VehicleDefinition
+use STD.Error
+use STD.Error.Kind
+use STD.File
+use STD.Math
+
+// Vehicle definitions for the thermal simulator, separate from Synthesis.Engine.
+public struct Profile {
+    let key:str
+    let name:str
+    let displacement_cc:float
+    let cylinders:int
+    let strokes:int = 4
+    let idle_rpm:float = 850.0
+    let redline_rpm:float = 7_000.0
+    let note:str = ""
+}
+
+public func catalogue() Profile[] {
+    return [
+        Profile(key:"454", name:"Référence · Chevrolet 454", displacement_cc:displacement(8, 107.95, 101.6), cylinders:8, redline_rpm:5_500.0),
+        Profile(key:"city-i3", name:"Citadine essence · 3 cylindres", displacement_cc:1_000.0, cylinders:3, redline_rpm:6_500.0),
+        Profile(key:"city-i4", name:"Citadine essence · 4 cylindres", displacement_cc:1_400.0, cylinders:4, idle_rpm:800.0, redline_rpm:6_500.0),
+        Profile(key:"city-diesel", name:"Citadine diesel · prototype", displacement_cc:1_600.0, cylinders:4, idle_rpm:800.0, redline_rpm:4_800.0,
+            note:"Approximation sonore : la combustion native reste à allumage commandé ; l’auto-inflammation diesel n’est pas simulée."),
+        Profile(key:"sport-turbo-i4", name:"Sportive · 4 cylindres / esprit GTI", displacement_cc:2_000.0, cylinders:4,
+            note:"Architecture I4 thermique ; la suralimentation n’est pas simulée."),
+        Profile(key:"sport-flat6", name:"Sportive · flat-six / esprit 911", displacement_cc:3_200.0, cylinders:6, idle_rpm:900.0, redline_rpm:8_000.0),
+        Profile(key:"sport-v8", name:"Sportive · V8 américain", displacement_cc:5_000.0, cylinders:8, idle_rpm:900.0),
+        Profile(key:"sport-v10", name:"Sportive · V10 / base LFA", displacement_cc:4_805.0, cylinders:10, idle_rpm:900.0, redline_rpm:9_000.0),
+        Profile(key:"sport-v12", name:"Sportive · V12 / base Ferrari 412 T2", displacement_cc:displacement(12, 86.0, 43.0), cylinders:12, idle_rpm:1_000.0, redline_rpm:15_000.0),
+        Profile(key:"cross-125-2t", name:"Motocross · 125 cm³ 2T", displacement_cc:125.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:12_000.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
+        Profile(key:"cross-250-2t", name:"Motocross · 250 cm³ 2T", displacement_cc:250.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:10_000.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
+        Profile(key:"cross-500-2t", name:"Motocross · 500 cm³ 2T", displacement_cc:500.0, cylinders:1, strokes:2, idle_rpm:1_500.0, redline_rpm:8_500.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
+        Profile(key:"cross-250-4t", name:"Motocross · 250 cm³ 4T", displacement_cc:250.0, cylinders:1, idle_rpm:1_500.0, redline_rpm:10_000.0),
+        Profile(key:"cross-500-4t", name:"Motocross · 500 cm³ 4T", displacement_cc:500.0, cylinders:1, idle_rpm:1_500.0, redline_rpm:9_500.0),
+        Profile(key:"race-i4", name:"Moto de course · 4 en ligne / base Hayabusa", displacement_cc:1_000.0, cylinders:4, idle_rpm:1_400.0, redline_rpm:12_000.0),
+        Profile(key:"race-v4", name:"Moto de course · V4 à allumages groupés", displacement_cc:1_000.0, cylinders:4, idle_rpm:1_500.0, redline_rpm:14_000.0),
+        Profile(key:"custom-1200", name:"Custom · V-twin 1 200 / base Harley", displacement_cc:1_200.0, cylinders:2, idle_rpm:1_000.0, redline_rpm:5_000.0),
+        Profile(key:"custom-1800", name:"Chopper · V-twin 1 800 / base Harley", displacement_cc:1_800.0, cylinders:2, idle_rpm:1_000.0, redline_rpm:5_000.0)
+    ]
+}
+
+public func create(key:str = "454", displacement_cc:float? = null) Result<Engines.Engine, Error> {
+    for profile in catalogue() {
+        if profile.key != key { continue }
+        let cc = displacement_cc ?? profile.displacement_cc
+        if !Math.is_finite(cc) || cc < 50.0 || cc > 12_000.0 {
+            return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles", detail:"finite displacement in 50..12000 cc required"))
+        }
+        // The reference path is literally the public stock factory: no rewritten
+        // definition, extra oscillator, EQ or different output calibration.
+        if key == "454" && Math.abs(cc - profile.displacement_cc) < 0.001 {
+            var library = try Engines.Library.open() else error { return Result<Engines.Engine,Error>.failure(error) }
+            return try library.engine("454")
+        }
+        if key == "454" {
+            return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles",
+                detail:"the Chevrolet reference keeps its original geometry; select sport-v8 for an editable V8"))
+        }
+        var files = try EngineFiles.bundled() else error { return Result<Engines.Engine,Error>.failure(error) }
+        let definition = try VehicleDefinition.prepare(files, profile, cc) else error { return Result<Engines.Engine,Error>.failure(error) }
+        var intake_level:float = 0.0
+        if profile.strokes == 4 && profile.cylinders == 1 { intake_level = 0.6 }
+        let native = Engines.Profile(key:key, label:profile.name, redline:profile.redline_rpm, ceiling:profile.redline_rpm + 1_000.0,
+            idle:profile.idle_rpm, strokes:profile.strokes, gears:5,
+            gearing:Engines.Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1.0], final_drive:3.5), intake:intake_level, slot:definition)
+        var worker = try EngineWorker.open(files.root, definition, key, capture_intake:intake_level > 0.0) else error { return Result<Engines.Engine,Error>.failure(error) }
+        // The legacy dyno has a 25 Nm minimum. Scale that floor for small
+        // engines so a 125 cc does not receive the 250 cc bench's torque.
+        return Result<Engines.Engine,Error>.success(Engines.Engine(files, native, worker, null, null, load_scale:Math.min(1.0, cc / 250.0)))
+    }
+    return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles", detail:"unknown vehicle profile"))
+}
+
+func displacement(cylinders:int, bore:float, stroke:float) float {
+    return cylinders as float * Math.pi<float>() * bore * bore * stroke / 4_000.0
+}

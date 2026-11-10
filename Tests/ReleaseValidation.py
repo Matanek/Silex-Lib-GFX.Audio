@@ -11,12 +11,14 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--target")
 parser.add_argument("--execute", action="store_true", help="also execute an explicitly selected host-compatible target")
 parser.add_argument("--source", action="append", help="run only this registered owner-relative source; repeatable")
+parser.add_argument("--run-timeout", type=float, default=120.0, help="execution timeout per source, including native simulator processes")
 options = parser.parse_args()
 owner = Path(__file__).resolve().parents[1]
 workspace = owner.parents[1]
 compiler = Path(os.environ.get("SILEX_EXECUTABLE", str(workspace / "Silex/Toolchain/zig-out/bin/silex")))
 sources = ["Tests/Processing.sx", "Tests/Consumer/Tests/Production.sx", "Tests/Consumer/Tests/StreamGroups.sx", "Tests/Consumer/Tests/Synthesis.sx", "Tests/Consumer/Tests/Waveforms.sx", "Tests/Consumer/Tests/Composition.sx", "Tests/Consumer/Tests/Bitcrusher.sx", "Tests/Consumer/Tests/Distortion.sx", "Tests/Consumer/Tests/StereoPan.sx", "Tests/Consumer/Tests/ModulatedDelay.sx", "Tests/Consumer/Tests/Reverb.sx", "Tests/Consumer/Tests/Dynamics.sx", "Tests/Consumer/Tests/Instruments.sx", "Tests/Consumer/Tests/Piano.sx", "Tests/Consumer/Tests/Catalogue.sx", "Tests/Consumer/Tests/Continuous.sx", "Tests/Consumer/Tests/MIDIFile.sx", "Tests/Consumer/Tests/MIDISynth.sx", "Tests/Consumer/Tests/Music.sx", "Tests/Consumer/Tests/MusicKeys.sx", "Tests/Consumer/Tests/MusicPlayer.sx"]
 sources += ["Tests/Consumer/Tests/Engine.sx", "Tests/Consumer/Tests/EngineAssembly.sx", "Tests/Consumer/Tests/EngineVehicles.sx"]
+sources += ["Tests/Consumer/Tests/VehicleEngines.sx"]
 if options.source:
     for source in options.source:
         if source not in sources:
@@ -46,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix="ReleaseValidation_", dir=owner / "Tests
             arguments += ["--target", options.target]
         subprocess.run(arguments, cwd=workspace, env=environment, check=True, timeout=90)
         if not options.target or options.execute:
-            subprocess.run([str(artifact)], cwd=workspace, env=environment, check=True, timeout=45)
+            subprocess.run([str(artifact)], cwd=workspace, env=environment, check=True, timeout=options.run_timeout)
         count += len(cases)
         print(f"ok - {relative}: {len(cases)} Release oracles", flush=True)
 print(f"{count} Release oracles {'executed' if not options.target or options.execute else 'linked'}")

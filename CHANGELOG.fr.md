@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Corriger le décodage du régime natif lors des petits retours arrière du vilebrequin et arrondir les télémétries positives après conversion d’unité. L’atelier conserve le ralenti libre du banc : le ralenti nominal d’un profil n’engage plus automatiquement le dynamomètre.
+
+- Ajouter `Engines.Vehicles` : référence Chevrolet 454 conservée échantillon par échantillon et 17 variantes préparées avec le simulateur thermique, ses définitions natives et ses réponses d’échappement. Cylindrée en cm³, adaptations mécaniques des monos, pédale continue optionnelle et définitions privées conservées au reset. Le binaire natif embarqué reste inchangé et qualifié sur macOS ARM64 ; diesel, turbo et 2T gardent les limites explicites du guide. EngineWorkshop utilise désormais cette chaîne, avec contrôle de parité du 454 ; le générateur par impulsions reste un prototype séparé.
+
 - Ajouter `Synthesis.EngineVehicles.catalogue()` : 17 profils procéduraux de citadines essence/diesel, sportives, motocross 2T/4T, motos de course et customs, avec cylindrée, régime et réponse propres à chaque archétype. Les profils restent des inspirations sonores à qualifier par l’écoute.
 - Enrichir le parcours `Engine.assemble` : attaque de combustion, allumage par compression et claquement, chicanes acoustiques, résonance de détente, sifflement mécanique et irrégularité de rotation. Valider les nouveaux réglages avant mutation ; conserver phases, rendu déterministe et stockage préparé. Réduire le niveau avant le limiteur du parcours par pièces pour préserver ses transitoires en charge ; son niveau de sortie change. `Engine.create` et la bibliothèque native `Engines` restent séparés.
 

@@ -1,0 +1,93 @@
+use GFX.Audio.Engines
+use GFX.Audio.Engines.Vehicles
+use STD.Math
+use STD.System
+
+func zeros() float32[] { var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
+    return samples }
+
+test "vehicle reference preserves every Chevrolet PCM sample and operating state" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var library = Engines.Library.open()
+    var original = library.engine("454")
+    var vehicle = Vehicles.create("454")
+    var a = zeros(); var b = zeros()
+    var controls = Engines.Controls(running:true)
+    for phase in 0...3 {
+        controls.accelerating = phase == 1
+        if phase == 2 { controls.running = false }
+        original.set_controls(controls); vehicle.set_controls(controls)
+        for _ in 0...160 {
+            original.render(&a[0:960]); vehicle.render(&b[0:960])
+            assert(original.current_rpm() == vehicle.current_rpm())
+            for i in 0...960 { assert(a[i] == b[i], "vehicle factory changed the reference PCM") }
+        }
+    }
+}
+
+test "native vehicle catalogue renders all architectures without the pulse synthesizer" {
+    assert(Vehicles.catalogue().count() == 18)
+    if System.target_name(System.target()) != "macos-arm64" {
+        match try Vehicles.create() { failure(error) => {}; success(value) => { panic("unqualified native target accepted") } }
+        return
+    }
+    for profile in Vehicles.catalogue() {
+        var source = Vehicles.create(profile.key)
+        var samples = zeros(); var controls = source.controls()
+        controls.running = true; controls.accelerating = true
+        source.set_controls(controls)
+        var energy:float64 = 0.0
+        for _ in 0...480 {
+            source.render(&samples[0:960])
+            for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 1.0); energy += sample as float64 * sample as float64 }
+        }
+        print(profile.key, " rpm=", source.current_rpm(), " energy=", energy)
+        assert(source.current_rpm() > 500.0 && energy > 0.001)
+    }
+}
+
+test "vehicle geometry and analog throttle reject invalid requests" {
+    match try Vehicles.create("missing") { failure(error) => {}; success(value) => { panic("unknown profile accepted") } }
+    match try Vehicles.create("454", displacement_cc:Math.sqrt(-1.0)) { failure(error) => {}; success(value) => { panic("NaN capacity accepted") } }
+    match try Vehicles.create("454", displacement_cc:5_000.0) { failure(error) => {}; success(value) => { panic("reference geometry changed") } }
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var source = Vehicles.create()
+    var controls = source.controls(); controls.throttle = 1.01
+    match try source.set_controls(controls) { failure(error) => {}; success => { panic("invalid throttle accepted") } }
+    assert(source.controls().throttle == null)
+}
+
+test "analog throttle is continuous and vehicle displacement remains effective across reset" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var a = Vehicles.create(); var b = Vehicles.create()
+    var low = a.controls(); low.running = true; low.throttle = 0.25
+    var high = b.controls(); high.running = true; high.throttle = 0.8
+    a.set_controls(low); b.set_controls(high)
+    var samples = zeros()
+    for _ in 0...320 { a.render(&samples[0:960]); b.render(&samples[0:960]) }
+    assert(b.current_rpm() > a.current_rpm() + 100.0)
+    var small = Vehicles.create("cross-250-4t", displacement_cc:300.0)
+    var first = zeros(); var again = zeros()
+    small.set_controls(Engines.Controls(running:true, throttle:0.4))
+    for _ in 0...120 { small.render(&first[0:960]) }
+    small.reset()
+    for _ in 0...120 { small.render(&again[0:960]) }
+    for i in 0...960 { assert(first[i] == again[i], "reset lost the configured engine or its commands") }
+}
+
+test "native V10 crank rebound at dyno release decodes as stopped" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var engine = Vehicles.create("sport-v10")
+    var controls = engine.controls(); controls.running = true; controls.idle_rpm = 900.0
+    var samples = zeros(); var stopped = false
+    for block in 0...820 {
+        let time = (block + 1) as float * 480.0 / 44_100.0
+        controls.throttle = 0.0; controls.load = 0.1
+        if time >= 2.0 && time < 4.0 { controls.throttle = (time - 2.0) / 2.0 }
+        if time >= 4.0 && time < 6.0 { controls.throttle = 1.0; controls.load = 0.7 }
+        engine.set_controls(controls); engine.render(&samples[0:960])
+        assert(Math.is_finite(engine.current_rpm()) && engine.current_rpm() >= 0.0)
+        if time > 6.0 && engine.current_rpm() == 0.0 { stopped = true }
+    }
+    assert(stopped, "test did not reach the native crank rebound")
+}

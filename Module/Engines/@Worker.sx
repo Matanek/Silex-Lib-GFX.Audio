@@ -23,22 +23,22 @@ class EngineWorker {
     private var request_count:int = 0
     private var reply:uint8[] = []
 
-    private init(child:Subprocess.Child, key:str, driving:bool, following:bool) {
+    private init(child:Subprocess.Child, key:str, driving:bool, following:bool, capture_intake:bool) {
         self.following = following
-        self.driving = driving; self.intake_mode = key == "cross4"
+        self.driving = driving; self.intake_mode = key == "cross4" || capture_intake
         var bytes = 2; if self.intake_mode { bytes = 4 }
         self.sample_bytes = bytes
         var size = 16; if driving { size = 32 }
         self.header_size = size
         self.child = child
     }
-    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false) Result<EngineWorker, Error> {
+    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false, capture_intake:bool = false) Result<EngineWorker, Error> {
         var script = root + "/Runtime/Profile-$(key).mr"
         var impulse = root + "/Runtime/Impulse-$(key).pcm"
         if profile == 0 { script = root + "/Runtime/Profile454.mr"; impulse = root + "/Runtime/Impulse.pcm" }
         var mode = "serve"; if driving { mode = "drive" }
         if following { mode = "follow" }
-        if key == "cross4" { mode += "-intake" }
+        if key == "cross4" || capture_intake { mode += "-intake" }
         var arguments:str[] = [script, impulse, "unused", mode, "$(profile)"]
         if let value = gearing {
             arguments.append("--gearing"); arguments.append("$(value.final_drive)")
@@ -48,7 +48,7 @@ class EngineWorker {
             executable:root + "/RenderReference",
             arguments:arguments,
             current_directory:root + "/Runtime", inherit_environment:true, environment:[])) else error { return Result<EngineWorker, Error>.failure(error) }
-        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving, following))
+        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving, following, capture_intake))
     }
 
     func current_gear() int { return self.gear }
@@ -67,13 +67,17 @@ class EngineWorker {
     }
 
     func request(frames:int, running:bool, pedal:bool, texture:float,
-        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null) Result<void, Error> {
+        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null, throttle:float? = null) Result<void, Error> {
         if frames <= 0 || frames > 960 || self.request_count == 4 {
             return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"engine-reference.request",
                 subject:null, detail:"1 to 960 frames and fewer than four outstanding requests required"))
         }
         var contact = 0; if running { contact = 1 }
-        var acceleration = 0; if running && pedal { acceleration = 1 }
+        var acceleration:float = 0.0
+        if running {
+            if let value = throttle { acceleration = value }
+            else { if pedal { acceleration = 1.0 } }
+        }
         var text = ""
         if let state = operating {
             var fuel = 0; if state.running { fuel = 1 }
@@ -133,7 +137,12 @@ class EngineWorker {
             self.integer(@self.reply[0:self.reply.count()], 4) != frames {
             panic("engine reference packet missing or invalid; rebuild the GFX.Audio engine library")
         }
-        self.rpm = self.integer(@self.reply[0:self.reply.count()], 8) as float / 1_000.0
+        let milli_rpm = self.integer(@self.reply[0:self.reply.count()], 8)
+        // The native unsigned word also carries tiny negative crank rebounds
+        // as two's complement. Report stopped, without overflowing float32's
+        // exact integer conversion; positive telemetry is rounded after scaling.
+        self.rpm = 0.0
+        if milli_rpm < 2_147_483_648 { self.rpm = round_float<float>(milli_rpm as float64 / 1_000.0) }
         self.starting = self.integer(@self.reply[0:self.reply.count()], 12) != 0
         if self.driving {
             self.gear = self.integer(@self.reply[0:self.reply.count()], 16)
@@ -170,12 +179,12 @@ class EngineWorker {
     }
 
     func render(samples:&float32[..], intake:&float32[..], running:bool, pedal:bool, texture:float,
-        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null) Result<void, Error> {
+        convolution:float, base_rpm:float, load:float, mode:int = 1, gear:int = 0, braking:bool = false, operating:OperatingState? = null, throttle:float? = null) Result<void, Error> {
         if samples.count() % 2 != 0 || self.has_request() {
             return Result<void, Error>.failure(Error(kind:Kind.invalid_input(), operation:"engine-reference.render",
                 subject:null, detail:"stereo frames and an empty request queue required"))
         }
-        try self.request(samples.count() / 2, running, pedal, texture, convolution, base_rpm, load, mode, gear, braking, operating) else error {
+        try self.request(samples.count() / 2, running, pedal, texture, convolution, base_rpm, load, mode, gear, braking, operating, throttle) else error {
             return Result<void, Error>.failure(error)
         }
         var attempts = 0

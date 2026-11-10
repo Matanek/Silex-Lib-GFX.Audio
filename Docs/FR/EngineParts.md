@@ -37,8 +37,9 @@ engine.set_state(6_000.0, throttle:0.85, load:0.7)
 
 Ce profil est un mono cross 250 deux temps. La génération demeure entièrement
 procédurale. Les profils sont des archétypes stylisés, sans enregistrements ni
-reproduction certifiée de véhicules commerciaux. L’[atelier des véhicules](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop)
-permet de les comparer, d’ajuster leur cylindrée totale et d’exporter un WAV.
+reproduction certifiée de véhicules commerciaux. Ce prototype est distinct de
+la [chaîne thermique de référence](Vehicles.md), désormais employée par
+l’atelier des véhicules pour conserver le son d’EngineLibrary.
 
 ## Choisir un assemblage puis remplacer une pièce
 

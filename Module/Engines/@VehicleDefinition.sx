@@ -1,0 +1,151 @@
+use GFX.Audio.Engines.EngineFiles
+use GFX.Audio.Engines.Vehicles
+use STD.Error
+use STD.Error.Kind
+use STD.File
+use STD.FileSystem
+use STD.Math
+use STD.Text
+
+static struct VehicleDefinition {
+    struct Template {
+        var path:str
+        var node:str
+        var bore:str
+        var stroke:str
+        var chamber:str
+        var bore_mm:float
+        var stroke_mm:float
+        var chamber_cc:float
+        var slot:int
+        var impulse:str
+    }
+    func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.vehicle-definition", detail:detail) }
+    func replace(source:str, before:str, after:str) Result<str,Error> {
+        if !Text.contains(source, before) { return Result<str,Error>.failure(VehicleDefinition.invalid("native template does not match its pinned definition")) }
+        return Result<str,Error>.success(Text.replace(source, before, after))
+    }
+    func limits(source:str, redline:float) str {
+        var result = ""
+        for line in Text.split(source, "\n") {
+            let trimmed = Text.trim(line)
+            if Text.starts_with(trimmed, "redline:") || Text.starts_with(trimmed, "rev_limit:") {
+                var field = "redline"; if Text.starts_with(trimmed, "rev_limit:") { field = "rev_limit" }
+                var comma = ""; if Text.contains(line, ",") { comma = "," }
+                result += "        $(field): $(redline) * units.rpm$(comma)\n"
+            } else { result += line + "\n" }
+        }
+        return result
+    }
+
+    func prepare(files:EngineFiles, profile:Vehicles.Profile, cc:float) Result<int,Error> {
+        let key = profile.key
+        var definition = VehicleDefinition.Template(path:"engines/atg-video-2/07_gm_ls.mr", node:"ls_v8", bore:"3.78 * units.inch", stroke:"3.622 * units.inch",
+            chamber:"90 * units.cc", bore_mm:96.012, stroke_mm:91.9988, chamber_cc:90.0, slot:5, impulse:"454")
+        if Text.starts_with(key, "cross-") {
+            definition = VehicleDefinition.Template(path:"engines/local/Cross450.mr", node:"cross_450", bore:"96 * units.mm", stroke:"62.1 * units.mm",
+                chamber:"40 * units.cc", bore_mm:96.0, stroke_mm:62.1, chamber_cc:40.0, slot:6, impulse:"cross4")
+            if profile.strokes == 2 {
+                definition = VehicleDefinition.Template(path:"engines/local/Cross250TwoStroke.mr", node:"cross_250_two_stroke", bore:"66.4 * units.mm", stroke:"72 * units.mm",
+                    chamber:"25 * units.cc", bore_mm:66.4, stroke_mm:72.0, chamber_cc:25.0, slot:7, impulse:"cross2")
+            }
+        } else if Text.starts_with(key, "custom-") {
+            definition = VehicleDefinition.Template(path:"engines/atg-video-1/03_harley_davidson_shovelhead.mr", node:"harley_davidson_shovelhead",
+                bore:"3.5 * units.inch", stroke:"4.25 * units.inch", chamber:"100 * units.cc",
+                bore_mm:88.9, stroke_mm:107.95, chamber_cc:100.0, slot:3, impulse:"cruiser")
+        } else if key == "race-i4" {
+            definition = VehicleDefinition.Template(path:"engines/atg-video-1/04_hayabusa.mr", node:"hayabusa_i4", bore:"81 * units.mm", stroke:"65 * units.mm",
+                chamber:"19.2 * units.cc", bore_mm:81.0, stroke_mm:65.0, chamber_cc:19.2, slot:4, impulse:"moto")
+        } else if key == "sport-v10" {
+            definition = VehicleDefinition.Template(path:"engines/atg-video-2/10_lfa_v10.mr", node:"lr_gue_v10", bore:"88 * units.mm", stroke:"79 * units.mm",
+                chamber:"1.5 * 25 * units.cc", bore_mm:88.0, stroke_mm:79.0, chamber_cc:37.5, slot:2, impulse:"sport")
+        } else if key == "sport-v12" {
+            definition = VehicleDefinition.Template(path:"engines/atg-video-2/12_ferrari_412_t2.mr", node:"ferrari_412_t2_v12", bore:"86 * units.mm", stroke:"43 * units.mm",
+                chamber:"1.5 * 25 * units.cc", bore_mm:86.0, stroke_mm:43.0, chamber_cc:37.5, slot:2, impulse:"sport")
+        } else if key != "sport-v8" {
+            let bore = Math.pow(cc * 4_000.0 / (Math.pi<float>() * profile.cylinders as float), 1.0 / 3.0)
+            var compression:float = 11.0; if key == "city-diesel" { compression = 17.0 }
+            let chamber = cc / (profile.cylinders as float * (compression - 1.0))
+            if bore < 20.0 || bore > 200.0 || chamber < 1.0 || chamber > 500.0 {
+                return Result<int,Error>.failure(VehicleDefinition.invalid("displacement exceeds the bore or combustion chamber range of this engine"))
+            }
+            let source = VehicleDefinition.generic(profile, cc)
+            try File.write_all(files.root + "/Runtime/Profile-$(key).mr", source) else error { return Result<int,Error>.failure(error) }
+            var impulse = "454"; if key == "race-v4" { impulse = "moto" }
+            try FileSystem.copy_file(files.root + "/Runtime/Impulse-$(impulse).pcm", files.root + "/Runtime/Impulse-$(key).pcm", false) else error { return Result<int,Error>.failure(error) }
+            return Result<int,Error>.success(4)
+        }
+        let original_cc = profile.cylinders as float * Math.pi<float>() * definition.bore_mm * definition.bore_mm * definition.stroke_mm / 4_000.0
+        let ratio = cc / original_cc
+        let scale = Math.pow(ratio, 1.0 / 3.0)
+        let bore = definition.bore_mm * scale
+        if bore < 20.0 || bore > 200.0 || definition.chamber_cc * ratio < 1.0 || definition.chamber_cc * ratio > 500.0 {
+            return Result<int,Error>.failure(VehicleDefinition.invalid("displacement exceeds the bore or combustion chamber range of this engine"))
+        }
+        let path = files.root + "/Runtime/" + definition.path
+        var source = try File.read_text(path, 1_000_000) else error { return Result<int,Error>.failure(error) }
+        source = try VehicleDefinition.replace(source, definition.bore, "$(bore) * units.mm") else error { return Result<int,Error>.failure(error) }
+        source = try VehicleDefinition.replace(source, definition.stroke, "$(definition.stroke_mm * scale) * units.mm") else error { return Result<int,Error>.failure(error) }
+        source = try VehicleDefinition.replace(source, definition.chamber, "$(definition.chamber_cc * ratio) * units.cc") else error { return Result<int,Error>.failure(error) }
+        source = VehicleDefinition.limits(source, profile.redline_rpm)
+        if profile.cylinders == 1 {
+            // Preserve torque/friction balance and scale rotational inertia
+            // with geometry, rather than resizing combustion alone.
+            source = try VehicleDefinition.replace(source, "friction_torque: 5.0 * units.lb_ft", "friction_torque: $(5.0 * ratio) * units.lb_ft") else error { return Result<int,Error>.failure(error) }
+            var inertia = "moment_of_inertia: 0.22986844776863666 * 0.2"
+            var base_inertia:float = 0.22986844776863666 * 0.2
+            if profile.strokes == 2 { inertia = "moment_of_inertia: 0.008"; base_inertia = 0.008 }
+            source = try VehicleDefinition.replace(source, inertia, "moment_of_inertia: $(base_inertia * Math.pow(ratio, 5.0 / 3.0))") else error { return Result<int,Error>.failure(error) }
+        }
+        try File.write_all(path, source) else error { return Result<int,Error>.failure(error) }
+        let entry = "import \"engine_sim.mr\"\nimport \"$(definition.path)\"\nset_engine($(definition.node)())\n"
+        try File.write_all(files.root + "/Runtime/Profile-$(key).mr", entry) else error { return Result<int,Error>.failure(error) }
+        try FileSystem.copy_file(files.root + "/Runtime/Impulse-$(definition.impulse).pcm", files.root + "/Runtime/Impulse-$(key).pcm", false) else error { return Result<int,Error>.failure(error) }
+        return Result<int,Error>.success(definition.slot)
+    }
+
+    // The same gas solver, valves and combustion model as the reference. Each
+    // cylinder has correctly phased valves and a physical journal; exhaust banks
+    // share gas volumes instead of summing unrelated audio pulses.
+    func generic(profile:Vehicles.Profile, cc:float) str {
+        let count = profile.cylinders
+        let bore = Math.pow(cc * 4_000.0 / (Math.pi<float>() * count as float), 1.0 / 3.0)
+        var compression:float = 11.0; var advance:float = 20.0
+        if profile.key == "city-diesel" { compression = 17.0; advance = 8.0 }
+        let chamber = cc / (count as float * (compression - 1.0))
+        let race = profile.key == "race-v4"
+        var inertia:float = 0.18; var volume:float = 16.0
+        if race { inertia = 0.04; volume = 3.0 }
+        var tdc:float = 90.0
+        if race { tdc = 135.0 }
+        if profile.key == "sport-flat6" { tdc = 180.0 }
+        var result = "import \"engine_sim.mr\"\nunits units()\nconstants constants()\nimpulse_response_library ir_lib()\n"
+        result += "engine motor(name: \"$(profile.key)\", starter_torque: 120 * units.lb_ft, starter_speed: 500 * units.rpm, redline: $(profile.redline_rpm) * units.rpm, simulation_frequency: 20000, fuel: fuel(max_burning_efficiency: 0.9, burning_efficiency_randomness: 0.35), noise: 0.2, jitter: 0.1)\n"
+        result += "crankshaft crank(throw: $(bore / 2.0) * units.mm, flywheel_mass: 8 * units.lb, mass: 15 * units.lb, friction_torque: 3 * units.lb_ft, moment_of_inertia: $(inertia), position_x: 0.0, position_y: 0.0, tdc: $(tdc) * units.deg)\n"
+        result += "intake air(plenum_volume: 4 * units.L, plenum_cross_section_area: 10 * units.cm2, intake_flow_rate: k_carb(600), idle_flow_rate: k_carb(0.003), idle_throttle_plate_position: 0.995, velocity_decay: 0.5)\n"
+        result += "exhaust_system_parameters exhaust_params(outlet_flow_rate: k_carb(550), primary_tube_length: 24 * units.inch, primary_flow_rate: k_carb(180), velocity_decay: 0.6, volume: $(volume) * units.L)\n"
+        result += "exhaust_system exhaust0(exhaust_params, audio_volume: 1.0, impulse_response: ir_lib.default_0)\nexhaust_system exhaust1(exhaust_params, audio_volume: 0.65, impulse_response: ir_lib.default_0)\n"
+        result += "harmonic_cam_lobe lobe(duration_at_50_thou: 230 * units.deg, gamma: 1.0, lift: 350 * units.thou, steps: 100)\n"
+        result += "function timing(1000 * units.rpm)\ntiming.add_sample(0 * units.rpm, $(advance) * units.deg).add_sample(4000 * units.rpm, $(advance + 10.0) * units.deg)\nignition_module ignition(timing_curve: timing, rev_limit: $(profile.redline_rpm) * units.rpm, limiter_duration: 0.05)\n"
+        result += "piston_parameters piston_params(mass: 350 * units.g, compression_height: 25.4 * units.mm, wrist_pin_position: 0.0, displacement: 0.0)\nconnecting_rod_parameters rod_params(mass: 350 * units.g, length: 150 * units.mm, moment_of_inertia: 0.0015, center_of_mass: 0.0)\n"
+        for i in 0...count {
+            var phase = i as float * 720.0 / count as float
+            var bank:float = 0.0
+            if race {
+                let phases:float[] = [0.0, 90.0, 360.0, 450.0]
+                phase = phases[i]; bank = 45.0; if i % 2 == 1 { bank = -45.0 }
+            }
+            if profile.key == "sport-flat6" { bank = 90.0; if i % 2 == 1 { bank = -90.0 } }
+            let journal = phase - (tdc - 90.0 - bank)
+            var exhaust = 0; if i % 2 == 1 && (race || count == 6) { exhaust = 1 }
+            result += "ignition_wire wire$(i)()\nrod_journal journal$(i)(angle: $(journal) * units.deg)\ncrank.add_rod_journal(journal$(i))\n"
+            result += "camshaft intake_cam$(i)(lobe_profile: lobe)\nintake_cam$(i).add_lobe($(360.0 + 110.0 + phase) * units.deg)\ncamshaft exhaust_cam$(i)(lobe_profile: lobe)\nexhaust_cam$(i).add_lobe($(360.0 - 110.0 + phase) * units.deg)\n"
+            result += "cylinder_bank bank$(i)(bore: $(bore) * units.mm, deck_height: $(bore / 2.0 + 175.4) * units.mm, angle: $(bank) * units.deg)\n"
+            result += "bank$(i).add_cylinder(piston: piston(piston_params, blowby: k_28inH2O(0.1)), connecting_rod: connecting_rod(rod_params), rod_journal: journal$(i), intake: air, exhaust_system: exhaust$(exhaust), ignition_wire: wire$(i))\n"
+            result += "bank$(i).set_cylinder_head(generic_small_engine_head(chamber_volume: $(chamber) * units.cc, intake_camshaft: intake_cam$(i), exhaust_camshaft: exhaust_cam$(i), flow_attenuation: 1.6, intake_runner_cross_section_area: 9 * units.cm2, exhaust_runner_cross_section_area: 9 * units.cm2))\n"
+            result += "motor.add_cylinder_bank(bank$(i))\nignition.connect_wire(wire$(i), $(phase) * units.deg)\n"
+        }
+        result += "motor.add_crankshaft(crank)\nmotor.add_ignition_module(ignition)\nset_engine(motor)\n"
+        return result
+    }
+}

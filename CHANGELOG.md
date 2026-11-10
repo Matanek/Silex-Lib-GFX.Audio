@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- Correct native RPM decoding during small crankshaft rebounds and round positive telemetry after unit conversion. The workshop retains free bench idle: a profile's nominal idle no longer automatically engages the dynamometer.
+
+- Add `Engines.Vehicles`: sample-exact Chevrolet 454 reference and 17 variants prepared with the thermal simulator, native definitions and exhaust responses. Total displacement in cc, mechanical scaling for singles, optional continuous throttle and private definitions retained across reset. The embedded native binary remains unchanged and qualified on macOS ARM64; diesel, turbo and two-stroke limitations are explicit in the guide. EngineWorkshop now uses this chain and checks 454 PCM parity; the pulse generator remains a separate prototype.
+
 - Add `Synthesis.EngineVehicles.catalogue()`: 17 procedural city petrol/diesel, sports car, 2T/4T motocross, race motorcycle and custom profiles, with displacement, RPM and response settings for each archetype. Profiles remain sonic inspirations requiring listening qualification.
 - Extend `Engine.assemble` with combustion attack, compression ignition clatter, acoustic baffles, expansion resonance, mechanical whine and rotation irregularity. Validate settings before mutation and preserve phases, deterministic rendering and prepared storage. Lower the parts path's pre-limiter level to preserve loaded transients; its output level changes. `Engine.create` and the native `Engines` library remain separate.
 

@@ -37,8 +37,9 @@ engine.set_state(6_000.0, throttle:0.85, load:0.7)
 
 This profile is a 250 cc two-stroke motocross single. Generation remains fully
 procedural. Profiles are stylized archetypes without recordings or certified
-reproduction of commercial vehicles. The [vehicle workshop](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop)
-compares them, adjusts total displacement and exports WAV audio.
+reproduction of commercial vehicles. This prototype is separate from the
+[reference thermal chain](Vehicles.md) now used by the vehicle workshop to
+preserve EngineLibrary's sound.
 
 ## Choose an assembly and replace a part
 

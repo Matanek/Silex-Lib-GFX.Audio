@@ -5,6 +5,10 @@ profiles, exhaust responses, four-stroke intake and output mixing. Consumers
 copy neither its calculations nor the demo's filters. The eight profiles and
 existing controls are preserved independently of the experimental parts workshop.
 
+For a vehicle catalogue with customizable displacement, see
+[`Engines.Vehicles`](Vehicles.md). Its reference Chevrolet uses exactly the
+standard factory described here.
+
 ## Use the supplied engines
 
 `Library.open()` opens the eight standard profiles with their simulator and
@@ -62,6 +66,7 @@ meaning:
 | --- | --- |
 | `running` | Ignition and starter; switching off retains rotation and acoustic tails |
 | `accelerating` | Open or released throttle with the native engine response |
+| `throttle` | Optional continuous pedal 0..1; overrides `accelerating` when supplied, `null` retains the historical command |
 | `idle_rpm` | Free-bench holding speed, 700..4,000 RPM; not an instantaneous RPM override |
 | `load` | Free-bench load, 0..1 |
 | `texture` | Profile air noise and jitter, 0..1; physical combustion remains variable |

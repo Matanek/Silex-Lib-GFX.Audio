@@ -40,6 +40,9 @@ instruments keep their own musical settings and the existing extension protocol.
 intake and output processing. `Library.open()` supplies the standard engines on
 macOS ARM64; an external native library is optional.
 
-The [parts workshop](Docs/EN/EngineParts.md) remains experimental and separate
-from the validated engine library. `Synthesis.EngineVehicles.catalogue()` supplies
-17 editable procedural vehicle archetypes, including diesel, motocross and V-twins.
+[Create vehicle variants with the reference sound chain](Docs/EN/Vehicles.md)
+through `Engines.Vehicles`, preserving the Chevrolet 454 reference and preparing
+17 additional thermal-engine profiles. The vehicle workshop uses this path.
+
+The [parts synthesizer](Docs/EN/EngineParts.md), including
+`Synthesis.EngineVehicles`, remains a separate experimental prototype.

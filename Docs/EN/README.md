@@ -264,4 +264,6 @@ sustain and pitch bend on a frame timeline, without a sound bank.
 
 [Reuse the validated engine-bench sounds](Engines.md).
 
+[Create vehicle variants with the reference sound chain](Vehicles.md).
+
 [Observe the mix during playback](OutputCapture.md).

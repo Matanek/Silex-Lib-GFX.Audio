@@ -6,6 +6,15 @@ preparation. The old bench remains an independent, frozen comparison witness.
 `Module/Engines` owns the Silex-facing protocol, intake-flow sound and output mix.
 No source in this package imports Silex-Examples.
 
+`Module/Engines/Vehicles.sx` and its private `VehicleDefinition` prepare vehicle
+variants from these deployed definitions or generated crank/valve/gas graphs.
+They reuse the unchanged renderer and existing impulses. Geometry edits belong
+to a private temporary deployment; stock `454` goes through `Library.engine`
+without any edit. `Tests/Consumer/Tests/VehicleEngines.sx` protects that PCM parity
+and exercises every variant. Run it after changing the pinned source templates,
+their parameter spelling, or the bundled resources. The parts-based pulse
+synthesizer is not an acoustic substitute for this chain.
+
 This is the package-maintenance build path. Ordinary consumers call
 `Engines.Library.open()` without preparing a directory.
 

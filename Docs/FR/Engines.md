@@ -6,6 +6,10 @@ Le consommateur ne recopie ni ces calculs ni les filtres de la démo. Les huit
 profils et les réglages existants sont conservés ; ce parcours ne dépend pas de
 l’atelier expérimental par pièces.
 
+Pour un catalogue de véhicules avec cylindrée personnalisable, voir
+[`Engines.Vehicles`](Vehicles.md). Le Chevrolet de référence utilise exactement
+la fabrique standard décrite ici.
+
 ## Utiliser les moteurs fournis
 
 `Library.open()` ouvre les huit profils standard avec leur simulateur et leurs
@@ -65,6 +69,7 @@ les effets du banc validé :
 | --- | --- |
 | `running` | Contact, démarreur puis fonctionnement ; couper laisse évoluer rotation et queues acoustiques |
 | `accelerating` | Gaz ouverts ou relâchés, avec la réponse native du moteur |
+| `throttle` | Pédale continue optionnelle 0..1 ; remplace `accelerating` si renseignée, `null` conserve la commande historique |
 | `idle_rpm` | Banc libre : régime de maintien, 700..4 000 tr/min ; ce n’est pas une imposition instantanée du régime |
 | `load` | Charge du banc libre, 0..1 |
 | `texture` | Bruit d’air et jitter du profil, 0..1 ; la combustion physique conserve ses variations |
