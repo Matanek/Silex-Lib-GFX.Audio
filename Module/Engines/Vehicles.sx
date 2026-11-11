@@ -21,7 +21,6 @@ public struct Profile {
 }
 
 public func catalogue() Profile[] {
-    let cross2_note = "Balayage simplifié ; réponse acoustique calculée avec le pot du 250."
     return [
         Profile(key:"454", name:"Référence · Chevrolet 454", displacement_cc:displacement(8, 107.95, 101.6), cylinders:8, redline_rpm:5_500.0),
         Profile(key:"city-i3", name:"Citadine essence · 3 cylindres / extérieur feutré", displacement_cc:1_000.0, cylinders:3, redline_rpm:6_500.0,
@@ -36,9 +35,9 @@ public func catalogue() Profile[] {
         Profile(key:"sport-v8", name:"Sportive · V8 américain", displacement_cc:5_000.0, cylinders:8, idle_rpm:900.0),
         Profile(key:"sport-v10", name:"Sportive · V10 / base LFA", displacement_cc:4_805.0, cylinders:10, idle_rpm:900.0, redline_rpm:9_000.0),
         Profile(key:"sport-v12", name:"Sportive · V12 / base Ferrari 412 T2", displacement_cc:displacement(12, 86.0, 43.0), cylinders:12, idle_rpm:1_000.0, redline_rpm:15_000.0),
-        Profile(key:"cross-125-2t", name:"Motocross · 125 cm³ 2T", displacement_cc:125.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:12_000.0, note:cross2_note),
-        Profile(key:"cross-250-2t", name:"Motocross · 250 cm³ 2T", displacement_cc:250.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:10_000.0, note:cross2_note),
-        Profile(key:"cross-500-2t", name:"Motocross · 500 cm³ 2T", displacement_cc:500.0, cylinders:1, strokes:2, idle_rpm:1_500.0, redline_rpm:8_500.0, note:cross2_note),
+        Profile(key:"cross-125-2t", name:"Motocross · 125 cm³ 2T", displacement_cc:125.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:12_000.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
+        Profile(key:"cross-250-2t", name:"Motocross · 250 cm³ 2T", displacement_cc:250.0, cylinders:1, strokes:2, idle_rpm:1_800.0, redline_rpm:10_000.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
+        Profile(key:"cross-500-2t", name:"Motocross · 500 cm³ 2T", displacement_cc:500.0, cylinders:1, strokes:2, idle_rpm:1_500.0, redline_rpm:8_500.0, note:"Lumières et balayage 2T simplifiés ; pot de détente non simulé."),
         Profile(key:"cross-250-4t", name:"Motocross · 250 cm³ 4T", displacement_cc:250.0, cylinders:1, idle_rpm:1_500.0, redline_rpm:10_000.0),
         Profile(key:"cross-500-4t", name:"Motocross · 500 cm³ 4T", displacement_cc:500.0, cylinders:1, idle_rpm:1_500.0, redline_rpm:9_500.0),
         Profile(key:"race-i4", name:"Moto de course · 4 en ligne / base Hayabusa", displacement_cc:1_000.0, cylinders:4, idle_rpm:1_400.0, redline_rpm:12_000.0),

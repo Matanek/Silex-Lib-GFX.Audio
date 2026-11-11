@@ -2,8 +2,6 @@
 
 ## [Unreleased]
 
-- Calculate the `cross2` expansion chamber response from its diameters and lengths. The `Engines.Library` 250 two-stroke uses simulated pressure and the generated response without an engine recording. Acoustic propagation is one-dimensional and scavenging remains simplified.
-
 - Separate city cars from the sports I4 through milder intake/valve timing, a more restrictive exhaust and quiet exterior rendering. Diesel gains a hybrid voice built from eight excitations extracted from the supplied TDI reference, driven by native RPM with deterministic shutdown/reset. Labels identify the recorded source and its unidentified engine; mechanical simulation does not become diesel combustion. The 454, sports cars and 500 four-stroke motocross retain their sound paths.
 
 - Correct native RPM decoding during small crankshaft rebounds and round positive telemetry after unit conversion. The workshop retains free bench idle: a profile's nominal idle no longer automatically engages the dynamometer.

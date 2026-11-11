@@ -62,31 +62,6 @@ test "default vehicle engine library" {
         }
     }
 }
-test "calculated 250 two-stroke retains load contrast at fixed RPM" {
-    if System.target_name(System.target()) != "macos-arm64" { return }
-    var library = Engines.Library.open()
-    var samples:float32[] = []; for _ in 0...960 { samples.append(0.0) }
-    var energies:float64[] = []
-    let efforts:float[] = [0.15, 0.75]
-    for effort in efforts {
-        var engine = library.driven_engine("cross2")
-        engine.set_state(Engines.OperatingState(rpm:5_940.0, load:effort))
-        var power:float64 = 0.0
-        for block in 0...184 {
-            engine.render(&samples[0:960])
-            if block < 92 { continue }
-            assert(Math.abs(engine.current_rpm() - 5_940.0) < 1.0)
-            for sample in samples {
-                assert(Math.is_finite(sample) && Math.abs(sample) < 1.0)
-                let value = sample as float64
-                power += value * value
-            }
-        }
-        energies.append(power)
-    }
-    assert(energies[0] > 0.001 && energies[1] > 3.0 * energies[0],
-        "the output stage flattened the fixed-RPM load contrast")
-}
 func main() {
     let arguments = Process.arguments()
     var directory:str? = null

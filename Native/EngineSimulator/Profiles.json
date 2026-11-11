@@ -201,7 +201,7 @@
     },
     {
       "key": "cross2",
-      "label": "Moto cross / mono 250 · 2T · pot calculé",
+      "label": "Moto cross / mono 250 · 2T (prototype)",
       "path": "local/Cross250TwoStroke.mr",
       "node": "cross_250_two_stroke",
       "strokes": 2,
@@ -222,13 +222,10 @@
         1.18,
         1
       ],
+      "impulse": "archive/test_engine_14_eq_adjusted_16.wav",
       "audio_cutoff": 6000,
-      "expansion_chamber": {
-        "stations_mm": [[0, 36], [190, 36], [450, 110], [575, 110], [760, 25], [1000, 25]],
-        "speed_m_s": 500,
-        "loss_per_m": 0.65,
-        "response_ms": 45
-      },
+      "treble_db": 7,
+      "tail_ms": 45,
       "breath_percent": 0
     }
   ]

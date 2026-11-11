@@ -58,13 +58,6 @@ scale, idle speed, gear count and stroke cycle. Current keys are `454`, `berline
 `cruiser`, `moto`, `truck`, `cross4` and `cross2`. Unknown profiles are rejected.
 Each engine owns its simulation, phases and histories independently.
 
-The single-cylinder 250 two-stroke `cross2` uses an exhaust response calculated
-from pipe geometry. The simulator generates pressure from combustion and port
-flow. A one-dimensional waveguide calculates reflections at diameter changes.
-The geometry is generic and scavenging is simplified. Reflected pressure does
-not feed back into the cylinder. `Silex-Examples/Sources/EngineLibrary` plays
-this profile and exports two loads at fixed RPM.
-
 `controls()` returns a copy. `set_controls()` validates every value before
 mutation and rejects non-finite values. Controls retain the validated bench's
 meaning:
@@ -217,12 +210,13 @@ closes its input and releases its renderer process.
 
 ## Scope of this extraction
 
-The original extraction was verified bit for bit across eight profiles,
-including start, throttle, exhaust, texture and load changes, volume, ambience
-and shutdown. The calculated chamber subsequently changed `cross2`'s timbre.
+Comparison with the original bench preserves PCM bit for bit for all eight
+profiles, including start, throttle, exhaust/texture/load changes, volume,
+ambience and shutdown. The old bench remains an independent witness.
 
 This version retains the full simulator and one process per engine. It allocates
 and uses IPC; it is unsuitable for a real-time audio callback. External RPM has
 an offline-tested path; listening quality and heavy-application qualification
 remain open. This extraction has been built and executed on macOS ARM64; other targets remain to be prepared
-and tested. The embedded standard library retains this qualification scope.
+and tested. The embedded standard library retains this qualification scope
+and changes neither profiles nor audio calculations.

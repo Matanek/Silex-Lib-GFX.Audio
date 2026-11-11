@@ -2,8 +2,6 @@
 
 ## [Unreleased]
 
-- Calculer la réponse du pot de détente de `cross2` à partir de ses diamètres et longueurs. Le mono 250 2T d’`Engines.Library` utilise la pression simulée et cette réponse générée, sans enregistrement moteur. La propagation acoustique reste à une dimension et le balayage reste simplifié.
-
 - Différencier les citadines de l’I4 de sportive : admission et calage plus sages, échappement plus restrictif et rendu extérieur feutré. Le diesel reçoit une voix hybride issue de huit excitations extraites de la référence TDI fournie, pilotées par le régime natif, avec extinction et reset déterministes. Le libellé signale cette source enregistrée et son modèle non identifié ; la simulation mécanique ne devient pas une combustion diesel. Le 454, les sportives et la cross 500 4T conservent leur parcours sonore.
 
 - Corriger le décodage du régime natif lors des petits retours arrière du vilebrequin et arrondir les télémétries positives après conversion d’unité. L’atelier conserve le ralenti libre du banc : le ralenti nominal d’un profil n’engage plus automatiquement le dynamomètre.
