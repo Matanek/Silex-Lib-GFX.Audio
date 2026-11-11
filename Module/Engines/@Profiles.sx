@@ -24,6 +24,6 @@ func engine_profiles() Profile[] {
         Profile(key:"moto", label:"Moto sportive / Hayabusa I4 · 4T", redline:11000.0, ceiling:12000.0, idle:1400.0, strokes:4, gears:6, gearing:Gearing(ratios:[2.615, 1.937, 1.526, 1.285, 1.136, 1.043], final_drive:2.58), intake:0.0, slot:4),
         Profile(key:"truck", label:"Camion essence / Chevrolet 454 stock", redline:5500.0, ceiling:7000.0, idle:900.0, strokes:4, gears:6, gearing:Gearing(ratios:[5.2, 3.1, 1.9, 1.35, 1.0, 0.75], final_drive:4.1), intake:0.0, slot:5),
         Profile(key:"cross4", label:"Moto cross / mono 450 · 4T", redline:9500.0, ceiling:11000.0, idle:1500.0, strokes:4, gears:5, gearing:Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1], final_drive:8.5), intake:0.6, slot:6),
-        Profile(key:"cross2", label:"Moto cross / mono 250 · 2T (prototype)", redline:10000.0, ceiling:12000.0, idle:1800.0, strokes:2, gears:5, gearing:Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1], final_drive:8.5), intake:0.0, slot:7)
+        Profile(key:"cross2", label:"Moto cross / mono 250 · 2T · pot calculé", redline:10000.0, ceiling:12000.0, idle:1800.0, strokes:2, gears:5, gearing:Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1], final_drive:8.5), intake:0.0, slot:7)
     ]
 }

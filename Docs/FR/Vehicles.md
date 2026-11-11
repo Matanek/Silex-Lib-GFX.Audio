@@ -108,8 +108,8 @@ La mécanique diesel reste approximative : le simulateur conserve l’allumage
 commandé et ne modélise pas l’auto-inflammation ni l’injection diesel. La voix
 enregistrée corrige sa texture acoustique, pas cette thermodynamique.
 Le profil I4 de sportive ne simule pas la suralimentation.
-Le 2T conserve le modèle simplifié de lumières et de balayage de la banque,
-sans pot de détente à cônes. Ces limites sont aussi indiquées dans `note`.
+Les 2T utilisent des lumières et un balayage simplifiés. Les trois cylindrées
+partagent la réponse acoustique calculée avec la géométrie du pot du 250.
 
 Le test consommateur compare chaque échantillon du `454` à `Library.engine("454")`
 sur démarrage, accélération et coupure. Il exerce aussi les 18 architectures,

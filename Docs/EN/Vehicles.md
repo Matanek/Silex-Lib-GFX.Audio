@@ -104,8 +104,8 @@ and assets are retained; the factory edits only its temporary copy.
 Diesel mechanics remain approximate: the simulator still uses spark ignition
 and does not model diesel auto-ignition or injection. The recorded voice changes
 acoustic texture, not the thermodynamic model. The sports I4 does not simulate
-boost. Two-strokes retain the
-bank's simplified port/scavenging model without conical expansion chambers.
+boost. Two-strokes use simplified port timing and scavenging. The three
+displacements share the calculated acoustic response of the 250's chamber.
 These limits also appear in `note`.
 
 The consumer test compares every `454` sample with `Library.engine("454")`

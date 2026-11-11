@@ -3,7 +3,6 @@ import "engine_sim.mr"
 
 units units()
 constants constants()
-impulse_response_library ir_lib()
 
 private node wires {
     output wire1: ignition_wire();
@@ -22,8 +21,8 @@ public node cross_250_two_stroke {
             max_burning_efficiency: 1.0
         ),
         hf_gain: 0.015,
-        noise: 0.229,
-        jitter: 0.12,
+        noise: 0.030,
+        jitter: 0.016,
         simulation_frequency: 40000
     )
 
@@ -83,7 +82,9 @@ public node cross_250_two_stroke {
     exhaust_system exhaust0(
         es_params,
         audio_volume: 1.0,
-        impulse_response: ir_lib.mild_exhaust_0_reverb
+        // The native renderer provides the calculated PCM response. Use a
+        // fixed sensitivity so its leveler does not flatten the two test loads.
+        impulse_response: impulse_response(filename: "Impulse-cross2.pcm", volume: 0.000001)
     )
 
     cylinder_bank b0(bank_params, angle: 0 * units.deg)

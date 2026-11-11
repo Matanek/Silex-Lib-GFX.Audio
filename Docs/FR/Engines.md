@@ -61,6 +61,14 @@ engine.set_controls(controls)
 Un profil inconnu est refusé. Un moteur possède ses phases, sa simulation et ses
 historiques indépendamment des autres moteurs.
 
+Le mono 250 2T `cross2` utilise une réponse d’échappement calculée depuis la
+géométrie du pot. Le simulateur produit la pression à partir de la combustion
+et des lumières. Un guide d’onde à une dimension calcule les réflexions aux
+variations de diamètre. La géométrie est générique et le balayage reste
+simplifié. La pression réfléchie n’est pas réinjectée dans le cylindre.
+`Silex-Examples/Sources/EngineLibrary` permet d’écouter ce profil et d’exporter
+deux charges à régime imposé.
+
 `controls()` retourne une copie. `set_controls()` valide toutes les valeurs avant
 modification ; les valeurs non finies sont refusées. Les commandes reprennent
 les effets du banc validé :
@@ -215,9 +223,9 @@ Libérer le dernier moteur ferme son entrée et libère son processus de calcul.
 
 ## Portée de cette extraction
 
-La comparaison avec le premier banc conserve le PCM bit à bit sur les huit
-profils, avec démarrage, gaz, changements d’échappement/texture/charge, volume,
-ambiance et coupure. L’ancien banc reste un témoin autonome.
+L’extraction d’origine a été vérifiée bit à bit sur les huit profils, avec
+démarrage, gaz, changements d’échappement, de texture et de charge, volume,
+ambiance et coupure. Le pot calculé a ensuite changé le timbre de `cross2`.
 
 Cette version garde le simulateur complet et un processus par moteur. Elle
 alloue et communique entre processus ; elle n’est pas adaptée à un callback
@@ -225,4 +233,4 @@ audio temps réel. Le régime externe dispose d’un parcours contrôlé hors li
 sa qualité à l’écoute et la tenue dans une application lourde restent à qualifier.
 La construction et l’exécution de cette extraction sont vérifiées sur macOS ARM64 ; les autres cibles restent à préparer
 et à tester. La bibliothèque standard embarquée conserve ce même périmètre de
-qualification ; elle ne modifie ni les profils ni le calcul audio.
+qualification.

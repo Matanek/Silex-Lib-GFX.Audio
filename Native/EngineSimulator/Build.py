@@ -12,6 +12,7 @@ import wave
 import TwoStroke
 import Impulse
 import ExhaustBlend
+import ExpansionChamber
 import Catalog
 import PackageLibrary
 
@@ -121,12 +122,15 @@ def main():
         (runtime / 'Impulse.pcm').write_bytes(stream.readframes(stream.getnframes()))
     for profile in profiles:
         (runtime / ('Profile-' + profile['key'] + '.mr')).write_text('import "engine_sim.mr"\nimport "engines/' + profile['path'] + '"\nset_engine(' + profile['node'] + '())\n')
-        with wave.open(str(snapshot / 'assets/sound-library' / profile['impulse']), 'rb') as stream:
-            assert (stream.getnchannels(), stream.getsampwidth(), stream.getframerate()) == (1, 2, 44100)
-            pcm = stream.readframes(stream.getnframes())
+        if 'expansion_chamber' in profile:
+            pcm = ExpansionChamber.prepare(profile['expansion_chamber'])
+        else:
+            with wave.open(str(snapshot / 'assets/sound-library' / profile['impulse']), 'rb') as stream:
+                assert (stream.getnchannels(), stream.getsampwidth(), stream.getframerate()) == (1, 2, 44100)
+                pcm = stream.readframes(stream.getnframes())
             pcm = Impulse.prepare(pcm, profile.get('treble_db', 0), profile.get('tail_ms', 0), profile.get('bass_db', 0),
                 profile.get('mid_decay_ms', 0), profile.get('high_decay_ms', 0))
-            (runtime / ('Impulse-' + profile['key'] + '.pcm')).write_bytes(pcm)
+        (runtime / ('Impulse-' + profile['key'] + '.pcm')).write_bytes(pcm)
     metadata = {'repository': 'https://github.com/ange-yaghi/engine-sim', 'revision': REVISION,
         'dependencies': DEPENDENCIES, 'profiles': profiles,
         'local_profiles_sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((tools / 'Profiles').glob('*.mr'))},
