@@ -41,6 +41,15 @@ before mutation. Other controls retain their meaning: load, texture, exhaust
 response, intake, volume and ambience. `exhaust` blends raw and response-filtered
 audio; it is not a baffle count or back-pressure setting.
 
+## Add a transmission to the bench
+
+Create the engine with `Vehicles.create("454", transmission:Engines.Transmission.manual)`.
+It starts in neutral (`gear = 0`). Read its controls with `controls()`,
+select a gear from 1 to `gearing.ratios.count()`, and pass the controls
+to `set_controls()`. Shifting keeps the engine state. `drive_state()`
+reports the engaged gear, speed and refused downshifts. In neutral the
+engine revs freely and the bench load setting takes effect again.
+
 ## Catalogue and displacement
 
 `catalogue()` returns 18 `Profile` values with `key`, `name`, `displacement_cc`,

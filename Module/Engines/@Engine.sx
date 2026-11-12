@@ -45,11 +45,12 @@ public class Engine:Synthesis.Generator {
     private var ambience_gain:float32 = 0.0
     private var remaining:int = 0
     private let driving:bool
+    private let bench_transmission:bool
     private var operating:OperatingState?
     private let load_scale:float
     private var voice:VehicleVoice?
 
-    module init(files:EngineFiles, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?, operating:OperatingState? = null, load_scale:float = 1.0, voice:VehicleVoice? = null) {
+    module init(files:EngineFiles, profile:Profile, worker:EngineWorker, transmission:Transmission?, gearing:Gearing?, operating:OperatingState? = null, load_scale:float = 1.0, voice:VehicleVoice? = null, bench_transmission:bool = false) {
         self.files = files; self.root = files.root; self.profile = profile
         self.worker = worker
         self.operating = operating
@@ -58,6 +59,7 @@ public class Engine:Synthesis.Generator {
         self.custom_gearing = gearing; self.gearing = gearing ?? profile.gearing
         self.control = Controls(intake:profile.intake, transmission:transmission)
         self.driving = transmission != null
+        self.bench_transmission = bench_transmission
         self.airflow = EngineAirflow(self.format)
         self.room = Processing.Reverb.create(self.format, room_size:0.18,
             decay_seconds:0.22, damping:0.65, wet:1.0)
@@ -149,7 +151,7 @@ public class Engine:Synthesis.Generator {
         }
     }
     func reset() {
-        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving, self.custom_gearing, self.operating != null, self.profile.intake > 0.0)
+        self.worker = EngineWorker.open(self.root, self.profile.slot, self.profile.key, self.driving, self.custom_gearing, self.operating != null, self.profile.intake > 0.0, bench:self.bench_transmission)
         self.remaining = 0; self.gain = 0.7; self.ambience_gain = 0.0
         self.airflow.reset(); self.room.reset()
         if let voice = self.voice { voice.reset() }

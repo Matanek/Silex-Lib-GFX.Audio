@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Add optional gearing to `Engines.Vehicles`, with free-running neutral and continuous engine state through shifts.
+
 - Report per-cylinder combustions from the free-running native engine on the audio frame clock.
 
 - Add two comparison modes to source builds of the native renderer. They calculate the exhaust response from filter bands and can export each collector signal.

@@ -166,7 +166,19 @@ static void renderQuantum(CapturingSimulator& simulator, Engine& engine, std::ve
     }
 }
 
-static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSettings& settings, int profile, bool withIntake, bool withCombustion) {
+static Vehicle::Parameters roadParameters(const DriveSettings& settings) {
+    Vehicle::Parameters parameters;
+    parameters.mass = settings.mass;
+    parameters.diffRatio = settings.diff;
+    parameters.tireRadius = settings.wheel;
+    parameters.dragCoefficient = settings.drag;
+    parameters.crossSectionArea = settings.area;
+    parameters.rollingResistance = settings.mass * 9.81 * 0.012;
+    return parameters;
+}
+
+static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSettings& settings, int profile,
+    bool withIntake, bool withCombustion, DriveController* drive, RoadVehicle* vehicle) {
     constexpr int maxCylinders = 16;
     if (withCombustion && engine.getCylinderCount() > maxCylinders) {
         throw std::runtime_error("Combustion telemetry supports up to 16 cylinders");
@@ -193,7 +205,18 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
     double contactTime = 0;
     double throttle = 0;
     bool wasRunning = false;
+    int mode = 2;
+    int requestedGear = 0;
+    double brake = 0;
+    bool brakeAttached = false;
+    bool roadConfigured = false;
     while (std::cin >> frames >> ignition >> pedal >> texture >> convolution >> baseRpm >> load) {
+        if (drive && (!(std::cin >> mode >> requestedGear >> brake) ||
+                mode < 1 || mode > 2 || requestedGear < 0 ||
+                requestedGear > static_cast<int>(settings.ratios.size()) ||
+                !std::isfinite(brake) || brake < 0 || brake > 1)) {
+            throw std::runtime_error("Invalid bench transmission request");
+        }
         if (frames < 1 || frames > 960 || ignition < 0 || ignition > 1 ||
             !std::isfinite(pedal) || pedal < 0 || pedal > 1 ||
             !std::isfinite(texture) || texture < 0 || texture > 1 ||
@@ -201,6 +224,14 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
             !std::isfinite(baseRpm) || baseRpm < 700 || baseRpm > 4000 ||
             !std::isfinite(load) || load < 0 || load > 1) {
             throw std::runtime_error("Invalid reference-render request");
+        }
+        if (vehicle && !roadConfigured && (mode == 1 || requestedGear > 0 || brake > 0)) {
+            vehicle->initialize(roadParameters(settings));
+            roadConfigured = true;
+        }
+        if (vehicle && brake > 0 && !brakeAttached) {
+            vehicle->attachBrake(simulator.getSystem());
+            brakeAttached = true;
         }
         if (ignition && !wasRunning) contactTime = 0;
         wasRunning = ignition;
@@ -214,12 +245,18 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
             const bool starter = ignition && contactTime < settings.starter && engine.getRpm() < (profile == 0 ? 650 : std::max(650.0, settings.idle * 0.65));
             simulator.m_starterMotor.m_enabled = starter;
             engine.getIgnitionModule()->m_enabled = ignition;
-            const double requestedThrottle = ignition && !starter ? (profile == 0 ? 0.35 : 1.0) * pedal : 0;
+            const bool useDrive = drive && (mode == 1 || requestedGear > 0 ||
+                drive->currentGear() > 0 || drive->flags() != 0 || brakeAttached);
+            const double drivenPedal = useDrive ? drive->update(ignition, pedal, mode, requestedGear, brake, 0.01) : pedal;
+            const bool inGear = drive && drive->currentGear() > 0;
+            const double requestedThrottle = ignition && !starter ?
+                (profile == 0 ? 0.35 : 1.0) * (inGear ? drivenPedal : pedal) : 0;
             throttle += 0.16 * (requestedThrottle - throttle);
             engine.setSpeedControl(throttle);
             const bool heldSpeed = ignition && pedal == 0 && baseRpm > 800 && engine.getRpm() > 600;
             simulator.m_dyno.m_hold = heldSpeed;
-            simulator.m_dyno.m_enabled = heldSpeed || (ignition && pedal > 0 && load > 0 && engine.getRpm() > 900);
+            simulator.m_dyno.m_enabled = !inGear &&
+                (heldSpeed || (ignition && pedal > 0 && load > 0 && engine.getRpm() > 900));
             simulator.m_dyno.m_rotationSpeed = units::rpm(baseRpm);
             const double loadTorque = profile == 0 ? 250 : std::max(25.0, engine.getDisplacement() * 100000);
             simulator.m_dyno.m_maxTorque = heldSpeed ? 10000 : load * loadTorque;
@@ -233,11 +270,18 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
             }
             if (ignition) contactTime += 0.01;
         }
-        const uint32_t magic = withIntake ? 0x38563845 : 0x34563845;
+        const uint32_t magic = drive ? (withIntake ? 0x39563845 : 0x36563845) :
+            (withIntake ? 0x38563845 : 0x34563845);
         writeInteger(std::cout, withCombustion ? magic | 0x40000000 : magic, 4);
         writeInteger(std::cout, frames, 4);
         writeInteger(std::cout, static_cast<uint32_t>(std::round(engine.getRpm() * 1000)), 4);
         writeInteger(std::cout, ignition && (contactTime < 1.2 || engine.getRpm() < 650), 4);
+        if (drive) {
+            writeInteger(std::cout, drive->currentGear(), 4);
+            writeInteger(std::cout, static_cast<uint32_t>(std::round(vehicle->getSpeed() * 3600)), 4);
+            writeInteger(std::cout, drive->flags(), 4);
+            writeInteger(std::cout, drive->shiftCount(), 4);
+        }
         if (withCombustion) {
             std::array<uint16_t, maxCylinders> offsets {};
             for (int index = 0; index < frames; ++index) {
@@ -442,16 +486,17 @@ int main(int count, char** arguments) {
         const std::string mode = arguments[4];
         const bool calculated = mode == "serve-calculated" || mode == "follow-calculated";
         const bool following = mode == "follow" || mode == "follow-intake" || mode == "follow-calculated";
-        const bool withCombustion = mode == "serve-combustion" || mode == "serve-intake-combustion";
+        const bool bench = mode == "bench-combustion" || mode == "bench-intake-combustion";
+        const bool withCombustion = bench || mode == "serve-combustion" || mode == "serve-intake-combustion";
         const bool serving = mode == "serve" || mode == "serve-intake" || mode == "serve-calculated" || withCombustion;
         const bool withIntake = mode == "serve-intake" || mode == "drive-intake" ||
-            mode == "follow-intake" || mode == "serve-intake-combustion";
+            mode == "follow-intake" || mode == "serve-intake-combustion" || mode == "bench-intake-combustion";
         const bool driving = mode == "drive" || mode == "drive-intake";
         if (mode != "full" && mode != "base" && !serving && !driving && !following) throw std::runtime_error("Unknown rendering mode");
         const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
         auto settings = profileSettings(profile);
         if (count > 6) {
-            if (!driving || std::string(arguments[6]) != "--gearing") {
+            if ((!driving && !bench) || std::string(arguments[6]) != "--gearing") {
                 throw std::runtime_error("Gearing configuration requires road mode");
             }
             settings.diff = gearingValue(arguments[7]);
@@ -492,14 +537,7 @@ int main(int count, char** arguments) {
         vehicleParameters.dragCoefficient = 0.25;
         vehicleParameters.crossSectionArea = 36 * units::foot * units::foot;
         vehicleParameters.rollingResistance = 2000;
-        if (driving) {
-            vehicleParameters.mass = settings.mass;
-            vehicleParameters.diffRatio = settings.diff;
-            vehicleParameters.tireRadius = settings.wheel;
-            vehicleParameters.dragCoefficient = settings.drag;
-            vehicleParameters.crossSectionArea = settings.area;
-            vehicleParameters.rollingResistance = settings.mass * 9.81 * 0.012;
-        }
+        if (driving) vehicleParameters = roadParameters(settings);
         vehicle.initialize(vehicleParameters);
         Transmission transmission;
         const double ratios[] = {2.97, 2.07, 1.43, 1.0, 0.84, 0.56};
@@ -507,7 +545,7 @@ int main(int count, char** arguments) {
         transmissionParameters.GearCount = 6;
         transmissionParameters.GearRatios = ratios;
         transmissionParameters.MaxClutchTorque = 1000 * units::ft_lb;
-        if (driving) {
+        if (driving || bench) {
             transmissionParameters.GearCount = settings.ratios.size();
             transmissionParameters.GearRatios = settings.ratios.data();
             if (settings.strokes == 2) transmissionParameters.MaxClutchTorque = 40;
@@ -547,7 +585,11 @@ int main(int count, char** arguments) {
         FollowRotation rotation(engine);
         if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
         else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
-        else if (serving) serve(simulator, engine, settings, profile, withIntake, withCombustion);
+        else if (serving) {
+            DriveController drive(settings, engine, transmission, vehicle);
+            serve(simulator, engine, settings, profile, withIntake, withCombustion,
+                bench ? &drive : nullptr, bench ? &vehicle : nullptr);
+        }
         else renderOffline(simulator, engine, arguments[3]);
         synthesizer.destroy();
         simulator.destroy();

@@ -105,6 +105,12 @@ inactive cylinder in the packet. Other values give the one-based audio
 frame of that cylinder's latest successful combustion in the packet.
 Requests and PCM payloads retain their existing formats.
 
+Builds with `bench-transmission-v1` advertise it in `BenchTransmission.txt`.
+The `bench-combustion` and `bench-intake-combustion` modes accept the
+existing drive requests and add combustion offsets after the drive header.
+The same engine runs the bench load model in neutral and couples to the
+vehicle under a selected gear.
+
 For a streaming comparison, pass `collectors=/path/to/capture.f32` in place
 of the output prefix. The capture contains the 44.1 kHz input of the
 synthesizer, as interleaved native float32 samples in collector order. Each

@@ -47,7 +47,8 @@ public func catalogue() Profile[] {
     ]
 }
 
-public func create(key:str = "454", displacement_cc:float? = null) Result<Engines.Engine, Error> {
+public func create(key:str = "454", displacement_cc:float? = null,
+    transmission:Engines.Transmission? = null) Result<Engines.Engine, Error> {
     for profile in catalogue() {
         if profile.key != key { continue }
         let cc = displacement_cc ?? profile.displacement_cc
@@ -58,7 +59,7 @@ public func create(key:str = "454", displacement_cc:float? = null) Result<Engine
         // definition, extra oscillator, EQ or different output calibration.
         if key == "454" && Math.abs(cc - profile.displacement_cc) < 0.001 {
             var library = try Engines.Library.open() else error { return Result<Engines.Engine,Error>.failure(error) }
-            return try library.engine("454")
+            return try library.vehicle_reference(transmission)
         }
         if key == "454" {
             return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles",
@@ -71,10 +72,15 @@ public func create(key:str = "454", displacement_cc:float? = null) Result<Engine
         let native = Engines.Profile(key:key, label:profile.name, redline:profile.redline_rpm, ceiling:profile.redline_rpm + 1_000.0,
             idle:profile.idle_rpm, strokes:profile.strokes, gears:5,
             gearing:Engines.Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1.0], final_drive:3.5), intake:intake_level, slot:definition)
-        var worker = try EngineWorker.open(files.root, definition, key, capture_intake:intake_level > 0.0) else error { return Result<Engines.Engine,Error>.failure(error) }
+        let with_transmission = transmission != null
+        var gearing:Engines.Gearing? = null
+        if with_transmission { gearing = native.gearing }
+        var worker = try EngineWorker.open(files.root, definition, key, driving:with_transmission, gearing:gearing,
+            capture_intake:intake_level > 0.0, bench:with_transmission) else error { return Result<Engines.Engine,Error>.failure(error) }
         // The legacy dyno has a 25 Nm minimum. Scale that floor for small
         // engines so a 125 cc does not receive the 250 cc bench's torque.
-        return Result<Engines.Engine,Error>.success(Engines.Engine(files, native, worker, null, null, load_scale:Math.min(1.0, cc / 250.0), voice:VehicleVoice.city(key)))
+        return Result<Engines.Engine,Error>.success(Engines.Engine(files, native, worker, transmission, gearing,
+            load_scale:Math.min(1.0, cc / 250.0), voice:VehicleVoice.city(key), bench_transmission:with_transmission))
     }
     return Result<Engines.Engine,Error>.failure(Error(kind:Kind.invalid_input(), operation:"audio.vehicles", detail:"unknown vehicle profile"))
 }

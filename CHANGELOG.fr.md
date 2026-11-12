@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Ajouter une boîte optionnelle à `Engines.Vehicles`, avec le banc libre au point mort et un état moteur continu pendant les changements de rapport.
+
 - Transmettre les combustions du moteur natif en rotation libre par cylindre, sur l’horloge du rendu audio.
 
 - Ajouter deux modes de comparaison au moteur natif construit depuis les sources. Ils calculent la réponse d’échappement à partir de bandes paramétrées et peuvent exporter le signal par collecteur.

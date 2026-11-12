@@ -39,14 +39,25 @@ class EngineWorker {
         self.child = child
         for cylinder in 0...16 { self.combustion_frames[cylinder] = 0 }
     }
-    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false, capture_intake:bool = false) Result<EngineWorker, Error> {
+    static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false, capture_intake:bool = false, bench:bool = false) Result<EngineWorker, Error> {
         var script = root + "/Runtime/Profile-$(key).mr"
         var impulse = root + "/Runtime/Impulse-$(key).pcm"
         if profile == 0 { script = root + "/Runtime/Profile454.mr"; impulse = root + "/Runtime/Impulse.pcm" }
         var mode = "serve"; if driving { mode = "drive" }
         if following { mode = "follow" }
+        if bench {
+            match try File.read_text(root + "/BenchTransmission.txt", 32) {
+                success(marker) => {
+                    if marker != "bench-transmission-v1\n" {
+                        return Result<EngineWorker, Error>.failure(engine_error("unsupported bench transmission"))
+                    }
+                }
+                failure(error) => { return Result<EngineWorker, Error>.failure(engine_error("bench transmission requires an updated engine library")) }
+            }
+            mode = "bench"
+        }
         if key == "cross4" || capture_intake { mode += "-intake" }
-        var combustion_mode = false
+        var combustion_mode = bench
         if !driving && !following {
             match try File.read_text(root + "/CombustionTelemetry.txt", 32) {
                 success(marker) => { combustion_mode = marker == "combustion-v1\n" }
@@ -175,7 +186,7 @@ class EngineWorker {
         }
         if self.combustion_mode {
             for cylinder in 0...self.combustion_frames.count() {
-                let byte = 16 + cylinder * 2
+                let byte = self.header_size - 32 + cylinder * 2
                 let offset = self.reply[byte] as int + self.reply[byte + 1] as int * 256
                 if offset > frames { panic("invalid combustion frame in engine renderer packet") }
                 if offset > 0 { self.combustion_frames[cylinder] = self.rendered_frames + offset }

@@ -103,3 +103,33 @@ test "native V10 crank rebound at dyno release decodes as stopped" {
     }
     assert(stopped, "test did not reach the native crank rebound")
 }
+
+test "vehicle bench transmission preserves neutral and couples the same running engine" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var free = Vehicles.create("454")
+    var bench = Vehicles.create("454", transmission:Engines.Transmission.manual)
+    var a = zeros(); var b = zeros()
+    free.set_controls(Engines.Controls(running:true, throttle:0.7))
+    var controls = bench.controls()
+    controls.running = true; controls.throttle = 0.7
+    bench.set_controls(controls)
+    for _ in 0...200 {
+        free.render(&a[0:960]); bench.render(&b[0:960])
+        assert(bench.current_rpm() == free.current_rpm())
+        assert(bench.drive_state()!.gear == 0)
+        for i in 0...960 { assert(a[i] == b[i], "neutral changed the free-running sound") }
+    }
+    controls.gear = 1; bench.set_controls(controls)
+    for _ in 0...260 { bench.render(&b[0:960]) }
+    let first = bench.drive_state()!
+    assert(first.gear == 1 && first.speed_kmh > 5.0)
+    controls.gear = 2; bench.set_controls(controls)
+    for _ in 0...200 { bench.render(&b[0:960]) }
+    assert(bench.drive_state()!.gear == 2 && bench.drive_state()!.speed_kmh > first.speed_kmh)
+    let before = bench.frame()
+    controls.gear = 0; bench.set_controls(controls)
+    for _ in 0...60 { bench.render(&b[0:960]) }
+    assert(bench.drive_state()!.gear == 0 && bench.drive_state()!.speed_kmh > 0.0)
+    assert(bench.frame() == before + 60 * 480)
+    assert(bench.last_combustion_frame(0)! > before)
+}

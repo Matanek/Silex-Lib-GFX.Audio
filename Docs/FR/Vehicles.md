@@ -41,6 +41,16 @@ dont charge, texture, réponse d’échappement, admission, volume et ambiance,
 conservent leur sens. Le réglage `exhaust` mélange le signal brut et la réponse
 filtrée : ce n’est pas un nombre de chicanes ou une contre-pression.
 
+## Ajouter une boîte au banc
+
+Créer le moteur avec `Vehicles.create("454", transmission:Engines.Transmission.manual)`.
+Le moteur démarre au point mort (`gear = 0`). Lire ses commandes avec
+`controls()`, choisir un rapport de 1 à `gearing.ratios.count()`, puis
+les transmettre avec `set_controls()`. Le moteur garde son état au
+changement de rapport. `drive_state()` donne le rapport réellement engagé,
+la vitesse et les refus de rétrogradage. Au point mort, le moteur tourne
+librement et le réglage de charge du banc redevient actif.
+
 ## Catalogue et cylindrée
 
 `catalogue()` fournit 18 `Profile` avec `key`, `name`, `displacement_cc`,

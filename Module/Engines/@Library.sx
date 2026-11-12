@@ -49,10 +49,18 @@ public class Library {
             }
             try configuration.validate() else error { return Result<Engine, Error>.failure(error) }
         }
+        return try self.create_engine(key, transmission, gearing)
+    }
+
+    module func vehicle_reference(transmission:Transmission?) Result<Engine, Error> {
+        return try self.create_engine("454", transmission, null, bench:transmission != null)
+    }
+
+    private func create_engine(key:str, transmission:Transmission?, gearing:Gearing?, bench:bool = false) Result<Engine, Error> {
         for profile in engine_profiles() {
             if profile.key == key {
-                var worker = try EngineWorker.open(self.files.root, profile.slot, profile.key, transmission != null, gearing) else error { return Result<Engine, Error>.failure(error) }
-                return Result<Engine, Error>.success(Engine(self.files, profile, worker, transmission, gearing))
+                var worker = try EngineWorker.open(self.files.root, profile.slot, profile.key, transmission != null, gearing, bench:bench) else error { return Result<Engine, Error>.failure(error) }
+                return Result<Engine, Error>.success(Engine(self.files, profile, worker, transmission, gearing, bench_transmission:bench))
             }
         }
         return Result<Engine, Error>.failure(engine_error("unknown engine profile"))
