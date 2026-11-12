@@ -6,6 +6,13 @@ simulateur. Le démarreur, l’allumage, les gaz et le couple résistant piloten
 la rotation. Le mode `hold_rpm` impose un régime pour un essai comparatif.
 Relâcher ce mode reprend la rotation libre à partir du régime courant.
 
+Configurer le rupteur avec `rev_limit_rpm` entre 500 et 20 000 tr/min et
+`rev_limit_cut_ms` entre 0 et 2 000 ms. L’allumage est coupé au seuil et
+reste coupé pendant la durée réglée après le dernier dépassement. Par
+défaut, le seuil vaut 6 500 tr/min et l’allumage reprend dès que le régime
+repasse sous ce seuil. Le contact coupé réarme le rupteur. La rotation
+libre et `hold_rpm` couvrent 0 à 24 000 tr/min.
+
 ```sx
 var engine = EngineSimulation.Simulator.create(
     EngineSimulation.Assembly(cylinders:[

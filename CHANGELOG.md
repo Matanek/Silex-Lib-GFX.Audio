@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Configure the ignition cut threshold and duration in `EngineSimulation`. The simulation range now reaches 24,000 rpm.
+
 - Attenuate intake radiation in `EngineSimulation` as the throttle plate closes.
 
 - Scale blowdown timbre with cylinder dimensions in `EngineSimulation`. Charge and burn duration vary between cycles and repeat after a reset.

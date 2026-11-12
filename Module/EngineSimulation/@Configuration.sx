@@ -21,6 +21,8 @@ public struct Assembly {
     var inertia_kg_m2:float32 = 0.23
     var starter_nm:float32 = 75.0
     var exhausts:EngineParts.Exhaust[] = []
+    var rev_limit_rpm:float32 = 6_500.0
+    var rev_limit_cut_ms:float32 = 0.0
 }
 
 public struct Controls {

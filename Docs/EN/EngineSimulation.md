@@ -6,6 +6,13 @@ simulator. The starter, ignition, throttle and resisting torque drive the
 crankshaft. Set `hold_rpm` to compare sounds at a fixed speed. Releasing it
 resumes free rotation from the current speed.
 
+Set `rev_limit_rpm` between 500 and 20,000 rpm and `rev_limit_cut_ms`
+between 0 and 2,000 ms. Ignition cuts at the threshold and remains cut for
+the configured time after the last sample at or above it. By default,
+ignition cuts at 6,500 rpm and resumes immediately below that threshold.
+Switching the ignition off clears the pending cut. Free rotation and
+`hold_rpm` cover 0 to 24,000 rpm.
+
 ```sx
 var engine = EngineSimulation.Simulator.create(
     EngineSimulation.Assembly(cylinders:[

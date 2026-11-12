@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Configurer le seuil et la durée de coupure du rupteur d’`EngineSimulation`. La plage de simulation atteint 24 000 tr/min.
+
 - Atténuer le rayonnement à l’entrée d’air d’`EngineSimulation` quand le papillon se ferme.
 
 - Faire varier le timbre de détente avec les dimensions du cylindre dans `EngineSimulation`. La charge et la durée de combustion évoluent entre les cycles et la séquence se reproduit au reset.

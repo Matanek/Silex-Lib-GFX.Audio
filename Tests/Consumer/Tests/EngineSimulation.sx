@@ -280,6 +280,14 @@ test "invalid assembly and commands are rejected before changing the simulation"
         failure(error) => {}
         success(value) => { panic("invalid connecting rod accepted") }
     }
+    match try EngineSimulation.Simulator.create(EngineSimulation.Assembly(rev_limit_rpm:25_000.0)) {
+        failure(error) => {}
+        success(value) => { panic("invalid rev limit accepted") }
+    }
+    match try EngineSimulation.Simulator.create(EngineSimulation.Assembly(rev_limit_cut_ms:-1.0)) {
+        failure(error) => {}
+        success(value) => { panic("negative rev limit cut accepted") }
+    }
     var engine = EngineSimulation.Simulator.create()
     engine.set_controls(EngineSimulation.Controls(hold_rpm:900.0))
     match try engine.set_controls(EngineSimulation.Controls(hold_rpm:Math.sqrt(-1.0))) {
@@ -289,6 +297,29 @@ test "invalid assembly and commands are rejected before changing the simulation"
     var output = source_buffer(1)
     engine.render_sources(&output[0:1])
     assert(Math.abs(engine.rpm() - 900.0) < 0.01)
+}
+
+test "the configured limiter cuts ignition and resumes at high speed" {
+    var engine = EngineSimulation.Simulator.create(EngineSimulation.Assembly(
+        rev_limit_rpm:15_000.0, rev_limit_cut_ms:100.0))
+    var block = source_buffer(480)
+    let below = EngineSimulation.Controls(ignition:true, throttle:0.50, hold_rpm:14_900.0)
+    engine.set_controls(below)
+    engine.render_sources(&block[0:480])
+    let firings = engine.cylinder(0)!.firings
+    assert(firings > 0)
+
+    engine.set_controls(EngineSimulation.Controls(ignition:true, throttle:0.50, hold_rpm:15_100.0))
+    engine.render_sources(&block[0:480])
+    engine.set_controls(below)
+    for _ in 0...9 { engine.render_sources(&block[0:480]) }
+    assert(engine.cylinder(0)!.firings == firings)
+    for _ in 0...2 { engine.render_sources(&block[0:480]) }
+    assert(engine.cylinder(0)!.firings > firings)
+
+    engine.set_controls(EngineSimulation.Controls())
+    engine.render_sources(&block[0:1])
+    assert(engine.rpm() > 14_000.0, "free rotation must start from the held speed")
 }
 
 test "stationary cylinders freeze at the last angle and resume on the audio clock" {
