@@ -178,6 +178,28 @@ test "bench first gear keeps combustion and the 500 motocross reaches second pro
     }
 }
 
+test "250 two-stroke motocross reaches 25 km/h in first gear" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var engine = Vehicles.create("cross-250-2t", transmission:Engines.Transmission.manual)
+    assert(engine.gearing.final_drive == 8.5)
+    var input = engine.controls()
+    var samples = zeros()
+    input.running = true
+    engine.set_controls(input)
+    for _ in 0...160 { engine.render(&samples[0:960]) }
+    assert(engine.last_combustion_frame(0) != null)
+    engine.request_gear(1)
+    input = engine.controls()
+    input.throttle = 1.0
+    engine.set_controls(input)
+    for _ in 0...220 {
+        if engine.drive_state()!.speed_kmh >= 25.0 { break }
+        engine.render(&samples[0:960])
+    }
+    let state = engine.drive_state()!
+    assert(state.gear == 1 && state.speed_kmh >= 25.0)
+}
+
 test "American V8 drops RPM on full-throttle upshifts" {
     if System.target_name(System.target()) != "macos-arm64" { return }
     var engine = Vehicles.create("sport-v8", transmission:Engines.Transmission.manual)

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use the native profile's 8.5 final reduction for the 250 cc two-stroke motocross preset.
+
 - Use the GM LS preset's six-speed Corvette transmission for the American V8. A brief ignition cut lets RPM fall while upshifting.
 
 - Engage manual bench gears at the current road speed. Downshifts can mechanically over-rev the engine and transmit engine braking.

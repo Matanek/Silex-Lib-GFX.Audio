@@ -3,7 +3,7 @@ use GFX.Audio.Engines.Vehicles
 use STD.Math
 use STD.Process
 
-// Render without an audio device. Use EngineWorkshop to listen interactively.
+// Render without an audio device. Use AudioEngineSimulator to listen to the demo presets.
 func main() {
     let arguments = Process.arguments()
     var key = "454"; if arguments.count() > 1 { key = arguments[1] }

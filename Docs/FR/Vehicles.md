@@ -12,7 +12,7 @@ produit des blocs PCM et affiche le régime final :
 silex run Packages/GFX.Audio/Examples/VehicleEngine.sx --debug
 ```
 
-Pour écouter et exporter un WAV, utiliser l’[atelier des véhicules](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop).
+Pour écouter les presets de la démo et exporter un WAV, utiliser [AudioEngineSimulator](https://github.com/Matanek/Silex-Examples/tree/main/Sources/AudioEngineSimulator).
 
 ## Choisir et piloter un moteur
 
@@ -51,7 +51,8 @@ changement de rapport. `drive_state()` donne le rapport réellement engagé,
 la vitesse. Au point mort, le moteur tourne
 librement et le réglage de charge du banc redevient actif. À l’engagement depuis le
 point mort, l’embrayage se ferme progressivement et la pédale continue
-d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
+d’agir. Les monocylindres motocross 4T et le 250 2T utilisent la réduction
+finale de 8,5.
 Le V8 américain (`sport-v8`) reprend les six rapports et le pont de 3,42
 de la Corvette associée au GM LS. À la montée d’un rapport, le banc coupe
 brièvement l’allumage pendant le débrayage pour laisser retomber le régime.

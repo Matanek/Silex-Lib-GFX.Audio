@@ -12,8 +12,8 @@ produces PCM blocks and prints final RPM:
 silex run Packages/GFX.Audio/Examples/VehicleEngine.sx --debug
 ```
 
-Use the [vehicle workshop](https://github.com/Matanek/Silex-Examples/tree/main/Sources/EngineWorkshop)
-for interactive listening and WAV export.
+Use [AudioEngineSimulator](https://github.com/Matanek/Silex-Examples/tree/main/Sources/AudioEngineSimulator)
+to listen to the demo presets and export them as WAV files.
 
 ## Choose and drive an engine
 
@@ -50,7 +50,7 @@ to `set_controls()`. Shifting keeps the engine state. `drive_state()`
 reports the engaged gear and speed. In neutral the
 engine revs freely and the bench load setting takes effect again. When selecting a gear from neutral,
 the clutch engages progressively while the pedal stays active. Four-stroke
-motocross singles use the 8.5 final reduction.
+motocross singles and the 250 cc two-stroke use the 8.5 final reduction.
 The American V8 (`sport-v8`) uses the six ratios and 3.42 final drive of
 the Corvette paired with the GM LS. When upshifting, the bench briefly cuts
 ignition while the clutch is open to let RPM fall.

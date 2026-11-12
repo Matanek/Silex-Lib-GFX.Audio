@@ -76,6 +76,7 @@ public func create(key:str = "454", displacement_cc:float? = null,
             intake_level = 0.6
             stock_gearing = engine_profiles()[definition].gearing
         }
+        if key == "cross-250-2t" { stock_gearing = engine_profiles()[definition].gearing }
         let native = Engines.Profile(key:key, label:profile.name, redline:profile.redline_rpm, ceiling:profile.redline_rpm + 1_000.0,
             idle:profile.idle_rpm, strokes:profile.strokes, gears:stock_gearing.ratios.count(),
             gearing:stock_gearing, intake:intake_level, slot:definition)

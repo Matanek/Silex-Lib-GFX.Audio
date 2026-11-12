@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Appliquer au motocross 250 2T la démultiplication finale de 8,5 de son profil natif.
+
 - Équiper le V8 américain de la boîte à six rapports de la Corvette du preset GM LS. Une brève coupure d’allumage fait retomber le régime pendant la montée des rapports.
 
 - Engager les rapports manuels du banc à la vitesse courante. Un rétrogradage peut entraîner le moteur en surrégime et transmettre le frein moteur.
