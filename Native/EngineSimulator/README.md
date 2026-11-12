@@ -109,7 +109,9 @@ Builds with `bench-transmission-v2` advertise it in `BenchTransmission.txt`.
 The `bench-combustion` and `bench-intake-combustion` modes accept the drive
 request followed by a gear-request sequence number. A new number retries
 the selected gear after a refusal. Replies carry combustion offsets after
-the drive header. The `--vehicle` argument selects a road setup from the
+the drive header. The two low bits of the drive flags mark a shift or an
+over-rev refusal. The upper bits carry the maximum speed in tenths of
+km/h for a pending gear. The `--vehicle` argument selects a road setup from the
 catalogue. The same engine runs the bench load model in neutral and couples
 to the vehicle under a selected gear.
 

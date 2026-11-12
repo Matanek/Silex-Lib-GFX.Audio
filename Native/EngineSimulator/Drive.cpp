@@ -28,6 +28,12 @@ int DriveController::flags() const {
     return (shiftRemaining > 0 ? 1 : 0) | (rejection > 0 ? 2 : 0);
 }
 
+double DriveController::shiftSpeedLimitKmh() const {
+    if (!bench || rejection <= 0 || rejectedGear <= 0) return 0;
+    return engine.getRedline() * 1.02 * settings.wheel * 3.6 /
+        (settings.diff * settings.ratios[rejectedGear - 1]);
+}
+
 double DriveController::update(bool running, double pedal, int mode, int requestedGear,
     double braking, double dt, std::uint64_t gearRequest) {
     shiftRemaining = std::max(0.0, shiftRemaining - dt);
@@ -48,7 +54,7 @@ double DriveController::update(bool running, double pedal, int mode, int request
             if (rpm > units::toRpm(engine.getRedline()) * 0.84 && pedal > 0 && gear < static_cast<int>(settings.ratios.size())) target = gear + 1;
             else if (rpm < std::max(settings.idle * 1.5, units::toRpm(engine.getRedline()) * 0.32) && gear > 1) target = gear - 1;
         }
-    } else if (requestedGear != rejectedGear) target = requestedGear;
+    } else if (requestedGear != rejectedGear || (bench && pedal == 0)) target = requestedGear;
     else rejection = 0.6;
     if (target != gear && shiftRemaining == 0) {
         double coupledRpm = 0;
@@ -60,6 +66,10 @@ double DriveController::update(bool running, double pedal, int mode, int request
         else {
             transmission.setClutchPressure(0);
             transmission.changeGear(target - 1);
+            if (bench) {
+                rejectedGear = -1;
+                rejection = 0;
+            }
             // Selecting a gear from neutral is a clutch engagement, with the pedal still active.
             cutThrottleDuringShift = !bench || (gear > 0 && target > 0);
             gear = target;
@@ -73,7 +83,14 @@ double DriveController::update(bool running, double pedal, int mode, int request
         const double releaseRpm = settings.idle * (bench ? 0.90 : 0.55);
         const double clutchRange = settings.idle * (bench ? 0.85 : 0.60);
         const double antiStall = std::clamp((rpm - releaseRpm) / clutchRange, 0.0, 1.0);
-        double launch = vehicle.getSpeed() > 3.0 ? 1.0 : std::clamp((rpm - settings.idle * 0.8) / settings.idle, 0.0, 1.0);
+        const double speed = vehicle.getSpeed();
+        const double rolling = std::clamp((speed - 3.0) / 6.0, 0.0, 1.0);
+        double launch = speed > 3.0 ? 1.0 : std::clamp((rpm - settings.idle * 0.8) / settings.idle, 0.0, 1.0);
+        if (settings.launchRpm > 0 && bench) {
+            const double targetRpm = std::lerp(settings.idle, settings.launchRpm, pedal);
+            const double engagement = std::clamp((rpm - targetRpm) / settings.idle, 0.0, 1.0);
+            launch = std::lerp(engagement, 1.0, rolling);
+        }
         if (settings.strokes == 2) {
             // A small two-stroke launches above idle with a slipping clutch.
             const double launchRpm = units::toRpm(engine.getRedline()) * 0.45;
@@ -83,10 +100,9 @@ double DriveController::update(bool running, double pedal, int mode, int request
         clutch = std::min(antiStall, launch);
         if (launchClutchFraction < 1.0) {
             // Limit launch torque while letting the clutch lock once the vehicle is moving.
-            const double rolling = std::clamp((vehicle.getSpeed() - 3.0) / 6.0, 0.0, 1.0);
             clutch *= std::lerp(launchClutchFraction, 1.0, rolling);
         }
-        if (vehicle.getSpeed() < 1.0 && pedal == 0) clutch = 0;
+        if (speed < 1.0 && pedal == 0) clutch = 0;
         if (shiftRemaining > 0) {
             const double engagement = cutThrottleDuringShift ? settings.shift * 0.45 : settings.shift;
             clutch *= std::clamp(1.0 - shiftRemaining / engagement, 0.0, 1.0);

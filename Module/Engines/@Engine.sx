@@ -10,6 +10,7 @@ public struct DriveState {
     let shifting:bool
     let shift_refused:bool
     let shift_count:int
+    let shift_speed_limit_kmh:float? = null
 }
 public struct Controls {
     var running:bool = false
@@ -102,8 +103,11 @@ public class Engine:Synthesis.Generator {
     func drive_state() DriveState? {
         if !self.driving { return null }
         let flags = self.worker.drive_flags()
+        var limit:float? = null
+        if flags >= 4 { limit = (flags / 4) as float / 10.0 }
         return DriveState(gear:self.worker.current_gear(), speed_kmh:self.worker.speed_kmh(),
-            shifting:flags % 2 == 1, shift_refused:flags >= 2, shift_count:self.worker.shift_count())
+            shifting:flags % 2 == 1, shift_refused:flags / 2 % 2 == 1, shift_count:self.worker.shift_count(),
+            shift_speed_limit_kmh:limit)
     }
     private func drive_mode() int {
         if self.control.transmission == Transmission.manual { return 2 }

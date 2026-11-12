@@ -54,7 +54,9 @@ motocross singles use the 8.5 final reduction.
 
 With a manual transmission, `request_gear(gear)` issues a new shift,
 including a retry of the same gear after a refusal. Gear zero selects
-neutral. `Controls.braking` can slow the vehicle before retrying a downshift.
+neutral. With the pedal released, the requested gear engages once vehicle
+speed is safe. `drive_state().shift_speed_limit_kmh` reports the speed
+limit while waiting. `Controls.braking` can slow the vehicle sooner.
 
 ## Catalogue and displacement
 

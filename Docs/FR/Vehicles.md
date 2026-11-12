@@ -55,8 +55,10 @@ d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
 
 En boîte manuelle, `request_gear(gear)` demande un nouveau passage, y
 compris une seconde tentative du même rapport après un refus. `gear = 0`
-sélectionne le point mort. `Controls.braking` permet de ralentir avant de
-retenter un rétrogradage.
+sélectionne le point mort. Pédale relâchée, le rapport demandé s’engage
+quand la vitesse devient compatible. `drive_state().shift_speed_limit_kmh`
+indique alors la vitesse maximale du passage. `Controls.braking` permet
+de ralentir plus vite.
 
 ## Catalogue et cylindrée
 

@@ -209,9 +209,11 @@ test "GTI pulls through its gears and can retry a refused downshift" {
     assert(engine.drive_state()!.gear == 5 && engine.drive_state()!.speed_kmh >= 213.0)
     engine.request_gear(4)
     for _ in 0...30 { engine.render(&samples[0:960]) }
-    assert(engine.drive_state()!.gear == 5 && engine.drive_state()!.shift_refused)
+    let refusal = engine.drive_state()!
+    assert(refusal.gear == 5 && refusal.shift_refused)
+    assert(refusal.shift_speed_limit_kmh != null && refusal.speed_kmh > refusal.shift_speed_limit_kmh!)
     input = engine.controls()
-    input.throttle = 0.0; input.braking = true
+    input.throttle = 0.1; input.braking = true
     engine.set_controls(input)
     for _ in 0...260 {
         if engine.drive_state()!.speed_kmh <= 170.0 { break }
@@ -223,4 +225,40 @@ test "GTI pulls through its gears and can retry a refused downshift" {
     engine.request_gear(4)
     for _ in 0...35 { engine.render(&samples[0:960]) }
     assert(engine.drive_state()!.gear == 4 && !engine.drive_state()!.shift_refused)
+    input = engine.controls()
+    input.throttle = 0.0
+    engine.set_controls(input)
+    engine.request_gear(3)
+    for _ in 0...12 { engine.render(&samples[0:960]) }
+    let waiting = engine.drive_state()!
+    assert(waiting.gear == 4 && waiting.shift_refused && waiting.shift_speed_limit_kmh != null)
+    for _ in 0...600 {
+        if engine.drive_state()!.gear == 3 { break }
+        engine.render(&samples[0:960])
+    }
+    let third = engine.drive_state()!
+    assert(third.gear == 3 && !third.shift_refused && third.speed_kmh <= waiting.shift_speed_limit_kmh! + 0.1)
+}
+
+test "GTI first gear responds to the 150 ms pedal from a stationary idle" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    for warmup in [45, 230] {
+        var engine = Vehicles.create("sport-turbo-i4", transmission:Engines.Transmission.manual)
+        var input = engine.controls()
+        var samples = zeros()
+        input.running = true
+        engine.set_controls(input)
+        for _ in 0...warmup { engine.render(&samples[0:960]) }
+        engine.request_gear(1)
+        for _ in 0...28 { engine.render(&samples[0:960]) }
+        input = engine.controls()
+        let initial = engine.current_rpm()
+        for block in 0...75 {
+            input.throttle = Math.min(block as float * 480.0 / 6_615.0, 1.0)
+            engine.set_controls(input)
+            engine.render(&samples[0:960])
+        }
+        assert(engine.drive_state()!.gear == 1)
+        assert(engine.current_rpm() > Math.max(2_200.0, initial + 300.0))
+    }
 }

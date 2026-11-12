@@ -238,6 +238,7 @@
       "diff": 3.65,
       "wheel": 0.315,
       "shift": 0.2,
+      "launch_rpm": 2600,
       "ratios": [
         3.36,
         2.09,

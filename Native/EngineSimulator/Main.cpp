@@ -289,7 +289,8 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
         if (drive) {
             writeInteger(std::cout, drive->currentGear(), 4);
             writeInteger(std::cout, static_cast<uint32_t>(std::round(vehicle->getSpeed() * 3600)), 4);
-            writeInteger(std::cout, drive->flags(), 4);
+            const auto limit = static_cast<uint32_t>(std::round(drive->shiftSpeedLimitKmh() * 10.0));
+            writeInteger(std::cout, (limit << 2) | static_cast<uint32_t>(drive->flags()), 4);
             writeInteger(std::cout, drive->shiftCount(), 4);
         }
         if (withCombustion) {

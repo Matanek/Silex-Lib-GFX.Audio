@@ -29,6 +29,8 @@ def native_header(data):
         source += f'    if (key == {json.dumps(row["key"])}) {{\n'
         for field in ('mass', 'area', 'drag', 'diff', 'wheel', 'shift'):
             source += f'        settings.{field} = {row[field]};\n'
+        if 'launch_rpm' in row:
+            source += f'        settings.launchRpm = {row["launch_rpm"]};\n'
         ratios = ', '.join(str(value) for value in row['ratios'])
         source += f'        settings.ratios = {{{ratios}}};\n        return true;\n    }}\n'
     return source + '    return false;\n}\n'
