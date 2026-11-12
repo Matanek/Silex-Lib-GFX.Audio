@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Progressively engage the clutch on higher two-stroke bench gears once the bike is rolling.
+
 - Use the native profile's 8.5 final reduction for the 250 cc two-stroke motocross preset.
 
 - Use the GM LS preset's six-speed Corvette transmission for the American V8. A brief ignition cut lets RPM fall while upshifting.

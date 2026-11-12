@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Refermer progressivement l’embrayage des deux-temps sur les rapports supérieurs quand la moto est lancée.
+
 - Appliquer au motocross 250 2T la démultiplication finale de 8,5 de son profil natif.
 
 - Équiper le V8 américain de la boîte à six rapports de la Corvette du preset GM LS. Une brève coupure d’allumage fait retomber le régime pendant la montée des rapports.

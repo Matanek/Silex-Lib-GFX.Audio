@@ -53,6 +53,8 @@ librement et le réglage de charge du banc redevient actif. À l’engagement de
 point mort, l’embrayage se ferme progressivement et la pédale continue
 d’agir. Les monocylindres motocross 4T et le 250 2T utilisent la réduction
 finale de 8,5.
+Sur les deux-temps du banc manuel, les rapports supérieurs reprennent
+progressivement la vitesse des roues quand la moto roule.
 Le V8 américain (`sport-v8`) reprend les six rapports et le pont de 3,42
 de la Corvette associée au GM LS. À la montée d’un rapport, le banc coupe
 brièvement l’allumage pendant le débrayage pour laisser retomber le régime.

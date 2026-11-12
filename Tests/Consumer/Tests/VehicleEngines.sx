@@ -178,7 +178,7 @@ test "bench first gear keeps combustion and the 500 motocross reaches second pro
     }
 }
 
-test "250 two-stroke motocross reaches 25 km/h in first gear" {
+test "250 two-stroke motocross shifts into second with the throttle held" {
     if System.target_name(System.target()) != "macos-arm64" { return }
     var engine = Vehicles.create("cross-250-2t", transmission:Engines.Transmission.manual)
     assert(engine.gearing.final_drive == 8.5)
@@ -198,6 +198,15 @@ test "250 two-stroke motocross reaches 25 km/h in first gear" {
     }
     let state = engine.drive_state()!
     assert(state.gear == 1 && state.speed_kmh >= 25.0)
+    engine.request_gear(2)
+    for _ in 0...41 { engine.render(&samples[0:960]) }
+    let second = engine.drive_state()!
+    assert(second.gear == 2 && !second.shifting && !second.shift_refused)
+    assert(second.speed_kmh > state.speed_kmh + 4.0)
+    // Translate road speed through the second gear and the native 0.34 m tire.
+    let coupled_rpm = second.speed_kmh * engine.gearing.ratios[1] * engine.gearing.final_drive *
+        60.0 / (3.6 * 2.0 * Math.pi() * 0.34)
+    assert(Math.abs(engine.current_rpm() - coupled_rpm) < 450.0, "the clutch should couple in second")
 }
 
 test "American V8 drops RPM on full-throttle upshifts" {

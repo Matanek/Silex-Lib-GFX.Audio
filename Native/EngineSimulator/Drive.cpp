@@ -97,6 +97,8 @@ double DriveController::update(bool running, double pedal, int mode, int request
             const double launchRpm = units::toRpm(engine.getRedline()) * 0.45;
             const double coupledRpm = units::toRpm(vehicle.getSpeed() / settings.wheel * settings.diff * settings.ratios[gear - 1]);
             launch = coupledRpm > launchRpm ? 1.0 : std::clamp((rpm - launchRpm) / 1500, 0.0, 1.0);
+            // Once rolling, a taller gear must not put the clutch back into launch slip.
+            if (manualBench && gear > 1) launch = std::lerp(launch, 1.0, rolling);
         }
         clutch = std::min(antiStall, launch);
         if (launchClutchFraction < 1.0) {
