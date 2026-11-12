@@ -40,3 +40,7 @@ endif()
 add_executable(ExhaustBlendCheck ExhaustBlendCheck.cpp)
 target_include_directories(ExhaustBlendCheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME exhaust-blend COMMAND ExhaustBlendCheck)
+
+add_executable(CalculatedExhaustCheck CalculatedExhaustCheck.cpp)
+target_include_directories(CalculatedExhaustCheck PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME calculated-exhaust COMMAND CalculatedExhaustCheck)

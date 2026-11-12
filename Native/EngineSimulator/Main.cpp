@@ -8,10 +8,12 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <compiler.h>
 #include <impulse_response.h>
 #include <piston_engine_simulator.h>
+#include <CalculatedExhaust.hpp>
 #include <Drive.hpp>
 #include <GeneratedProfiles.hpp>
 
@@ -26,6 +28,22 @@ class CapturingSimulator : public PistonEngineSimulator {
     public: bool recording { false };
     public: bool captureIntake { false };
     public: std::vector<float> intake;
+    public: void openCollectorCapture(const std::string& path) {
+        collectors.open(path, std::ios::binary);
+        if (!collectors) throw std::runtime_error("Cannot open collector capture");
+    }
+    public: void captureCollectorBlock(int frames, int channels) {
+        if (!collectors.is_open()) return;
+        auto& audio = synthesizer();
+        for (int frame = 0; frame < frames; ++frame) {
+            for (int channel = 0; channel < channels; ++channel) {
+                const float sample = audio.m_inputChannels[channel].transferBuffer[frame];
+                collectors.write(reinterpret_cast<const char*>(&sample), sizeof(sample));
+            }
+        }
+        if (!collectors) throw std::runtime_error("Cannot write collector capture");
+    }
+    private: std::ofstream collectors;
     private: double previousIntakeFlow { 0 };
 
     // -------------------------------------------------------------------------
@@ -116,6 +134,7 @@ static void renderQuantum(CapturingSimulator& simulator, Engine& engine, std::ve
         synthesizer.m_inputChannels[channel].data.read(available, synthesizer.m_inputChannels[channel].transferBuffer);
         synthesizer.m_filters[channel].jitterFilter.setJitterScale(parameters.inputSampleNoise);
     }
+    simulator.captureCollectorBlock(available, engine.getExhaustSystemCount());
     if (intake && simulator.intake.size() != static_cast<size_t>(available)) {
         throw std::runtime_error("Intake/exhaust resampling clocks diverged");
     }
@@ -370,14 +389,16 @@ static double gearingValue(const char* text) {
 int main(int count, char** arguments) {
     try {
         if (count != 5 && count != 6 && (count < 9 || count > 20)) {
-            std::fprintf(stderr, "Usage: RenderReference profile.mr impulse.pcm output-prefix full|base|serve|drive|serve-intake|drive-intake [profile-index]\n");
+            std::fprintf(stderr, "Usage: RenderReference profile.mr response output-prefix mode [profile-index]\n");
             return 2;
         }
         const std::string mode = arguments[4];
-        const bool following = mode == "follow" || mode == "follow-intake";
+        const bool calculated = mode == "serve-calculated" || mode == "follow-calculated";
+        const bool following = mode == "follow" || mode == "follow-intake" || mode == "follow-calculated";
+        const bool serving = mode == "serve" || mode == "serve-intake" || mode == "serve-calculated";
         const bool withIntake = mode == "serve-intake" || mode == "drive-intake" || mode == "follow-intake";
         const bool driving = mode == "drive" || mode == "drive-intake";
-        if (mode != "full" && mode != "base" && mode != "serve" && !driving && !following && mode != "serve-intake") throw std::runtime_error("Unknown rendering mode");
+        if (mode != "full" && mode != "base" && !serving && !driving && !following) throw std::runtime_error("Unknown rendering mode");
         const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
         auto settings = profileSettings(profile);
         if (count > 6) {
@@ -394,7 +415,8 @@ int main(int count, char** arguments) {
                 settings.ratios.push_back(ratio);
             }
         }
-        const auto impulse = readImpulse(arguments[2]);
+        const auto impulse = calculated ? std::vector<int16_t>() : readImpulse(arguments[2]);
+        const auto response = calculated ? EngineReference::readExhaustResponse(arguments[2]) : EngineReference::ExhaustResponse();
         std::srand(42);
         es_script::Compiler compiler;
         compiler.initialize();
@@ -443,6 +465,11 @@ int main(int count, char** arguments) {
         }
         transmission.initialize(transmissionParameters);
         CapturingSimulator simulator;
+        const std::string_view outputPrefix = arguments[3];
+        constexpr std::string_view capturePrefix = "collectors=";
+        if ((serving || following) && outputPrefix.starts_with(capturePrefix)) {
+            simulator.openCollectorCapture(std::string(outputPrefix.substr(capturePrefix.size())));
+        }
         Simulator::Parameters simulatorParameters;
         simulator.initialize(simulatorParameters);
         simulator.setSimulationFrequency(static_cast<int>(engine.getSimulationFrequency()));
@@ -465,12 +492,13 @@ int main(int count, char** arguments) {
         for (int index = 0; index < engine.getExhaustSystemCount(); ++index) {
             synthesizer.m_filters[index].antialiasing.setCutoffFrequency(settings.audioCutoff, 44100);
             const double volume = engine.getExhaustSystem(index)->getImpulseResponse()->getVolume();
-            synthesizer.initializeImpulseResponse(impulse.data(), impulse.size(), volume, index);
+            if (calculated) synthesizer.m_filters[index].calculatedExhaust.configure(response, volume);
+            else synthesizer.initializeImpulseResponse(impulse.data(), impulse.size(), volume, index);
         }
         FollowRotation rotation(engine);
         if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
         else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
-        else if (mode == "serve" || mode == "serve-intake") serve(simulator, engine, settings, profile, withIntake);
+        else if (serving) serve(simulator, engine, settings, profile, withIntake);
         else renderOffline(simulator, engine, arguments[3]);
         synthesizer.destroy();
         simulator.destroy();

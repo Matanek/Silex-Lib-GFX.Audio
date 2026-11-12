@@ -87,6 +87,21 @@ most 200 RPM per 10 ms quantum. The regular free/road paths are unchanged.
 The public API validates the narrower profile-specific RPM ceiling and rejects
 older banks before launching an unsupported mode.
 
+Source builds with `calculated-exhaust-v1` provide `serve-calculated` and
+`follow-calculated` for offline comparisons. The second argument is a text
+response file. Its first line contains `exhaust-response-v1`, the band count
+(1–24) and the overall gain in dB. Each subsequent line contains the center
+frequency in Hz, the quality factor and the gain in dB. The renderer calculates
+each filter at startup and applies an independent filter history to each
+collector, before the output leveler. The request and reply layout matches
+`serve` or `follow` respectively. The convolution field sets the amount of
+calculated response in the mix.
+
+For a streaming comparison, pass `collectors=/path/to/capture.f32` in place
+of the output prefix. The capture contains the 44.1 kHz input of the
+synthesizer, as interleaved native float32 samples in collector order. Each
+write covers a whole simulated quantum. `unused` disables the capture.
+
 `Catalog.py` maintains the Silex profile projection from `Profiles.json`.
 Keep profile ordering aligned with the native renderer. The original profiles,
 impulses and full thermal simulation are retained: this is an extraction, not a
