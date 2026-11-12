@@ -166,6 +166,15 @@ static void renderQuantum(CapturingSimulator& simulator, Engine& engine, std::ve
     }
 }
 
+static double sweptVolume(const Engine& engine) {
+    double volume = 0;
+    for (int i = 0; i < engine.getCylinderCount(); ++i) {
+        const auto* piston = engine.getPiston(i);
+        volume += piston->getCylinderBank()->boreSurfaceArea() * 2 * piston->getRod()->getCrankshaft()->getThrow();
+    }
+    return volume;
+}
+
 static Vehicle::Parameters roadParameters(const DriveSettings& settings) {
     Vehicle::Parameters parameters;
     parameters.mass = settings.mass;
@@ -550,6 +559,11 @@ int main(int count, char** arguments) {
             transmissionParameters.GearRatios = settings.ratios.data();
             if (settings.strokes == 2) transmissionParameters.MaxClutchTorque = 40;
         }
+        if (bench) {
+            // Size the clutch to the engine instead of applying the full V8 capacity to every preset.
+            transmissionParameters.MaxClutchTorque = std::clamp(sweptVolume(engine) * 120000.0,
+                35.0, transmissionParameters.MaxClutchTorque);
+        }
         transmission.initialize(transmissionParameters);
         CapturingSimulator simulator;
         const std::string_view outputPrefix = arguments[3];
@@ -586,7 +600,7 @@ int main(int count, char** arguments) {
         if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
         else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
         else if (serving) {
-            DriveController drive(settings, engine, transmission, vehicle);
+            DriveController drive(settings, engine, transmission, vehicle, bench);
             serve(simulator, engine, settings, profile, withIntake, withCombustion,
                 bench ? &drive : nullptr, bench ? &vehicle : nullptr);
         }

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Raccourcir la transmission des motocross 4T avec leur réduction finale de 8,5. L’engagement depuis le point mort conserve les gaz et module le couple de l’embrayage selon la cylindrée et le régime.
+
 - Ajouter une boîte optionnelle à `Engines.Vehicles`, avec le banc libre au point mort et un état moteur continu pendant les changements de rapport.
 
 - Transmettre les combustions du moteur natif en rotation libre par cylindre, sur l’horloge du rendu audio.

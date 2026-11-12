@@ -45,7 +45,7 @@ class DriveController {
     // LIFECYCLE
 
     public: DriveController(const DriveSettings& settings, Engine& engine,
-        Transmission& transmission, RoadVehicle& vehicle);
+        Transmission& transmission, RoadVehicle& vehicle, bool bench = false);
 
     // -------------------------------------------------------------------------
     // API
@@ -63,6 +63,8 @@ class DriveController {
     private: Engine& engine;
     private: Transmission& transmission;
     private: RoadVehicle& vehicle;
+    private: const bool bench;
+    private: bool cutThrottleDuringShift { true };
     private: int gear { 0 };
     private: int shifts { 0 };
     private: int rejectedGear { -1 };

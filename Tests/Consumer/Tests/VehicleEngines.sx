@@ -133,3 +133,47 @@ test "vehicle bench transmission preserves neutral and couples the same running 
     assert(bench.frame() == before + 60 * 480)
     assert(bench.last_combustion_frame(0)! > before)
 }
+
+test "bench first gear keeps combustion and the 500 motocross reaches second promptly" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    for key in ["sport-v12", "cross-500-4t"] {
+        var engine = Vehicles.create(key, transmission:Engines.Transmission.manual)
+        var input = engine.controls()
+        var samples = zeros()
+        input.running = true
+        engine.set_controls(input)
+        for _ in 0...200 { engine.render(&samples[0:960]) }
+        input.gear = 1
+        engine.set_controls(input)
+        for _ in 0...32 { engine.render(&samples[0:960]) }
+        assert(engine.drive_state()!.gear == 1 && engine.current_rpm() > 1_000.0)
+        input.gear = 0; input.throttle = 0.26
+        engine.set_controls(input)
+        for _ in 0...55 { engine.render(&samples[0:960]) }
+        let before = engine.frame()
+        input.gear = 1
+        engine.set_controls(input)
+        for _ in 0...34 {
+            engine.render(&samples[0:960])
+            assert(engine.current_rpm() > 1_000.0, key + " · RPM collapsed on first gear engagement")
+        }
+        assert(engine.drive_state()!.gear == 1 && engine.last_combustion_frame(0)! > before)
+        if key == "cross-500-4t" {
+            assert(engine.gearing.final_drive == 8.5)
+            input.throttle = 1.0
+            engine.set_controls(input)
+            for _ in 0...125 {
+                if engine.drive_state()!.speed_kmh >= 25.0 { break }
+                engine.render(&samples[0:960])
+            }
+            assert(engine.drive_state()!.speed_kmh >= 25.0)
+            input.gear = 2
+            engine.set_controls(input)
+            for _ in 0...150 {
+                if engine.drive_state()!.speed_kmh >= 45.0 { break }
+                engine.render(&samples[0:960])
+            }
+            assert(engine.drive_state()!.gear == 2 && engine.drive_state()!.speed_kmh >= 45.0)
+        }
+    }
+}

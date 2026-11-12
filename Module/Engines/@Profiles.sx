@@ -15,7 +15,7 @@ public struct Profile {
         self.idle = idle; self.strokes = strokes; self.gears = gears; self.gearing = gearing; self.intake = intake; self.slot = slot
     }
 }
-func engine_profiles() Profile[] {
+module func engine_profiles() Profile[] {
     return [
         Profile(key:"454", label:"Monster / Chevrolet 454 V8", redline:5500.0, ceiling:7000.0, idle:850.0, strokes:4, gears:6, gearing:Gearing(ratios:[2.97, 2.07, 1.43, 1.0, 0.84, 0.56], final_drive:3.73), intake:0.0, slot:0),
         Profile(key:"berline", label:"Berline / BMW 2,8 L · 6 cylindres", redline:7000.0, ceiling:8000.0, idle:900.0, strokes:4, gears:6, gearing:Gearing(ratios:[4.2, 2.49, 1.66, 1.24, 1.0, 0.83], final_drive:3.15), intake:0.0, slot:1),

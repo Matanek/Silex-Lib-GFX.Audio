@@ -49,7 +49,9 @@ Le moteur démarre au point mort (`gear = 0`). Lire ses commandes avec
 les transmettre avec `set_controls()`. Le moteur garde son état au
 changement de rapport. `drive_state()` donne le rapport réellement engagé,
 la vitesse et les refus de rétrogradage. Au point mort, le moteur tourne
-librement et le réglage de charge du banc redevient actif.
+librement et le réglage de charge du banc redevient actif. À l’engagement depuis le
+point mort, l’embrayage se ferme progressivement et la pédale continue
+d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
 
 ## Catalogue et cylindrée
 

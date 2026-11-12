@@ -18,8 +18,8 @@ void RoadVehicle::setBrake(double amount) {
 // -----------------------------------------------------------------------------
 
 DriveController::DriveController(const DriveSettings& settings, Engine& engine,
-    Transmission& transmission, RoadVehicle& vehicle)
-    : settings(settings), engine(engine), transmission(transmission), vehicle(vehicle) {}
+    Transmission& transmission, RoadVehicle& vehicle, bool bench)
+    : settings(settings), engine(engine), transmission(transmission), vehicle(vehicle), bench(bench) {}
 
 // -----------------------------------------------------------------------------
 
@@ -54,6 +54,8 @@ double DriveController::update(bool running, double pedal, int mode, int request
         else {
             transmission.setClutchPressure(0);
             transmission.changeGear(target - 1);
+            // Selecting a gear from neutral is a clutch engagement, with the pedal still active.
+            cutThrottleDuringShift = !bench || (gear > 0 && target > 0);
             gear = target;
             shiftRemaining = settings.shift;
             cooldown = 0.75;
@@ -62,7 +64,9 @@ double DriveController::update(bool running, double pedal, int mode, int request
     }
     double clutch = 0;
     if (gear > 0) {
-        const double antiStall = std::clamp((rpm - settings.idle * 0.55) / (settings.idle * 0.6), 0.0, 1.0);
+        const double releaseRpm = settings.idle * (bench ? 0.90 : 0.55);
+        const double clutchRange = settings.idle * (bench ? 0.85 : 0.60);
+        const double antiStall = std::clamp((rpm - releaseRpm) / clutchRange, 0.0, 1.0);
         double launch = vehicle.getSpeed() > 3.0 ? 1.0 : std::clamp((rpm - settings.idle * 0.8) / settings.idle, 0.0, 1.0);
         if (settings.strokes == 2) {
             // A small two-stroke launches above idle with a slipping clutch.
@@ -72,9 +76,12 @@ double DriveController::update(bool running, double pedal, int mode, int request
         }
         clutch = std::min(antiStall, launch);
         if (vehicle.getSpeed() < 1.0 && pedal == 0) clutch = 0;
-        if (shiftRemaining > 0) clutch *= std::clamp(1.0 - shiftRemaining / (settings.shift * 0.45), 0.0, 1.0);
+        if (shiftRemaining > 0) {
+            const double engagement = cutThrottleDuringShift ? settings.shift * 0.45 : settings.shift;
+            clutch *= std::clamp(1.0 - shiftRemaining / engagement, 0.0, 1.0);
+        }
     }
     transmission.setClutchPressure(clutch);
-    if (shiftRemaining > settings.shift * 0.45) return 0;
+    if (cutThrottleDuringShift && shiftRemaining > settings.shift * 0.45) return 0;
     return pedal;
 }

@@ -48,7 +48,9 @@ It starts in neutral (`gear = 0`). Read its controls with `controls()`,
 select a gear from 1 to `gearing.ratios.count()`, and pass the controls
 to `set_controls()`. Shifting keeps the engine state. `drive_state()`
 reports the engaged gear, speed and refused downshifts. In neutral the
-engine revs freely and the bench load setting takes effect again.
+engine revs freely and the bench load setting takes effect again. When selecting a gear from neutral,
+the clutch engages progressively while the pedal stays active. Four-stroke
+motocross singles use the 8.5 final reduction.
 
 ## Catalogue and displacement
 
