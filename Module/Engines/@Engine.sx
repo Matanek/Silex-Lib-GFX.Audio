@@ -46,6 +46,7 @@ public class Engine:Synthesis.Generator {
     private var remaining:int = 0
     private let driving:bool
     private let bench_transmission:bool
+    private var gear_request:int = 0
     private var operating:OperatingState?
     private let load_scale:float
     private var voice:VehicleVoice?
@@ -84,6 +85,16 @@ public class Engine:Synthesis.Generator {
         self.control = value
         return Result<void, Error>.success()
     }
+    func request_gear(gear:int) Result<void, Error> {
+        if !self.bench_transmission {
+            return Result<void, Error>.failure(engine_error("gear requests require a vehicle bench transmission"))
+        }
+        var controls = self.control
+        controls.gear = gear
+        try self.set_controls(controls) else error { return Result<void, Error>.failure(error) }
+        self.gear_request++
+        return Result<void, Error>.success()
+    }
     func current_rpm() float { return self.worker.current_rpm() }
     func frame() int { return self.worker.frame() }
     func last_combustion_frame(cylinder:int) int? { return self.worker.last_combustion_frame(cylinder) }
@@ -106,7 +117,7 @@ public class Engine:Synthesis.Generator {
         while self.worker.in_flight() < depth {
             try self.worker.request(480, self.control.running, self.control.accelerating, self.control.texture,
                 self.control.exhaust, self.control.idle_rpm, self.control.load * self.load_scale,
-                self.drive_mode(), self.control.gear, self.control.braking, self.operating, self.control.throttle) else error { return Result<void, Error>.failure(error) }
+                self.drive_mode(), self.control.gear, self.control.braking, self.operating, self.control.throttle, self.gear_request) else error { return Result<void, Error>.failure(error) }
         }
         return Result<void, Error>.success()
     }
@@ -128,7 +139,7 @@ public class Engine:Synthesis.Generator {
             try self.worker.render(&samples[offset:offset + frames * 2], &self.intake[0:frames],
                 self.control.running, self.control.accelerating, self.control.texture,
                 self.control.exhaust, self.control.idle_rpm, self.control.load * self.load_scale,
-                self.drive_mode(), self.control.gear, self.control.braking, self.operating, self.control.throttle) else error { return Result<void, Error>.failure(error) }
+                self.drive_mode(), self.control.gear, self.control.braking, self.operating, self.control.throttle, self.gear_request) else error { return Result<void, Error>.failure(error) }
             self.process_output(&samples[offset:offset + frames * 2])
             self.remaining -= frames; offset += frames * 2
         }

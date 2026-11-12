@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Régler séparément la masse, la démultiplication et l’étagement des quatre sportives. Autoriser une nouvelle tentative de rétrogradage après un refus.
+
 - Raccourcir la transmission des motocross 4T avec leur réduction finale de 8,5. L’engagement depuis le point mort conserve les gaz et module le couple de l’embrayage selon la cylindrée et le régime.
 
 - Ajouter une boîte optionnelle à `Engines.Vehicles`, avec le banc libre au point mort et un état moteur continu pendant les changements de rapport.

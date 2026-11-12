@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 #include <vector>
 #include <engine.h>
 #include <piston_engine_simulator.h>
@@ -45,13 +46,13 @@ class DriveController {
     // LIFECYCLE
 
     public: DriveController(const DriveSettings& settings, Engine& engine,
-        Transmission& transmission, RoadVehicle& vehicle, bool bench = false);
+        Transmission& transmission, RoadVehicle& vehicle, bool bench = false, double launchClutchFraction = 1.0);
 
     // -------------------------------------------------------------------------
     // API
 
     public: double update(bool running, double pedal, int mode, int requestedGear,
-        double braking, double dt);
+        double braking, double dt, std::uint64_t gearRequest = 0);
     public: int currentGear() const { return gear; }
     public: int shiftCount() const { return shifts; }
     public: int flags() const;
@@ -64,6 +65,8 @@ class DriveController {
     private: Transmission& transmission;
     private: RoadVehicle& vehicle;
     private: const bool bench;
+    private: const double launchClutchFraction;
+    private: std::uint64_t lastGearRequest { 0 };
     private: bool cutThrottleDuringShift { true };
     private: int gear { 0 };
     private: int shifts { 0 };

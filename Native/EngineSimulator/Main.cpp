@@ -216,11 +216,12 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
     bool wasRunning = false;
     int mode = 2;
     int requestedGear = 0;
+    std::uint64_t gearRequest = 0;
     double brake = 0;
     bool brakeAttached = false;
     bool roadConfigured = false;
     while (std::cin >> frames >> ignition >> pedal >> texture >> convolution >> baseRpm >> load) {
-        if (drive && (!(std::cin >> mode >> requestedGear >> brake) ||
+        if (drive && (!(std::cin >> mode >> requestedGear >> brake >> gearRequest) ||
                 mode < 1 || mode > 2 || requestedGear < 0 ||
                 requestedGear > static_cast<int>(settings.ratios.size()) ||
                 !std::isfinite(brake) || brake < 0 || brake > 1)) {
@@ -256,7 +257,7 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
             engine.getIgnitionModule()->m_enabled = ignition;
             const bool useDrive = drive && (mode == 1 || requestedGear > 0 ||
                 drive->currentGear() > 0 || drive->flags() != 0 || brakeAttached);
-            const double drivenPedal = useDrive ? drive->update(ignition, pedal, mode, requestedGear, brake, 0.01) : pedal;
+            const double drivenPedal = useDrive ? drive->update(ignition, pedal, mode, requestedGear, brake, 0.01, gearRequest) : pedal;
             const bool inGear = drive && drive->currentGear() > 0;
             const double requestedThrottle = ignition && !starter ?
                 (profile == 0 ? 0.35 : 1.0) * (inGear ? drivenPedal : pedal) : 0;
@@ -488,7 +489,7 @@ static double gearingValue(const char* text) {
 
 int main(int count, char** arguments) {
     try {
-        if (count != 5 && count != 6 && (count < 9 || count > 20)) {
+        if (count < 5 || count > 22) {
             std::fprintf(stderr, "Usage: RenderReference profile.mr response output-prefix mode [profile-index]\n");
             return 2;
         }
@@ -504,13 +505,21 @@ int main(int count, char** arguments) {
         if (mode != "full" && mode != "base" && !serving && !driving && !following) throw std::runtime_error("Unknown rendering mode");
         const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
         auto settings = profileSettings(profile);
-        if (count > 6) {
-            if ((!driving && !bench) || std::string(arguments[6]) != "--gearing") {
-                throw std::runtime_error("Gearing configuration requires road mode");
+        int option = 6;
+        bool calibratedVehicle = false;
+        if (bench && option + 1 < count && std::string_view(arguments[option]) == "--vehicle") {
+            calibratedVehicle = configureBenchVehicle(arguments[option + 1], settings);
+            option += 2;
+        }
+        if (option < count) {
+            const int ratioCount = count - option - 2;
+            if ((!driving && !bench) || std::string_view(arguments[option]) != "--gearing" ||
+                    ratioCount < 1 || ratioCount > 12) {
+                throw std::runtime_error("Expected final reduction and one to twelve gear ratios");
             }
-            settings.diff = gearingValue(arguments[7]);
+            settings.diff = gearingValue(arguments[option + 1]);
             settings.ratios.clear();
-            for (int i = 8; i < count; ++i) {
+            for (int i = option + 2; i < count; ++i) {
                 const double ratio = gearingValue(arguments[i]);
                 if (!settings.ratios.empty() && ratio >= settings.ratios.back()) {
                     throw std::runtime_error("Gear ratios must decrease from first to last");
@@ -559,10 +568,12 @@ int main(int count, char** arguments) {
             transmissionParameters.GearRatios = settings.ratios.data();
             if (settings.strokes == 2) transmissionParameters.MaxClutchTorque = 40;
         }
+        double launchClutchFraction = 1.0;
         if (bench) {
-            // Size the clutch to the engine instead of applying the full V8 capacity to every preset.
-            transmissionParameters.MaxClutchTorque = std::clamp(sweptVolume(engine) * 120000.0,
+            const double launchCapacity = std::clamp(sweptVolume(engine) * 120000.0,
                 35.0, transmissionParameters.MaxClutchTorque);
+            if (calibratedVehicle) launchClutchFraction = launchCapacity / transmissionParameters.MaxClutchTorque;
+            else transmissionParameters.MaxClutchTorque = launchCapacity;
         }
         transmission.initialize(transmissionParameters);
         CapturingSimulator simulator;
@@ -600,7 +611,7 @@ int main(int count, char** arguments) {
         if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
         else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
         else if (serving) {
-            DriveController drive(settings, engine, transmission, vehicle, bench);
+            DriveController drive(settings, engine, transmission, vehicle, bench, launchClutchFraction);
             serve(simulator, engine, settings, profile, withIntake, withCombustion,
                 bench ? &drive : nullptr, bench ? &vehicle : nullptr);
         }

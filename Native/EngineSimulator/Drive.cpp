@@ -18,8 +18,9 @@ void RoadVehicle::setBrake(double amount) {
 // -----------------------------------------------------------------------------
 
 DriveController::DriveController(const DriveSettings& settings, Engine& engine,
-    Transmission& transmission, RoadVehicle& vehicle, bool bench)
-    : settings(settings), engine(engine), transmission(transmission), vehicle(vehicle), bench(bench) {}
+    Transmission& transmission, RoadVehicle& vehicle, bool bench, double launchClutchFraction)
+    : settings(settings), engine(engine), transmission(transmission), vehicle(vehicle),
+    bench(bench), launchClutchFraction(launchClutchFraction) {}
 
 // -----------------------------------------------------------------------------
 
@@ -28,12 +29,17 @@ int DriveController::flags() const {
 }
 
 double DriveController::update(bool running, double pedal, int mode, int requestedGear,
-    double braking, double dt) {
+    double braking, double dt, std::uint64_t gearRequest) {
     shiftRemaining = std::max(0.0, shiftRemaining - dt);
     cooldown = std::max(0.0, cooldown - dt);
     rejection = std::max(0.0, rejection - dt);
     vehicle.setBrake(braking);
     const double rpm = engine.getRpm();
+    if (bench && gearRequest != lastGearRequest) {
+        lastGearRequest = gearRequest;
+        rejectedGear = -1;
+        rejection = 0;
+    }
     if (mode == 1 || requestedGear != rejectedGear) rejectedGear = -1;
     int target = gear;
     if (mode == 1) {
@@ -75,6 +81,11 @@ double DriveController::update(bool running, double pedal, int mode, int request
             launch = coupledRpm > launchRpm ? 1.0 : std::clamp((rpm - launchRpm) / 1500, 0.0, 1.0);
         }
         clutch = std::min(antiStall, launch);
+        if (launchClutchFraction < 1.0) {
+            // Limit launch torque while letting the clutch lock once the vehicle is moving.
+            const double rolling = std::clamp((vehicle.getSpeed() - 3.0) / 6.0, 0.0, 1.0);
+            clutch *= std::lerp(launchClutchFraction, 1.0, rolling);
+        }
         if (vehicle.getSpeed() < 1.0 && pedal == 0) clutch = 0;
         if (shiftRemaining > 0) {
             const double engagement = cutThrottleDuringShift ? settings.shift * 0.45 : settings.shift;

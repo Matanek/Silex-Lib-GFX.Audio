@@ -1,5 +1,6 @@
 use GFX.Audio.Engines
 use GFX.Audio.Engines.engine_profiles
+use GFX.Audio.Engines.bench_gearing
 use GFX.Audio.Engines.EngineFiles
 use GFX.Audio.Engines.EngineWorker
 use GFX.Audio.Engines.VehicleDefinition
@@ -69,7 +70,8 @@ public func create(key:str = "454", displacement_cc:float? = null,
         var files = try EngineFiles.bundled() else error { return Result<Engines.Engine,Error>.failure(error) }
         let definition = try VehicleDefinition.prepare(files, profile, cc) else error { return Result<Engines.Engine,Error>.failure(error) }
         var intake_level:float = 0.0
-        var stock_gearing = Engines.Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1.0], final_drive:3.5)
+        var stock_gearing = bench_gearing(key) ??
+            Engines.Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1.0], final_drive:3.5)
         if profile.strokes == 4 && profile.cylinders == 1 {
             intake_level = 0.6
             stock_gearing = engine_profiles()[definition].gearing

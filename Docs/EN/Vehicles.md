@@ -52,6 +52,10 @@ engine revs freely and the bench load setting takes effect again. When selecting
 the clutch engages progressively while the pedal stays active. Four-stroke
 motocross singles use the 8.5 final reduction.
 
+With a manual transmission, `request_gear(gear)` issues a new shift,
+including a retry of the same gear after a refusal. Gear zero selects
+neutral. `Controls.braking` can slow the vehicle before retrying a downshift.
+
 ## Catalogue and displacement
 
 `catalogue()` returns 18 `Profile` values with `key`, `name`, `displacement_cc`,

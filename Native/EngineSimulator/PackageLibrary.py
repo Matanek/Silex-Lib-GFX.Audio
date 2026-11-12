@@ -8,11 +8,12 @@ def stage(source, output):
     marker='silex-engine-library-v2\n' if 'gearing-v1' in expected.get('features',[]) else 'silex-engine-library-v1\n'
     if 'following-v1' in expected.get('features',[]):marker='silex-engine-library-v3\n'
     combustion = 'combustion-v1' in expected.get('features', [])
-    bench = 'bench-transmission-v1' in expected.get('features', [])
+    features = expected.get('features', [])
+    bench = next((version for version in ('bench-transmission-v2', 'bench-transmission-v1') if version in features), None)
     if source==output:
         (output/'EngineLibrary.txt').write_text(marker)
         if combustion: (output/'CombustionTelemetry.txt').write_text('combustion-v1\n')
-        if bench: (output/'BenchTransmission.txt').write_text('bench-transmission-v1\n')
+        if bench: (output/'BenchTransmission.txt').write_text(bench + '\n')
         return
     if output.exists():
         raise SystemExit('Refusing to overwrite an engine library: '+str(output))
@@ -28,7 +29,7 @@ def stage(source, output):
     shutil.copy2(source/'Provenance.json',output/'Provenance.json')
     (output/'EngineLibrary.txt').write_text(marker)
     if combustion: (output/'CombustionTelemetry.txt').write_text('combustion-v1\n')
-    if bench: (output/'BenchTransmission.txt').write_text('bench-transmission-v1\n')
+    if bench: (output/'BenchTransmission.txt').write_text(bench + '\n')
     files={str(p.relative_to(output)):hashlib.sha256(p.read_bytes()).hexdigest()
            for p in sorted(output.rglob('*')) if p.is_file()}
     (output/'Library-Manifest.json').write_text(json.dumps(dict(schema=1,host=platform.platform(),files=files),indent=2)+'\n')

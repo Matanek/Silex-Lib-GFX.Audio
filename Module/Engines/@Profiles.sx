@@ -27,3 +27,11 @@ module func engine_profiles() Profile[] {
         Profile(key:"cross2", label:"Moto cross / mono 250 · 2T (prototype)", redline:10000.0, ceiling:12000.0, idle:1800.0, strokes:2, gears:5, gearing:Gearing(ratios:[2.3, 1.8, 1.45, 1.18, 1], final_drive:8.5), intake:0.0, slot:7)
     ]
 }
+
+module func bench_gearing(key:str) Gearing? {
+    if key == "sport-turbo-i4" { return Gearing(ratios:[3.36, 2.09, 1.47, 1.1, 0.88, 0.74], final_drive:3.65) }
+    if key == "sport-flat6" { return Gearing(ratios:[3.54, 2.13, 1.48, 1.13, 0.92, 0.78], final_drive:3.55) }
+    if key == "sport-v10" { return Gearing(ratios:[3.23, 2.19, 1.61, 1.23, 0.97, 0.8], final_drive:3.42) }
+    if key == "sport-v12" { return Gearing(ratios:[2.8, 2.29, 1.93, 1.583, 1.375, 1.19], final_drive:4.1) }
+    return null
+}

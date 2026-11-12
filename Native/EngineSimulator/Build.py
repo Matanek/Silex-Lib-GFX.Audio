@@ -86,14 +86,9 @@ def main():
     prepare(snapshot)
     TwoStroke.prepare(snapshot, replace)
     ExhaustBlend.prepare(snapshot, replace)
-    profiles = json.loads((tools / 'Profiles.json').read_text())['profiles']
-    generated = '#pragma once\n#include <Drive.hpp>\ninline DriveSettings profileSettings(int index) {\n    switch (index) {\n'
-    for index, profile in enumerate(profiles):
-        values = ', '.join(str(profile[key]) for key in ['idle','mass','area','drag','diff','wheel','shift','starter','strokes','audio_cutoff'])
-        ratios = ', '.join(str(value) for value in profile['ratios'])
-        generated += f'        case {index}: return {{{values}, {{{ratios}}}}};\n'
-    generated += '        default: throw std::runtime_error("Unknown profile");\n    }\n}\n'
-    (output / 'GeneratedProfiles.hpp').write_text(generated)
+    catalogue = json.loads((tools / 'Profiles.json').read_text())
+    profiles = catalogue['profiles']
+    (output / 'GeneratedProfiles.hpp').write_text(Catalog.native_header(catalogue))
     compiler = Path(subprocess.check_output(['xcrun', '--find', 'clang++'], text=True).strip())
     flex_include = compiler.parent.parent / 'include'
     if not (flex_include / 'FlexLexer.h').is_file():
@@ -128,10 +123,10 @@ def main():
                 profile.get('mid_decay_ms', 0), profile.get('high_decay_ms', 0))
             (runtime / ('Impulse-' + profile['key'] + '.pcm')).write_bytes(pcm)
     metadata = {'repository': 'https://github.com/ange-yaghi/engine-sim', 'revision': REVISION,
-        'dependencies': DEPENDENCIES, 'profiles': profiles,
+        'dependencies': DEPENDENCIES, 'profiles': profiles, 'bench_vehicles': catalogue['bench_vehicles'],
         'local_profiles_sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((tools / 'Profiles').glob('*.mr'))},
         'catalog_sha256': hashlib.sha256((tools / 'Profiles.json').read_bytes()).hexdigest(), 'profile': 'assets/engines/chevrolet/engine_03_for_e1.mr',
-        'features': ['gearing-v1', 'following-v1', 'calculated-exhaust-v1', 'combustion-v1', 'bench-transmission-v1'],
+        'features': ['gearing-v1', 'following-v1', 'calculated-exhaust-v1', 'combustion-v1', 'bench-transmission-v2'],
         'sample_rate': 44100, 'vector_fir': not args.scalar_fir,
         'binary_sha256': hashlib.sha256((output / 'RenderReference').read_bytes()).hexdigest(),
         'impulse_sha256': hashlib.sha256(impulse.read_bytes()).hexdigest()}

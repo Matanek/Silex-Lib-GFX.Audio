@@ -53,6 +53,11 @@ librement et le réglage de charge du banc redevient actif. À l’engagement de
 point mort, l’embrayage se ferme progressivement et la pédale continue
 d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
 
+En boîte manuelle, `request_gear(gear)` demande un nouveau passage, y
+compris une seconde tentative du même rapport après un refus. `gear = 0`
+sélectionne le point mort. `Controls.braking` permet de ralentir avant de
+retenter un rétrogradage.
+
 ## Catalogue et cylindrée
 
 `catalogue()` fournit 18 `Profile` avec `key`, `name`, `displacement_cc`,
