@@ -266,6 +266,24 @@
       ]
     },
     {
+      "key": "sport-v8",
+      "mass": 1614,
+      "area": 2.322576,
+      "drag": 0.3,
+      "diff": 3.42,
+      "wheel": 0.254,
+      "shift": 0.2,
+      "cut_ignition_on_upshift": true,
+      "ratios": [
+        2.97,
+        2.07,
+        1.43,
+        1.0,
+        0.71,
+        0.57
+      ]
+    },
+    {
       "key": "sport-v10",
       "mass": 1614,
       "area": 2.32,

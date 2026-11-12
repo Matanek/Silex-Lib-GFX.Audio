@@ -31,6 +31,8 @@ def native_header(data):
             source += f'        settings.{field} = {row[field]};\n'
         if 'launch_rpm' in row:
             source += f'        settings.launchRpm = {row["launch_rpm"]};\n'
+        if row.get('cut_ignition_on_upshift', False):
+            source += '        settings.cutIgnitionOnUpshift = true;\n'
         ratios = ', '.join(str(value) for value in row['ratios'])
         source += f'        settings.ratios = {{{ratios}}};\n        return true;\n    }}\n'
     return source + '    return false;\n}\n'

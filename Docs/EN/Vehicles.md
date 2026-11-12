@@ -51,6 +51,9 @@ reports the engaged gear and speed. In neutral the
 engine revs freely and the bench load setting takes effect again. When selecting a gear from neutral,
 the clutch engages progressively while the pedal stays active. Four-stroke
 motocross singles use the 8.5 final reduction.
+The American V8 (`sport-v8`) uses the six ratios and 3.42 final drive of
+the Corvette paired with the GM LS. When upshifting, the bench briefly cuts
+ignition while the clutch is open to let RPM fall.
 
 With a manual transmission, `request_gear(gear)` selects the gear at
 the current vehicle speed. Gear zero selects neutral. On a downshift

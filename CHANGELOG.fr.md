@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Équiper le V8 américain de la boîte à six rapports de la Corvette du preset GM LS. Une brève coupure d’allumage fait retomber le régime pendant la montée des rapports.
+
 - Engager les rapports manuels du banc à la vitesse courante. Un rétrogradage peut entraîner le moteur en surrégime et transmettre le frein moteur.
 
 - Ajuster la prise d’embrayage au départ de la GTI. Pédale relâchée, un rétrogradage en attente s’effectue à la vitesse compatible avec le rapport demandé.

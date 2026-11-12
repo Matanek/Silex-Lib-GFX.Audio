@@ -52,6 +52,9 @@ la vitesse. Au point mort, le moteur tourne
 librement et le réglage de charge du banc redevient actif. À l’engagement depuis le
 point mort, l’embrayage se ferme progressivement et la pédale continue
 d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
+Le V8 américain (`sport-v8`) reprend les six rapports et le pont de 3,42
+de la Corvette associée au GM LS. À la montée d’un rapport, le banc coupe
+brièvement l’allumage pendant le débrayage pour laisser retomber le régime.
 
 En boîte manuelle, `request_gear(gear)` engage le rapport demandé à la
 vitesse courante. `gear = 0` sélectionne le point mort. Au rétrogradage,

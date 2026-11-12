@@ -254,10 +254,10 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
         while (pending.size() < static_cast<size_t>(frames)) {
             const bool starter = ignition && contactTime < settings.starter && engine.getRpm() < (profile == 0 ? 650 : std::max(650.0, settings.idle * 0.65));
             simulator.m_starterMotor.m_enabled = starter;
-            engine.getIgnitionModule()->m_enabled = ignition;
             const bool useDrive = drive && (mode == 1 || requestedGear > 0 ||
                 drive->currentGear() > 0 || drive->flags() != 0 || brakeAttached);
             const double drivenPedal = useDrive ? drive->update(ignition, pedal, mode, requestedGear, brake, 0.01, gearRequest) : pedal;
+            engine.getIgnitionModule()->m_enabled = ignition && !(useDrive && drive->isCuttingIgnition());
             const bool inGear = drive && drive->currentGear() > 0;
             const double requestedThrottle = ignition && !starter ?
                 (profile == 0 ? 0.35 : 1.0) * (inGear ? drivenPedal : pedal) : 0;

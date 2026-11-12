@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Use the GM LS preset's six-speed Corvette transmission for the American V8. A brief ignition cut lets RPM fall while upshifting.
+
 - Engage manual bench gears at the current road speed. Downshifts can mechanically over-rev the engine and transmit engine braking.
 
 - Tune GTI clutch engagement from rest. With the pedal released, a requested downshift waits for a safe vehicle speed.

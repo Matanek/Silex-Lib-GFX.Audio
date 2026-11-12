@@ -21,6 +21,7 @@ struct DriveSettings {
     double audioCutoff;
     std::vector<double> ratios;
     double launchRpm { 0 };
+    bool cutIgnitionOnUpshift { false };
 };
 
 // -----------------------------------------------------------------------------
@@ -56,6 +57,7 @@ class DriveController {
         double braking, double dt, std::uint64_t gearRequest = 0);
     public: int currentGear() const { return gear; }
     public: int shiftCount() const { return shifts; }
+    public: bool isCuttingIgnition() const;
     public: int flags() const;
 
     // -------------------------------------------------------------------------
@@ -69,10 +71,12 @@ class DriveController {
     private: const double launchClutchFraction;
     private: std::uint64_t lastGearRequest { 0 };
     private: bool cutThrottleDuringShift { true };
+    private: bool upshifting { false };
     private: int gear { 0 };
     private: int shifts { 0 };
     private: int rejectedGear { -1 };
     private: double shiftRemaining { 0 };
     private: double cooldown { 0 };
     private: double rejection { 0 };
+    private: bool isCuttingThrottle() const { return cutThrottleDuringShift && shiftRemaining > settings.shift * 0.45; }
 };

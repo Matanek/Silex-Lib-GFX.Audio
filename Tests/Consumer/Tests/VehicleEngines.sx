@@ -178,6 +178,39 @@ test "bench first gear keeps combustion and the 500 motocross reaches second pro
     }
 }
 
+test "American V8 drops RPM on full-throttle upshifts" {
+    if System.target_name(System.target()) != "macos-arm64" { return }
+    var engine = Vehicles.create("sport-v8", transmission:Engines.Transmission.manual)
+    assert(engine.gearing.ratios.count() == 6)
+    var input = engine.controls()
+    var samples = zeros()
+    input.running = true
+    engine.set_controls(input)
+    for _ in 0...160 { engine.render(&samples[0:960]) }
+    input.throttle = 1.0
+    engine.set_controls(input)
+    engine.request_gear(1)
+    let shift_rpm = engine.profile.redline * 0.87
+    for gear in 2...4 {
+        for _ in 0...400 {
+            if engine.current_rpm() >= shift_rpm { break }
+            engine.render(&samples[0:960])
+        }
+        let before = engine.current_rpm()
+        assert(before >= shift_rpm)
+        let speed = engine.drive_state()!.speed_kmh
+        engine.request_gear(gear)
+        for _ in 0...30 {
+            engine.render(&samples[0:960])
+            assert(engine.current_rpm() < before * 1.02)
+        }
+        let state = engine.drive_state()!
+        assert(state.gear == gear && !state.shifting)
+        assert(engine.current_rpm() < before * 0.85)
+        assert(state.speed_kmh > speed)
+    }
+}
+
 test "GTI pulls through its gears and back-drives the engine when downshifting" {
     if System.target_name(System.target()) != "macos-arm64" { return }
     var engine = Vehicles.create("sport-turbo-i4", transmission:Engines.Transmission.manual)

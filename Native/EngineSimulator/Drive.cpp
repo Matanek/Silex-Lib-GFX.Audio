@@ -28,6 +28,10 @@ int DriveController::flags() const {
     return (shiftRemaining > 0 ? 1 : 0) | (rejection > 0 ? 2 : 0);
 }
 
+bool DriveController::isCuttingIgnition() const {
+    return settings.cutIgnitionOnUpshift && upshifting && isCuttingThrottle();
+}
+
 double DriveController::update(bool running, double pedal, int mode, int requestedGear,
     double braking, double dt, std::uint64_t gearRequest) {
     shiftRemaining = std::max(0.0, shiftRemaining - dt);
@@ -68,6 +72,7 @@ double DriveController::update(bool running, double pedal, int mode, int request
             }
             // Selecting a gear from neutral is a clutch engagement, with the pedal still active.
             cutThrottleDuringShift = !bench || (gear > 0 && target > 0);
+            upshifting = gear > 0 && target > gear;
             gear = target;
             shiftRemaining = settings.shift;
             cooldown = 0.75;
@@ -105,6 +110,6 @@ double DriveController::update(bool running, double pedal, int mode, int request
         }
     }
     transmission.setClutchPressure(clutch);
-    if (cutThrottleDuringShift && shiftRemaining > settings.shift * 0.45) return 0;
+    if (isCuttingThrottle()) return 0;
     return pedal;
 }
