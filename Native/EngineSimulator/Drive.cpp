@@ -28,12 +28,6 @@ int DriveController::flags() const {
     return (shiftRemaining > 0 ? 1 : 0) | (rejection > 0 ? 2 : 0);
 }
 
-double DriveController::shiftSpeedLimitKmh() const {
-    if (!bench || rejection <= 0 || rejectedGear <= 0) return 0;
-    return engine.getRedline() * 1.02 * settings.wheel * 3.6 /
-        (settings.diff * settings.ratios[rejectedGear - 1]);
-}
-
 double DriveController::update(bool running, double pedal, int mode, int requestedGear,
     double braking, double dt, std::uint64_t gearRequest) {
     shiftRemaining = std::max(0.0, shiftRemaining - dt);
@@ -46,6 +40,7 @@ double DriveController::update(bool running, double pedal, int mode, int request
         rejectedGear = -1;
         rejection = 0;
     }
+    const bool manualBench = bench && mode == 2;
     if (mode == 1 || requestedGear != rejectedGear) rejectedGear = -1;
     int target = gear;
     if (mode == 1) {
@@ -54,12 +49,13 @@ double DriveController::update(bool running, double pedal, int mode, int request
             if (rpm > units::toRpm(engine.getRedline()) * 0.84 && pedal > 0 && gear < static_cast<int>(settings.ratios.size())) target = gear + 1;
             else if (rpm < std::max(settings.idle * 1.5, units::toRpm(engine.getRedline()) * 0.32) && gear > 1) target = gear - 1;
         }
-    } else if (requestedGear != rejectedGear || (bench && pedal == 0)) target = requestedGear;
+    } else if (manualBench || requestedGear != rejectedGear) target = requestedGear;
     else rejection = 0.6;
     if (target != gear && shiftRemaining == 0) {
         double coupledRpm = 0;
         if (target > 0) coupledRpm = units::toRpm(vehicle.getSpeed() / settings.wheel * settings.diff * settings.ratios[target - 1]);
-        if (target > 0 && coupledRpm > units::toRpm(engine.getRedline()) * 1.02) {
+        // Manual bench shifts can back-drive the crank beyond the ignition limiter.
+        if (!manualBench && target > 0 && coupledRpm > units::toRpm(engine.getRedline()) * 1.02) {
             rejection = 0.6;
             if (mode != 1) rejectedGear = target;
         }

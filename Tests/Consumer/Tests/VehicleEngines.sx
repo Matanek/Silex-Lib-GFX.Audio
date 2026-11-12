@@ -178,7 +178,7 @@ test "bench first gear keeps combustion and the 500 motocross reaches second pro
     }
 }
 
-test "GTI pulls through its gears and can retry a refused downshift" {
+test "GTI pulls through its gears and back-drives the engine when downshifting" {
     if System.target_name(System.target()) != "macos-arm64" { return }
     var engine = Vehicles.create("sport-turbo-i4", transmission:Engines.Transmission.manual)
     assert(engine.gearing.ratios.count() == 6)
@@ -207,37 +207,21 @@ test "GTI pulls through its gears and can retry a refused downshift" {
         engine.render(&samples[0:960])
     }
     assert(engine.drive_state()!.gear == 5 && engine.drive_state()!.speed_kmh >= 213.0)
-    engine.request_gear(4)
-    for _ in 0...30 { engine.render(&samples[0:960]) }
-    let refusal = engine.drive_state()!
-    assert(refusal.gear == 5 && refusal.shift_refused)
-    assert(refusal.shift_speed_limit_kmh != null && refusal.speed_kmh > refusal.shift_speed_limit_kmh!)
-    input = engine.controls()
-    input.throttle = 0.1; input.braking = true
-    engine.set_controls(input)
-    for _ in 0...260 {
-        if engine.drive_state()!.speed_kmh <= 170.0 { break }
-        engine.render(&samples[0:960])
-    }
-    assert(engine.drive_state()!.gear == 5 && engine.drive_state()!.speed_kmh <= 170.0)
-    input.braking = false
-    engine.set_controls(input)
-    engine.request_gear(4)
-    for _ in 0...35 { engine.render(&samples[0:960]) }
-    assert(engine.drive_state()!.gear == 4 && !engine.drive_state()!.shift_refused)
+    let speed = engine.drive_state()!.speed_kmh
     input = engine.controls()
     input.throttle = 0.0
     engine.set_controls(input)
     engine.request_gear(3)
-    for _ in 0...12 { engine.render(&samples[0:960]) }
-    let waiting = engine.drive_state()!
-    assert(waiting.gear == 4 && waiting.shift_refused && waiting.shift_speed_limit_kmh != null)
-    for _ in 0...600 {
-        if engine.drive_state()!.gear == 3 { break }
+    engine.render(&samples[0:960])
+    assert(engine.drive_state()!.gear == 3 && !engine.drive_state()!.shift_refused)
+    var peak_rpm = engine.current_rpm()
+    for _ in 0...80 {
         engine.render(&samples[0:960])
+        peak_rpm = Math.max(peak_rpm, engine.current_rpm())
+        for sample in samples { assert(Math.is_finite(sample) && Math.abs(sample) <= 1.0) }
     }
-    let third = engine.drive_state()!
-    assert(third.gear == 3 && !third.shift_refused && third.speed_kmh <= waiting.shift_speed_limit_kmh! + 0.1)
+    assert(peak_rpm > engine.profile.redline * 1.15)
+    assert(engine.drive_state()!.speed_kmh < speed - 4.0)
 }
 
 test "GTI first gear responds to the 150 ms pedal from a stationary idle" {

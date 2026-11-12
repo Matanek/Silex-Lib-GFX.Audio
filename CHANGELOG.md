@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Engage manual bench gears at the current road speed. Downshifts can mechanically over-rev the engine and transmit engine braking.
+
 - Tune GTI clutch engagement from rest. With the pedal released, a requested downshift waits for a safe vehicle speed.
 
 - Tune road load and gearing for the four sports presets. Allow a fresh downshift attempt after an over-rev refusal.

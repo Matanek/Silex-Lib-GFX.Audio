@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Engager les rapports manuels du banc à la vitesse courante. Un rétrogradage peut entraîner le moteur en surrégime et transmettre le frein moteur.
+
 - Ajuster la prise d’embrayage au départ de la GTI. Pédale relâchée, un rétrogradage en attente s’effectue à la vitesse compatible avec le rapport demandé.
 
 - Régler séparément la masse, la démultiplication et l’étagement des quatre sportives. Autoriser une nouvelle tentative de rétrogradage après un refus.

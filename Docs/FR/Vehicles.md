@@ -48,17 +48,15 @@ Le moteur démarre au point mort (`gear = 0`). Lire ses commandes avec
 `controls()`, choisir un rapport de 1 à `gearing.ratios.count()`, puis
 les transmettre avec `set_controls()`. Le moteur garde son état au
 changement de rapport. `drive_state()` donne le rapport réellement engagé,
-la vitesse et les refus de rétrogradage. Au point mort, le moteur tourne
+la vitesse. Au point mort, le moteur tourne
 librement et le réglage de charge du banc redevient actif. À l’engagement depuis le
 point mort, l’embrayage se ferme progressivement et la pédale continue
 d’agir. Les monocylindres motocross 4T utilisent la réduction finale de 8,5.
 
-En boîte manuelle, `request_gear(gear)` demande un nouveau passage, y
-compris une seconde tentative du même rapport après un refus. `gear = 0`
-sélectionne le point mort. Pédale relâchée, le rapport demandé s’engage
-quand la vitesse devient compatible. `drive_state().shift_speed_limit_kmh`
-indique alors la vitesse maximale du passage. `Controls.braking` permet
-de ralentir plus vite.
+En boîte manuelle, `request_gear(gear)` engage le rapport demandé à la
+vitesse courante. `gear = 0` sélectionne le point mort. Au rétrogradage,
+les roues peuvent entraîner le moteur au-delà du rupteur. Le rupteur
+coupe les combustions et l’embrayage transmet le frein moteur.
 
 ## Catalogue et cylindrée
 

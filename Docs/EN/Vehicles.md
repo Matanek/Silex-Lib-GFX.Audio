@@ -47,16 +47,15 @@ Create the engine with `Vehicles.create("454", transmission:Engines.Transmission
 It starts in neutral (`gear = 0`). Read its controls with `controls()`,
 select a gear from 1 to `gearing.ratios.count()`, and pass the controls
 to `set_controls()`. Shifting keeps the engine state. `drive_state()`
-reports the engaged gear, speed and refused downshifts. In neutral the
+reports the engaged gear and speed. In neutral the
 engine revs freely and the bench load setting takes effect again. When selecting a gear from neutral,
 the clutch engages progressively while the pedal stays active. Four-stroke
 motocross singles use the 8.5 final reduction.
 
-With a manual transmission, `request_gear(gear)` issues a new shift,
-including a retry of the same gear after a refusal. Gear zero selects
-neutral. With the pedal released, the requested gear engages once vehicle
-speed is safe. `drive_state().shift_speed_limit_kmh` reports the speed
-limit while waiting. `Controls.braking` can slow the vehicle sooner.
+With a manual transmission, `request_gear(gear)` selects the gear at
+the current vehicle speed. Gear zero selects neutral. On a downshift
+the wheels can drive the engine beyond the ignition cut-off. The limiter
+cuts combustion and the clutch transfers engine braking.
 
 ## Catalogue and displacement
 

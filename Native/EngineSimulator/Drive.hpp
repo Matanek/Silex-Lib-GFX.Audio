@@ -57,7 +57,6 @@ class DriveController {
     public: int currentGear() const { return gear; }
     public: int shiftCount() const { return shifts; }
     public: int flags() const;
-    public: double shiftSpeedLimitKmh() const;
 
     // -------------------------------------------------------------------------
     // INTERNALS
