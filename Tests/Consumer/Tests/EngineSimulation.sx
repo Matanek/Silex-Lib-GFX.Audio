@@ -1,0 +1,316 @@
+use GFX.Audio.EngineSimulation
+use GFX.Audio.Synthesis.EngineParts
+use STD.Math
+
+func source_buffer(frames:int) EngineSimulation.Sources[] {
+    var result:EngineSimulation.Sources[] = []
+    for _ in 0...frames { result.append(EngineSimulation.Sources()) }
+    return result
+}
+
+func scaled_single(scale:float32) EngineSimulation.Assembly {
+    return EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(
+        bore_mm:86.0 * scale, stroke_mm:86.0 * scale, rod_mm:143.0 * scale,
+        chamber_cc:55.0 * scale * scale * scale)])
+}
+
+test "cylinder size changes the pulse shape and firing variation survives a reset" {
+    var small = EngineSimulation.Simulator.create(scaled_single(0.464))
+    var large = EngineSimulation.Simulator.create(scaled_single(1.818))
+    let drive = EngineSimulation.Controls(ignition:true, hold_rpm:2_400.0, throttle:0.32)
+    small.set_controls(drive)
+    large.set_controls(drive)
+    let cycle = 2_400
+    var a = source_buffer(cycle)
+    var b = source_buffer(cycle)
+    var small_energy:float32 = 0.0
+    var large_energy:float32 = 0.0
+    var small_edges:float32 = 0.0
+    var large_edges:float32 = 0.0
+    var least:float32 = 1.0
+    var greatest:float32 = 0.0
+    var peaks:float32[] = []
+    for turn in 0...12 {
+        small.render_sources(&a[0:cycle])
+        large.render_sources(&b[0:cycle])
+        var peak:float32 = 0.0
+        for i in 1...cycle {
+            let light = a[i].combustion
+            let heavy = b[i].combustion
+            let light_edge = light - a[i - 1].combustion
+            let heavy_edge = heavy - b[i - 1].combustion
+            small_energy += light * light
+            large_energy += heavy * heavy
+            small_edges += light_edge * light_edge
+            large_edges += heavy_edge * heavy_edge
+            peak = Math.max(peak, Math.abs(light))
+        }
+        peaks.append(peak)
+        if turn > 1 {
+            least = Math.min(least, peak)
+            greatest = Math.max(greatest, peak)
+        }
+    }
+    assert(small_energy > 0.0 && large_energy > 0.0)
+    assert(small_edges / small_energy > 3.0 * large_edges / large_energy,
+        "pulse brightness must depend on cylinder size at equal level")
+    assert(least > 0.0 && greatest > 1.06 * least, "successive firing peaks must vary at equal rpm")
+    small.reset()
+    small.set_controls(drive)
+    for expected in peaks {
+        small.render_sources(&a[0:137])
+        small.render_sources(&a[137:cycle])
+        var peak:float32 = 0.0
+        for i in 1...cycle { peak = Math.max(peak, Math.abs(a[i].combustion)) }
+        assert(peak == expected)
+    }
+}
+
+test "piston contact changes the mechanical sound at unchanged speed and gas flow" {
+    var light = EngineSimulation.Simulator.create()
+    var heavy = EngineSimulation.Simulator.create(EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(friction:0.16)]))
+    let controls = EngineSimulation.Controls(hold_rpm:1_500.0, throttle:0.35)
+    light.set_controls(controls)
+    heavy.set_controls(controls)
+    var a = source_buffer(480)
+    var b = source_buffer(480)
+    var mechanical:float32 = 0.0
+    var aspiration:float32 = 0.0
+    for _ in 0...12 {
+        light.render_sources(&a[0:480])
+        heavy.render_sources(&b[0:480])
+        for i in 0...480 {
+            assert(a[i].combustion == 0.0 && b[i].combustion == 0.0)
+            assert(a[i].intake == b[i].intake)
+            mechanical += Math.abs(b[i].friction) - Math.abs(a[i].friction)
+            aspiration += Math.abs(a[i].intake)
+        }
+    }
+    let first = light.cylinder(0) ?? EngineSimulation.CylinderState()
+    let second = heavy.cylinder(0) ?? EngineSimulation.CylinderState()
+    assert(first.friction_n > 0.0 && second.friction_n == 2.0 * first.friction_n)
+    assert(first.piston_mps == second.piston_mps && first.pressure_pa == second.pressure_pa)
+    assert(first.firings == 0 && second.firings == 0 && light.rpm() == heavy.rpm())
+    assert(mechanical > 1.0 && aspiration > 1.0)
+}
+
+test "contact and intake follow the engine cycle, and opening the throttle strengthens the intake" {
+    let cycle = 3_840 // Two crankshaft turns at 1,500 rpm and 48 kHz.
+    var engine = EngineSimulation.Simulator.create()
+    var first = source_buffer(cycle)
+    var second = source_buffer(cycle)
+    engine.set_controls(EngineSimulation.Controls(hold_rpm:1_500.0, throttle:0.1))
+    for _ in 0...4 { engine.render_sources(&first[0:cycle]) }
+    engine.render_sources(&first[0:cycle])
+    engine.render_sources(&second[0:cycle])
+    var contact_energy:float32 = 0.0
+    var contact_difference:float32 = 0.0
+    var intake_energy:float32 = 0.0
+    var intake_difference:float32 = 0.0
+    for i in 0...cycle {
+        let contact_delta = first[i].friction - second[i].friction
+        let intake_delta = first[i].intake - second[i].intake
+        contact_energy += first[i].friction * first[i].friction
+        contact_difference += contact_delta * contact_delta
+        intake_energy += first[i].intake * first[i].intake
+        intake_difference += intake_delta * intake_delta
+    }
+    assert(contact_energy > 0.0 && contact_difference < 0.25 * contact_energy)
+    assert(intake_energy > 0.0 && intake_difference < 0.25 * intake_energy)
+
+    engine.set_controls(EngineSimulation.Controls(hold_rpm:1_500.0, throttle:0.8))
+    engine.render_sources(&second[0:cycle])
+    engine.render_sources(&second[0:cycle])
+    var open_energy:float32 = 0.0
+    for sample in second { open_energy += sample.intake * sample.intake }
+    assert(open_energy > 3.0 * intake_energy)
+}
+
+test "four-stroke cylinders fire at their configured offsets on the audio clock" {
+    let assembly = EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(), EngineSimulation.Cylinder(firing_degrees:180.0)])
+    var engine = EngineSimulation.Simulator.create(assembly)
+    engine.set_controls(EngineSimulation.Controls(hold_rpm:3_000.0, ignition:true, throttle:0.4))
+    var samples:float32[] = []
+    for _ in 0...480 { samples.append(0.0) }
+    for _ in 0...24 { engine.render(&samples[0:480]) }
+    engine.render(&samples[0:240])
+    let first = engine.cylinder(0) ?? EngineSimulation.CylinderState()
+    let second = engine.cylinder(1) ?? EngineSimulation.CylinderState()
+    assert(first.firings == 6 && second.firings == 6)
+    let offset = (first.last_firing_frame ?? -1) - (second.last_firing_frame ?? -1)
+    assert(Math.abs(offset - 1_440) <= 1)
+    assert(engine.cylinder(-1) == null && engine.cylinder(2) == null)
+}
+
+test "each cylinder excites its own exhaust path" {
+    let outlet = EngineParts.Exhaust()
+    let muted = EngineParts.Exhaust(outlet_level:0.0)
+    var single = EngineSimulation.Simulator.create(EngineSimulation.Assembly(exhausts:[outlet]))
+    var twin = EngineSimulation.Simulator.create(EngineSimulation.Assembly(
+        cylinders:[EngineSimulation.Cylinder(), EngineSimulation.Cylinder(firing_degrees:180.0, exhaust_index:1)],
+        exhausts:[outlet, muted]))
+    let drive = EngineSimulation.Controls(ignition:true, hold_rpm:2_400.0, throttle:0.4)
+    single.set_controls(drive)
+    twin.set_controls(drive)
+    var a = source_buffer(480)
+    var b = source_buffer(480)
+    var level:float32 = 0.0
+    for _ in 0...24 {
+        single.render_sources(&a[0:480])
+        twin.render_sources(&b[0:480])
+        for i in 0...480 {
+            assert(a[i].combustion == b[i].combustion)
+            level += Math.abs(a[i].combustion)
+        }
+    }
+    assert(level > 0.0 && twin.cylinder(1)!.firings > 0)
+
+    let absent = EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(exhaust_index:1)], exhausts:[outlet])
+    match try EngineSimulation.Simulator.create(absent) {
+        failure(error) => {}
+        success(value) => { panic("invalid cylinder exhaust index accepted") }
+    }
+}
+
+test "changing the exhaust in flight preserves engine phase and the other sources" {
+    let cylinders:EngineSimulation.Cylinder[] = [EngineSimulation.Cylinder(),
+        EngineSimulation.Cylinder(firing_degrees:180.0)]
+    let assembly = EngineSimulation.Assembly(cylinders:cylinders)
+    var original = EngineSimulation.Simulator.create(assembly)
+    var engine = EngineSimulation.Simulator.create(assembly)
+    let drive = EngineSimulation.Controls(ignition:true, hold_rpm:2_600.0, throttle:0.5)
+    original.set_controls(drive)
+    engine.set_controls(drive)
+    var a = source_buffer(480)
+    var b = source_buffer(480)
+    for _ in 0...20 {
+        original.render_sources(&a[0:480])
+        engine.render_sources(&b[0:480])
+    }
+    let first = EngineParts.Exhaust(silencer:EngineParts.Silencer(absorption:0.0))
+    let second = EngineParts.Exhaust(outlet_level:0.1)
+    let state = engine.cylinder(0)!
+    engine.set_exhaust([first, second], [0, 1])
+    assert(engine.frame() == 9_600 && engine.cylinder(0)! == state)
+    match try engine.set_exhaust([first], [0, 1]) {
+        failure(error) => {}
+        success => { panic("invalid live exhaust routing accepted") }
+    }
+    var difference:float32 = 0.0
+    for block in 0...12 {
+        original.render_sources(&a[0:480])
+        engine.render_sources(&b[0:480])
+        if block == 0 { assert(Math.abs(a[0].combustion - b[0].combustion) < 0.00001) }
+        for i in 0...480 {
+            assert(a[i].friction == b[i].friction && a[i].intake == b[i].intake)
+            difference += Math.abs(a[i].combustion - b[i].combustion)
+        }
+    }
+    assert(difference > 1.0 && engine.frame() == original.frame() && engine.rpm() == original.rpm())
+    assert(engine.cylinder(0)! == original.cylinder(0)! && engine.cylinder(1)! == original.cylinder(1)!)
+
+    engine.set_exhaust([first], [0, 0])
+    engine.set_exhaust([], [0, 0])
+    engine.reset()
+    original.reset()
+    engine.set_controls(drive)
+    original.set_controls(drive)
+    for _ in 0...8 {
+        engine.render_sources(&b[0:480])
+        original.render_sources(&a[0:480])
+        for i in 0...480 { assert(a[i] == b[i]) }
+    }
+}
+
+test "mix, isolated rendering, split blocks and reset advance the same simulation" {
+    var engine = EngineSimulation.Simulator.create(EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(firing_degrees:180.0)]))
+    let controls = EngineSimulation.Controls(hold_rpm:4_000.0, ignition:true, throttle:0.5)
+    engine.set_controls(controls)
+    var mix:float32[] = []
+    for _ in 0...960 { mix.append(0.0) }
+    var sources = source_buffer(960)
+    engine.render(&mix[0:960])
+    engine.reset()
+    engine.set_controls(controls)
+    engine.render_sources(&sources[0:137])
+    engine.render_sources(&sources[137:960])
+    var combustion:float32 = 0.0
+    for i in 0...960 {
+        assert(mix[i] == sources[i].mixed())
+        assert(Math.is_finite(mix[i]) && Math.abs(mix[i]) < 1.0)
+        combustion += Math.abs(sources[i].combustion)
+    }
+    assert(engine.frame() == 960 && combustion > 1.0)
+}
+
+test "starter drives rotation, combustion responds to load, and ignition cut drains the sources" {
+    var free = EngineSimulation.Simulator.create()
+    var loaded = EngineSimulation.Simulator.create()
+    var output = source_buffer(480)
+    let starter = EngineSimulation.Controls(starter:true)
+    free.set_controls(starter)
+    loaded.set_controls(starter)
+    for _ in 0...70 {
+        free.render_sources(&output[0:480])
+        loaded.render_sources(&output[0:480])
+        for sample in output { assert(sample.combustion == 0.0) }
+    }
+    assert(loaded.rpm() > 300.0 && loaded.cylinder(0)!.firings == 0)
+    free.set_controls(EngineSimulation.Controls(ignition:true, throttle:0.5))
+    loaded.set_controls(EngineSimulation.Controls(ignition:true, throttle:0.5, load_nm:8.0))
+    for _ in 0...180 {
+        free.render_sources(&output[0:480])
+        loaded.render_sources(&output[0:480])
+    }
+    assert(free.rpm() > loaded.rpm() + 150.0 && loaded.cylinder(0)!.firings > 0)
+    let firings = loaded.cylinder(0)!.firings
+    loaded.set_controls(EngineSimulation.Controls(load_nm:12.0))
+    for _ in 0...400 { loaded.render_sources(&output[0:480]) }
+    assert(loaded.rpm() == 0.0 && loaded.cylinder(0)!.piston_mps == 0.0)
+    assert(loaded.cylinder(0)!.firings == firings)
+    for sample in output { assert(Math.abs(sample.mixed()) < 0.00001) }
+}
+
+test "invalid assembly and commands are rejected before changing the simulation" {
+    match try EngineSimulation.Simulator.create(EngineSimulation.Assembly(cylinders:[])) {
+        failure(error) => {}
+        success(value) => { panic("empty assembly accepted") }
+    }
+    match try EngineSimulation.Simulator.create(EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(rod_mm:41.0)])) {
+        failure(error) => {}
+        success(value) => { panic("invalid connecting rod accepted") }
+    }
+    var engine = EngineSimulation.Simulator.create()
+    engine.set_controls(EngineSimulation.Controls(hold_rpm:900.0))
+    match try engine.set_controls(EngineSimulation.Controls(hold_rpm:Math.sqrt(-1.0))) {
+        failure(error) => {}
+        success => { panic("invalid held speed accepted") }
+    }
+    var output = source_buffer(1)
+    engine.render_sources(&output[0:1])
+    assert(Math.abs(engine.rpm() - 900.0) < 0.01)
+}
+
+test "stationary cylinders freeze at the last angle and resume on the audio clock" {
+    let assembly = EngineSimulation.Assembly(cylinders:[EngineSimulation.Cylinder(firing_degrees:450.0)])
+    var engine = EngineSimulation.Simulator.create(assembly)
+    var output = source_buffer(480)
+    let drive = EngineSimulation.Controls(hold_rpm:3_000.0, throttle:0.5)
+    engine.set_controls(drive)
+    engine.render_sources(&output[0:480])
+    let moving = engine.cylinder(0)!
+    assert(moving.piston_mps > 0.0 && moving.intake_m3_s > 0.0)
+
+    engine.set_controls(EngineSimulation.Controls(hold_rpm:0.0, throttle:1.0))
+    engine.render_sources(&output[0:1])
+    let stopped = engine.cylinder(0)!
+    assert(stopped.cycle_degrees == moving.cycle_degrees && stopped.piston_mm == moving.piston_mm)
+    assert(stopped.piston_mps == 0.0 && stopped.intake_m3_s == 0.0)
+    engine.render_sources(&output[0:479])
+    assert(engine.cylinder(0)! == stopped && engine.frame() == 960)
+
+    engine.set_controls(drive)
+    engine.render_sources(&output[0:1])
+    let resumed = engine.cylinder(0)!
+    assert(resumed.cycle_degrees > stopped.cycle_degrees && resumed.intake_m3_s > 0.0)
+}

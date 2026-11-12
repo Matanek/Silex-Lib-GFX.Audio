@@ -2,7 +2,7 @@ use GFX.Audio.Synthesis.EngineParts
 use STD.Math
 
 // Prepared pressure release: fast attack, body and zero-area rarefaction.
-class EnginePulse {
+package class EnginePulse {
     private let body_decay:float32
     private let front_decay:float32
     private let tail_decay:float32
@@ -55,7 +55,7 @@ class EngineDuct {
     }
 }
 
-class EngineExhaustPath {
+package class EngineExhaustPath {
     private var header:EngineDuct
     private var pipe:EngineDuct
     private var chamber:EngineResonance

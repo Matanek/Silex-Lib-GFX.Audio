@@ -3,7 +3,7 @@ use STD.Error
 use STD.Math
 
 // A normalized band-pass, prepared once; its history advances per audio frame.
-class EngineResonance {
+package class EngineResonance {
     private let b:float32
     private let a1:float32
     private let a2:float32

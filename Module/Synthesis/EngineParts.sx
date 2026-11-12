@@ -87,9 +87,7 @@ public struct Assembly {
             return Result<void, Error>.failure(invalid("invalid intake, mechanics or mix"))
         }
         for exhaust in self.exhausts {
-            if !pipe_valid(exhaust.header) || !pipe_valid(exhaust.pipe) ||
-                !in_range(exhaust.silencer.volume_litres, 0.05, 100.0) || !unit(exhaust.silencer.absorption) || !unit(exhaust.outlet_level) ||
-                exhaust.silencer.baffles < 0 || exhaust.silencer.baffles > 8 || !in_range(exhaust.expansion_litres, 0.0, 30.0) {
+            if !exhaust_valid(exhaust) {
                 return Result<void, Error>.failure(invalid("invalid exhaust pipe or silencer"))
             }
         }
@@ -132,6 +130,11 @@ public struct Assembly {
 func in_range(value:float32, low:float32, high:float32) bool { return Math.is_finite(value) && value >= low && value <= high }
 func unit(value:float32) bool { return in_range(value, 0.0, 1.0) }
 func pipe_valid(value:Pipe) bool { return in_range(value.length_mm, 20.0, 5_000.0) && in_range(value.diameter_mm, 5.0, 250.0) }
+package func exhaust_valid(value:Exhaust) bool {
+    return pipe_valid(value.header) && pipe_valid(value.pipe) &&
+        in_range(value.silencer.volume_litres, 0.05, 100.0) && unit(value.silencer.absorption) && unit(value.outlet_level) &&
+        value.silencer.baffles >= 0 && value.silencer.baffles <= 8 && in_range(value.expansion_litres, 0.0, 30.0)
+}
 package func mix_valid(value:Mix) bool { return unit(value.exhaust) && unit(value.intake) && unit(value.mechanics) && unit(value.turbo) }
 func invalid(detail:str) Error { return Error(kind:Kind.invalid_input(), operation:"audio.engine-parts", subject:null, detail:detail) }
 

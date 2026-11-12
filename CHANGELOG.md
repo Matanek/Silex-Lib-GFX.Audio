@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Attenuate intake radiation in `EngineSimulation` as the throttle plate closes.
+
+- Scale blowdown timbre with cylinder dimensions in `EngineSimulation`. Charge and burn duration vary between cycles and repeat after a reset.
+
+- Let `EngineSimulation` change exhaust pipes, silencers and routing while the engine runs. The audio transition preserves firing phase and engine controls.
+
+- Add the experimental `EngineSimulation` bench for assembling four-stroke cylinders, driving them with a starter, and isolating friction, intake and combustion audio. Sliding forces and piston skirt contacts excite the block. Pulsating flow excites the intake plenum and runner. Pressure release depends on bore and can be routed from each cylinder to a configured exhaust outlet. The model accepts higher starter and load torque for large engines.
+
 - Separate city cars from the sports I4 through milder intake/valve timing, a more restrictive exhaust and quiet exterior rendering. Diesel gains a hybrid voice built from eight excitations extracted from the supplied TDI reference, driven by native RPM with deterministic shutdown/reset. Labels identify the recorded source and its unidentified engine; mechanical simulation does not become diesel combustion. The 454, sports cars and 500 four-stroke motocross retain their sound paths.
 
 - Correct native RPM decoding during small crankshaft rebounds and round positive telemetry after unit conversion. The workshop retains free bench idle: a profile's nominal idle no longer automatically engages the dynamometer.

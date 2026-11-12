@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- Atténuer le rayonnement à l’entrée d’air d’`EngineSimulation` quand le papillon se ferme.
+
+- Faire varier le timbre de détente avec les dimensions du cylindre dans `EngineSimulation`. La charge et la durée de combustion évoluent entre les cycles et la séquence se reproduit au reset.
+
+- Permettre à `EngineSimulation` de remplacer les conduits, silencieux et sorties en cours de fonctionnement. La transition audio conserve les phases et les commandes du moteur.
+
+- Ajouter le banc expérimental `EngineSimulation` pour composer des cylindres 4T, les entraîner au démarreur et écouter séparément frottement, aspiration et combustion. Les efforts de glissement et les contacts de la jupe excitent le bloc. Le débit pulsé excite le plénum et le conduit d’admission. La détente dépend de l’alésage et peut être acheminée par cylindre vers une sortie d’échappement configurée. Le modèle accepte les couples de démarrage et de charge des grandes cylindrées.
+
 - Différencier les citadines de l’I4 de sportive : admission et calage plus sages, échappement plus restrictif et rendu extérieur feutré. Le diesel reçoit une voix hybride issue de huit excitations extraites de la référence TDI fournie, pilotées par le régime natif, avec extinction et reset déterministes. Le libellé signale cette source enregistrée et son modèle non identifié ; la simulation mécanique ne devient pas une combustion diesel. Le 454, les sportives et la cross 500 4T conservent leur parcours sonore.
 
 - Corriger le décodage du régime natif lors des petits retours arrière du vilebrequin et arrondir les télémétries positives après conversion d’unité. L’atelier conserve le ralenti libre du banc : le ralenti nominal d’un profil n’engage plus automatiquement le dynamomètre.
