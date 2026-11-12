@@ -13,6 +13,7 @@ test "vehicle reference preserves every Chevrolet PCM sample and operating state
     var vehicle = Vehicles.create("454")
     var a = zeros(); var b = zeros()
     var controls = Engines.Controls(running:true)
+    assert(original.frame() == 0 && original.last_combustion_frame(0) == null)
     for phase in 0...3 {
         controls.accelerating = phase == 1
         if phase == 2 { controls.running = false }
@@ -20,9 +21,20 @@ test "vehicle reference preserves every Chevrolet PCM sample and operating state
         for _ in 0...160 {
             original.render(&a[0:960]); vehicle.render(&b[0:960])
             assert(original.current_rpm() == vehicle.current_rpm())
+            assert(original.frame() == vehicle.frame())
+            for cylinder in 0...8 {
+                assert(original.last_combustion_frame(cylinder) == vehicle.last_combustion_frame(cylinder))
+            }
             for i in 0...960 { assert(a[i] == b[i], "vehicle factory changed the reference PCM") }
         }
     }
+    assert(original.frame() == 3 * 160 * 480)
+    for cylinder in 0...8 {
+        let frame = original.last_combustion_frame(cylinder)!
+        assert(frame > 0 && frame <= (2 * 160 + 1) * 480)
+    }
+    original.reset()
+    assert(original.frame() == 0 && original.last_combustion_frame(0) == null)
 }
 
 test "native vehicle catalogue renders all architectures without the pulse synthesizer" {

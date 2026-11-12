@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -28,6 +29,8 @@ class CapturingSimulator : public PistonEngineSimulator {
     public: bool recording { false };
     public: bool captureIntake { false };
     public: std::vector<float> intake;
+    public: bool captureCombustion { false };
+    public: std::vector<uint32_t> combustion;
     public: void openCollectorCapture(const std::string& path) {
         collectors.open(path, std::ios::binary);
         if (!collectors) throw std::runtime_error("Cannot open collector capture");
@@ -45,14 +48,16 @@ class CapturingSimulator : public PistonEngineSimulator {
     }
     private: std::ofstream collectors;
     private: double previousIntakeFlow { 0 };
+    private: uint32_t pendingCombustion { 0 };
 
     // -------------------------------------------------------------------------
     // INTERNALS
 
     protected: void writeToSynthesizer() override {
         auto& audio = synthesizer();
-        const int base = captureIntake ? audio.m_inputChannels[0].data.writeIndex() : 0;
-        const double previousOffset = captureIntake ? audio.m_lastInputSampleOffset : 0;
+        const bool capture = captureIntake || captureCombustion;
+        const int base = capture ? audio.m_inputChannels[0].data.writeIndex() : 0;
+        const double previousOffset = capture ? audio.m_lastInputSampleOffset : 0;
         PistonEngineSimulator::writeToSynthesizer();
         if (captureIntake) {
             double flow = 0;
@@ -71,6 +76,16 @@ class CapturingSimulator : public PistonEngineSimulator {
                 intake.push_back(static_cast<float>(previousIntakeFlow * (1 - fraction) + flow * fraction));
             }
             previousIntakeFlow = flow;
+        }
+        if (captureCombustion) {
+            for (int i = 0; i < m_engine->getCylinderCount(); ++i) {
+                if (m_engine->getChamber(i)->popLitLastFrame()) pendingCombustion |= uint32_t{1} << i;
+            }
+            const double distance = audio.inputDistance(audio.m_inputWriteOffset, previousOffset);
+            for (double t = audio.inputDistance(base, previousOffset); t <= distance; t += 1) {
+                combustion.push_back(pendingCombustion);
+                pendingCombustion = 0;
+            }
         }
         if (!recording) return;
         trace.push_back(static_cast<float>(m_engine->getRpm()));
@@ -125,6 +140,7 @@ static std::vector<int16_t> readImpulse(const std::string& path) {
 static void renderQuantum(CapturingSimulator& simulator, Engine& engine, std::vector<int16_t>& samples,
     std::vector<uint16_t>* intake = nullptr) {
     simulator.intake.clear();
+    simulator.combustion.clear();
     Synthesizer& synthesizer = simulator.synthesizer();
     simulator.startFrame(0.01);
     while (simulator.simulateStep()) {}
@@ -150,13 +166,23 @@ static void renderQuantum(CapturingSimulator& simulator, Engine& engine, std::ve
     }
 }
 
-static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSettings& settings, int profile, bool withIntake = false) {
+static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSettings& settings, int profile, bool withIntake, bool withCombustion) {
+    constexpr int maxCylinders = 16;
+    if (withCombustion && engine.getCylinderCount() > maxCylinders) {
+        throw std::runtime_error("Combustion telemetry supports up to 16 cylinders");
+    }
+    simulator.captureCombustion = withCombustion;
     simulator.captureIntake = withIntake;
     simulator.intake.reserve(1024);
     std::vector<uint16_t> intake;
     intake.reserve(2048);
     std::vector<int16_t> pending;
     pending.reserve(2048);
+    std::vector<uint32_t> combustion;
+    if (withCombustion) {
+        simulator.combustion.reserve(1024);
+        combustion.reserve(2048);
+    }
     int frames = 0;
     int ignition = 0;
     double pedal = 0;
@@ -197,13 +223,34 @@ static void serve(CapturingSimulator& simulator, Engine& engine, const DriveSett
             simulator.m_dyno.m_rotationSpeed = units::rpm(baseRpm);
             const double loadTorque = profile == 0 ? 250 : std::max(25.0, engine.getDisplacement() * 100000);
             simulator.m_dyno.m_maxTorque = heldSpeed ? 10000 : load * loadTorque;
+            const size_t start = pending.size();
             renderQuantum(simulator, engine, pending, withIntake ? &intake : nullptr);
+            if (withCombustion) {
+                if (simulator.combustion.size() != pending.size() - start) {
+                    throw std::runtime_error("Combustion and audio clocks diverged");
+                }
+                combustion.insert(combustion.end(), simulator.combustion.begin(), simulator.combustion.end());
+            }
             if (ignition) contactTime += 0.01;
         }
-        writeInteger(std::cout, withIntake ? 0x38563845 : 0x34563845, 4);
+        const uint32_t magic = withIntake ? 0x38563845 : 0x34563845;
+        writeInteger(std::cout, withCombustion ? magic | 0x40000000 : magic, 4);
         writeInteger(std::cout, frames, 4);
         writeInteger(std::cout, static_cast<uint32_t>(std::round(engine.getRpm() * 1000)), 4);
         writeInteger(std::cout, ignition && (contactTime < 1.2 || engine.getRpm() < 650), 4);
+        if (withCombustion) {
+            std::array<uint16_t, maxCylinders> offsets {};
+            for (int index = 0; index < frames; ++index) {
+                uint32_t lit = combustion[index];
+                while (lit != 0) {
+                    const int cylinder = std::countr_zero(lit);
+                    offsets[cylinder] = static_cast<uint16_t>(index + 1);
+                    lit &= lit - 1;
+                }
+            }
+            for (const auto offset : offsets) writeInteger(std::cout, offset, 2);
+            combustion.erase(combustion.begin(), combustion.begin() + frames);
+        }
         for (int index = 0; index < frames; ++index) {
             writeInteger(std::cout, static_cast<uint16_t>(pending[index]), 2);
             if (withIntake) writeInteger(std::cout, intake[index], 2);
@@ -395,8 +442,10 @@ int main(int count, char** arguments) {
         const std::string mode = arguments[4];
         const bool calculated = mode == "serve-calculated" || mode == "follow-calculated";
         const bool following = mode == "follow" || mode == "follow-intake" || mode == "follow-calculated";
-        const bool serving = mode == "serve" || mode == "serve-intake" || mode == "serve-calculated";
-        const bool withIntake = mode == "serve-intake" || mode == "drive-intake" || mode == "follow-intake";
+        const bool withCombustion = mode == "serve-combustion" || mode == "serve-intake-combustion";
+        const bool serving = mode == "serve" || mode == "serve-intake" || mode == "serve-calculated" || withCombustion;
+        const bool withIntake = mode == "serve-intake" || mode == "drive-intake" ||
+            mode == "follow-intake" || mode == "serve-intake-combustion";
         const bool driving = mode == "drive" || mode == "drive-intake";
         if (mode != "full" && mode != "base" && !serving && !driving && !following) throw std::runtime_error("Unknown rendering mode");
         const int profile = count >= 6 ? std::stoi(arguments[5]) : 0;
@@ -498,7 +547,7 @@ int main(int count, char** arguments) {
         FollowRotation rotation(engine);
         if (following) { simulator.getSystem()->addConstraint(&rotation); serveFollowing(simulator, engine, rotation, withIntake); }
         else if (driving) serveDrive(simulator, engine, vehicle, transmission, settings, withIntake);
-        else if (serving) serve(simulator, engine, settings, profile, withIntake);
+        else if (serving) serve(simulator, engine, settings, profile, withIntake, withCombustion);
         else renderOffline(simulator, engine, arguments[3]);
         synthesizer.destroy();
         simulator.destroy();

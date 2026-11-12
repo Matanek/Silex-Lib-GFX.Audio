@@ -213,6 +213,16 @@ les commandes. C’est une réinitialisation immédiate, susceptible de couper l
 Pour un arrêt naturel, mettre `running` à `false` et continuer à produire la queue.
 Libérer le dernier moteur ferme son entrée et libère son processus de calcul.
 
+Sur le banc moteur libre de la bibliothèque embarquée, `frame()` donne le
+nombre de frames audio reçues depuis la création ou le dernier `reset()`.
+`last_combustion_frame(cylinder)` repère la dernière inflammation de la
+chambre dans cette horloge à 44 100 Hz. L’index part de zéro et suit l’ordre
+des cylindres dans la définition native. Le premier échantillon a le numéro
+1. La méthode renvoie `null` tant que la chambre n’a pas brûlé, pour un index
+invalide ou si la bibliothèque et le mode ne fournissent pas cette mesure.
+Une interface peut utiliser la position de lecture du flux pour afficher
+l’événement au moment où le bloc est joué.
+
 ## Portée de cette extraction
 
 La comparaison avec le premier banc conserve le PCM bit à bit sur les huit

@@ -1,5 +1,6 @@
 use STD.Error
 use STD.Error.Kind
+use STD.File
 use STD.Process
 use STD.Subprocess
 use STD.Text.UTF8
@@ -13,6 +14,9 @@ class EngineWorker {
     private let following:bool
     private let header_size:int
     private let intake_mode:bool
+    private let combustion_mode:bool
+    private var rendered_frames:int = 0
+    private var combustion_frames:int[16]
     private let sample_bytes:int
     private var gear:int = 0
     private var speed:float = 0.0
@@ -23,14 +27,17 @@ class EngineWorker {
     private var request_count:int = 0
     private var reply:uint8[] = []
 
-    private init(child:Subprocess.Child, key:str, driving:bool, following:bool, capture_intake:bool) {
+    private init(child:Subprocess.Child, key:str, driving:bool, following:bool, capture_intake:bool, combustion_mode:bool) {
         self.following = following
         self.driving = driving; self.intake_mode = key == "cross4" || capture_intake
         var bytes = 2; if self.intake_mode { bytes = 4 }
         self.sample_bytes = bytes
         var size = 16; if driving { size = 32 }
+        self.combustion_mode = combustion_mode
+        if combustion_mode { size += 32 }
         self.header_size = size
         self.child = child
+        for cylinder in 0...16 { self.combustion_frames[cylinder] = 0 }
     }
     static func open(root:str, profile:int = 0, key:str = "454", driving:bool = false, gearing:Gearing? = null, following:bool = false, capture_intake:bool = false) Result<EngineWorker, Error> {
         var script = root + "/Runtime/Profile-$(key).mr"
@@ -39,6 +46,14 @@ class EngineWorker {
         var mode = "serve"; if driving { mode = "drive" }
         if following { mode = "follow" }
         if key == "cross4" || capture_intake { mode += "-intake" }
+        var combustion_mode = false
+        if !driving && !following {
+            match try File.read_text(root + "/CombustionTelemetry.txt", 32) {
+                success(marker) => { combustion_mode = marker == "combustion-v1\n" }
+                failure(error) => {}
+            }
+        }
+        if combustion_mode { mode += "-combustion" }
         var arguments:str[] = [script, impulse, "unused", mode, "$(profile)"]
         if let value = gearing {
             arguments.append("--gearing"); arguments.append("$(value.final_drive)")
@@ -48,7 +63,7 @@ class EngineWorker {
             executable:root + "/RenderReference",
             arguments:arguments,
             current_directory:root + "/Runtime", inherit_environment:true, environment:[])) else error { return Result<EngineWorker, Error>.failure(error) }
-        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving, following, capture_intake))
+        return Result<EngineWorker, Error>.success(EngineWorker(child, key, driving, following, capture_intake, combustion_mode))
     }
 
     func current_gear() int { return self.gear }
@@ -58,6 +73,13 @@ class EngineWorker {
 
     func current_rpm() float { return self.rpm }
     func is_starting() bool { return self.starting }
+    func frame() int { return self.rendered_frames }
+    func last_combustion_frame(cylinder:int) int? {
+        if cylinder < 0 || cylinder >= self.combustion_frames.count() { return null }
+        let frame = self.combustion_frames[cylinder]
+        if frame == 0 { return null }
+        return frame
+    }
     func has_request() bool { return self.request_count != 0 }
     func in_flight() int { return self.request_count }
 
@@ -132,6 +154,7 @@ class EngineWorker {
         var magic = 878_065_733; if self.driving { magic = 911_620_165 }
         if self.intake_mode { magic = 945_174_597; if self.driving { magic = 961_951_813 } }
         if self.following { magic = 1_096_169_541; if self.intake_mode { magic = 1_112_946_757 } }
+        if self.combustion_mode { magic += 1_073_741_824 }
         if samples.count() != frames * 2 || intake.count() != frames || self.reply.count() < self.header_size + frames * self.sample_bytes ||
             self.integer(@self.reply[0:self.reply.count()], 0) != magic ||
             self.integer(@self.reply[0:self.reply.count()], 4) != frames {
@@ -150,6 +173,15 @@ class EngineWorker {
             self.flags = self.integer(@self.reply[0:self.reply.count()], 24)
             self.shifts = self.integer(@self.reply[0:self.reply.count()], 28)
         }
+        if self.combustion_mode {
+            for cylinder in 0...self.combustion_frames.count() {
+                let byte = 16 + cylinder * 2
+                let offset = self.reply[byte] as int + self.reply[byte + 1] as int * 256
+                if offset > frames { panic("invalid combustion frame in engine renderer packet") }
+                if offset > 0 { self.combustion_frames[cylinder] = self.rendered_frames + offset }
+            }
+        }
+        self.rendered_frames += frames
         for frame in 0...frames {
             let offset = self.header_size + frame * self.sample_bytes
             var value = self.reply[offset] as int + self.reply[offset + 1] as int * 256

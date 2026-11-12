@@ -97,6 +97,14 @@ collector, before the output leveler. The request and reply layout matches
 `serve` or `follow` respectively. The convolution field sets the amount of
 calculated response in the mix.
 
+Builds with `combustion-v1` advertise it in `CombustionTelemetry.txt`.
+They accept `serve-combustion` and `serve-intake-combustion`. Replies set
+bit 30 of the corresponding magic and append sixteen little-endian
+16-bit combustion offsets to the header. An offset of zero marks an
+inactive cylinder in the packet. Other values give the one-based audio
+frame of that cylinder's latest successful combustion in the packet.
+Requests and PCM payloads retain their existing formats.
+
 For a streaming comparison, pass `collectors=/path/to/capture.f32` in place
 of the output prefix. The capture contains the 44.1 kHz input of the
 synthesizer, as interleaved native float32 samples in collector order. Each

@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Transmettre les combustions du moteur natif en rotation libre par cylindre, sur l’horloge du rendu audio.
+
 - Ajouter deux modes de comparaison au moteur natif construit depuis les sources. Ils calculent la réponse d’échappement à partir de bandes paramétrées et peuvent exporter le signal par collecteur.
 
 - Configurer le seuil et la durée de coupure du rupteur d’`EngineSimulation`. La plage de simulation atteint 24 000 tr/min.

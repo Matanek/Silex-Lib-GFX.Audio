@@ -208,6 +208,15 @@ controls. It is immediate and may interrupt the sound. For natural shutdown,
 set `running` to `false` and keep rendering the tail. Releasing the last engine
 closes its input and releases its renderer process.
 
+On the bundled free-running engine, `frame()` counts the audio frames
+received since creation or the last `reset()`. `last_combustion_frame(cylinder)`
+reports the last chamber ignition on that 44,100 Hz clock. Cylinder indices
+start at zero and follow the native engine definition. The first sample is
+frame 1. The method returns `null` before the chamber has fired, for an invalid
+index, or when the renderer or mode lacks this measurement. A graphical
+consumer can use the audio stream's playhead to display the event as its
+block is played.
+
 ## Scope of this extraction
 
 Comparison with the original bench preserves PCM bit for bit for all eight

@@ -83,6 +83,8 @@ public class Engine:Synthesis.Generator {
         return Result<void, Error>.success()
     }
     func current_rpm() float { return self.worker.current_rpm() }
+    func frame() int { return self.worker.frame() }
+    func last_combustion_frame(cylinder:int) int? { return self.worker.last_combustion_frame(cylinder) }
     func is_starting() bool { return self.worker.is_starting() }
     func drive_state() DriveState? {
         if !self.driving { return null }

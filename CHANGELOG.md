@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Report per-cylinder combustions from the free-running native engine on the audio frame clock.
+
 - Add two comparison modes to source builds of the native renderer. They calculate the exhaust response from filter bands and can export each collector signal.
 
 - Configure the ignition cut threshold and duration in `EngineSimulation`. The simulation range now reaches 24,000 rpm.
