@@ -1,16 +1,5 @@
 # Prepared audio resource gate
 
-The procedural engine has a focused macOS ARM64 gate:
-
-```sh
-python3 Packages/GFX.Audio/Tests/Resources/ValidateEngine.py
-```
-
-It checks an empty phase and a positive allocation control, then preparation,
-the first block, 1,000 render/control updates and reset in Debug and Release.
-It writes `.silex/engine-resource-validation.json`. The marked scope is prepared
-engine DSP on the application thread; PCM transfer, SDL and UI are excluded.
-
 From the SilexProject root, or the owning Spec Worktree group:
 
 ```sh
@@ -81,48 +70,3 @@ d’allocation et copie : 16/64 voix stéréo, blocs 128/512, frappes, rendu,
 vols de voix, contrôles, pédale et reset. Le compteur du thread appelant ne
 mesure ni une latence maximale, ni le transfert PCM natif du player.
 Depuis la racine workspace : `python3 Packages/GFX.Audio/Tests/Resources/ValidatePiano.py`.
-
-## Engine-part assemblies
-
-Run `python3 Packages/GFX.Audio/Tests/Resources/ValidateEngineAssembly.py` from
-the workspace or Spec group root. The macOS ARM64 counter checks Debug/Release
-first-block rendering, 1,000 blocks with state/mix changes, prepared part
-crossfades and reset. Empty/growing-array controls must succeed. Preparation and
-part replacement are separately counted as allocating operations. Output and
-binary identities are retained in `.silex/engine-assembly-resource-validation.json`.
-Audio device, streaming transfer, UI and other threads are excluded.
-
-## Engine workshop reserve witness
-
-On macOS, from the workspace or owning Spec group, compile the private fixture
-and run it with SDL's silent driver:
-
-```sh
-silex compile Packages/GFX.Audio/Tests/Resources/EngineStreamReserve.sx --release -o Build/EngineStreamReserve
-SDL_AUDIO_DRIVER=dummy Build/EngineStreamReserve
-```
-
-It deliberately leaves 45 ms between refills. A 1,440-frame reserve at 48 kHz
-must exhibit empty-queue observations; the 4,800-frame reserve must not. Run on
-an otherwise available host: OS scheduling stalls longer than 100 ms invalidate
-that second condition. This witness exercises the real device-consumption path
-without speakers; it does not certify uninterrupted playback under arbitrary
-load or count historical native underruns. The fixture's `usleep` boundary is
-macOS-only test instrumentation, never part of the installed package.
-
-## Validated engine library lifecycle
-
-The legacy compatibility checks below explicitly load custom bank directories.
-Ordinary consumers use the bundled default through `Library.open()`;
-`Tests/Consumer/Tests/EngineDefaults.sx` covers its PCM and lifetime.
-For these legacy checks, prepare the banks with the native maintenance tools:
-
-```sh
-silex compile Packages/GFX.Audio/Tests/Resources/EngineLibrary.sx --release -o Build/EngineLibrary-Checks
-Build/EngineLibrary-Checks /absolute/path/to/EngineLibrary
-```
-
-This exercises parameter rejection, four-block FIFO, identical synchronous and
-asynchronous PCM, reset with outstanding requests and process release. It opens
-no speakers. The native library must match the host. It is an IPC/lifecycle
-check, not an allocation-free callback or performance claim.

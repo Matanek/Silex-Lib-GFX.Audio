@@ -251,8 +251,6 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 
 [Faire évoluer un son et alimenter un flux](Continuous.md).
 
-[Piloter un moteur thermique procédural depuis un jeu](Engine.md).
-
 [Jouer une partition MIDI avec ses propres instruments](MIDI.md).
 
 [Choisir et adapter une recette procédurale](Recipes.md).
@@ -264,11 +262,5 @@ avec ADSR, sustain et pitch bend sur une chronologie en frames, sans banque de s
 [Jouer un piano procédural](Piano.md).
 
 [Jouer de la guitare, du violon et de la batterie](Catalogue.md), avec des instruments intégrés et des exemples écoutables.
-
-[Choisir une signature de véhicule et assembler son moteur sonore](EngineParts.md).
-
-[Réutiliser les moteurs du banc validé](Engines.md).
-
-[Créer des variantes de véhicules avec la chaîne de référence](Vehicles.md).
 
 - [Observer le mix pendant sa lecture](OutputCapture.md) : blocs possédés, chronologie, tampon borné et erreurs de capture de sortie.

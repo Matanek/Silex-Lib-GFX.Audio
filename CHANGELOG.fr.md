@@ -2,44 +2,10 @@
 
 ## [Unreleased]
 
-- Refermer progressivement l’embrayage des deux-temps sur les rapports supérieurs quand la moto est lancée.
-
-- Appliquer au motocross 250 2T la démultiplication finale de 8,5 de son profil natif.
-
-- Équiper le V8 américain de la boîte à six rapports de la Corvette du preset GM LS. Une brève coupure d’allumage fait retomber le régime pendant la montée des rapports.
-
-- Engager les rapports manuels du banc à la vitesse courante. Un rétrogradage peut entraîner le moteur en surrégime et transmettre le frein moteur.
-
-- Ajuster la prise d’embrayage au départ de la GTI. Pédale relâchée, un rétrogradage en attente s’effectue à la vitesse compatible avec le rapport demandé.
-
-- Régler séparément la masse, la démultiplication et l’étagement des quatre sportives. Autoriser une nouvelle tentative de rétrogradage après un refus.
-
-- Raccourcir la transmission des motocross 4T avec leur réduction finale de 8,5. L’engagement depuis le point mort conserve les gaz et module le couple de l’embrayage selon la cylindrée et le régime.
-
-- Ajouter une boîte optionnelle à `Engines.Vehicles`, avec le banc libre au point mort et un état moteur continu pendant les changements de rapport.
-
-- Transmettre les combustions du moteur natif en rotation libre par cylindre, sur l’horloge du rendu audio.
-
-- Ajouter deux modes de comparaison au moteur natif construit depuis les sources. Ils calculent la réponse d’échappement à partir de bandes paramétrées et peuvent exporter le signal par collecteur.
-
-- Configurer le seuil et la durée de coupure du rupteur d’`EngineSimulation`. La plage de simulation atteint 24 000 tr/min.
-
-- Atténuer le rayonnement à l’entrée d’air d’`EngineSimulation` quand le papillon se ferme.
-
-- Faire varier le timbre de détente avec les dimensions du cylindre dans `EngineSimulation`. La charge et la durée de combustion évoluent entre les cycles et la séquence se reproduit au reset.
-
-- Permettre à `EngineSimulation` de remplacer les conduits, silencieux et sorties en cours de fonctionnement. La transition audio conserve les phases et les commandes du moteur.
-
-- Ajouter le banc expérimental `EngineSimulation` pour composer des cylindres 4T, les entraîner au démarreur et écouter séparément frottement, aspiration et combustion. Les efforts de glissement et les contacts de la jupe excitent le bloc. Le débit pulsé excite le plénum et le conduit d’admission. La détente dépend de l’alésage et peut être acheminée par cylindre vers une sortie d’échappement configurée. Le modèle accepte les couples de démarrage et de charge des grandes cylindrées.
-
-- Différencier les citadines de l’I4 de sportive : admission et calage plus sages, échappement plus restrictif et rendu extérieur feutré. Le diesel reçoit une voix hybride issue de huit excitations extraites de la référence TDI fournie, pilotées par le régime natif, avec extinction et reset déterministes. Le libellé signale cette source enregistrée et son modèle non identifié ; la simulation mécanique ne devient pas une combustion diesel. Le 454, les sportives et la cross 500 4T conservent leur parcours sonore.
-
-- Corriger le décodage du régime natif lors des petits retours arrière du vilebrequin et arrondir les télémétries positives après conversion d’unité. L’atelier conserve le ralenti libre du banc : le ralenti nominal d’un profil n’engage plus automatiquement le dynamomètre.
-
-- Ajouter `Engines.Vehicles` : référence Chevrolet 454 conservée échantillon par échantillon et 17 variantes préparées avec le simulateur thermique, ses définitions natives et ses réponses d’échappement. Cylindrée en cm³, adaptations mécaniques des monos, pédale continue optionnelle et définitions privées conservées au reset. Le binaire natif embarqué reste inchangé et qualifié sur macOS ARM64 ; diesel, turbo et 2T gardent les limites explicites du guide. EngineWorkshop utilise désormais cette chaîne, avec contrôle de parité du 454 ; le générateur par impulsions reste un prototype séparé.
-
-- Ajouter `Synthesis.EngineVehicles.catalogue()` : 17 profils procéduraux de citadines essence/diesel, sportives, motocross 2T/4T, motos de course et customs, avec cylindrée, régime et réponse propres à chaque archétype. Les profils restent des inspirations sonores à qualifier par l’écoute.
-- Enrichir le parcours `Engine.assemble` : attaque de combustion, allumage par compression et claquement, chicanes acoustiques, résonance de détente, sifflement mécanique et irrégularité de rotation. Valider les nouveaux réglages avant mutation ; conserver phases, rendu déterministe et stockage préparé. Réduire le niveau avant le limiteur du parcours par pièces pour préserver ses transitoires en charge ; son niveau de sortie change. `Engine.create` et la bibliothèque native `Engines` restent séparés.
+- Retirer la simulation de moteurs de véhicules de l’API publique. Les démos
+  AudioEngineSimulator et MonsterTruck utilisent les modules de simulation de
+  Silex-Examples. Le package fournit les flux PCM, le mixage et les traitements
+  audio génériques.
 
 ## [0.5.0] - 2026-11-09
 

@@ -2,44 +2,10 @@
 
 ## [Unreleased]
 
-- Progressively engage the clutch on higher two-stroke bench gears once the bike is rolling.
-
-- Use the native profile's 8.5 final reduction for the 250 cc two-stroke motocross preset.
-
-- Use the GM LS preset's six-speed Corvette transmission for the American V8. A brief ignition cut lets RPM fall while upshifting.
-
-- Engage manual bench gears at the current road speed. Downshifts can mechanically over-rev the engine and transmit engine braking.
-
-- Tune GTI clutch engagement from rest. With the pedal released, a requested downshift waits for a safe vehicle speed.
-
-- Tune road load and gearing for the four sports presets. Allow a fresh downshift attempt after an over-rev refusal.
-
-- Restore the four-stroke motocross final reduction of 8.5. Engaging a gear from neutral keeps the throttle active and modulates clutch torque by displacement and RPM.
-
-- Add optional gearing to `Engines.Vehicles`, with free-running neutral and continuous engine state through shifts.
-
-- Report per-cylinder combustions from the free-running native engine on the audio frame clock.
-
-- Add two comparison modes to source builds of the native renderer. They calculate the exhaust response from filter bands and can export each collector signal.
-
-- Configure the ignition cut threshold and duration in `EngineSimulation`. The simulation range now reaches 24,000 rpm.
-
-- Attenuate intake radiation in `EngineSimulation` as the throttle plate closes.
-
-- Scale blowdown timbre with cylinder dimensions in `EngineSimulation`. Charge and burn duration vary between cycles and repeat after a reset.
-
-- Let `EngineSimulation` change exhaust pipes, silencers and routing while the engine runs. The audio transition preserves firing phase and engine controls.
-
-- Add the experimental `EngineSimulation` bench for assembling four-stroke cylinders, driving them with a starter, and isolating friction, intake and combustion audio. Sliding forces and piston skirt contacts excite the block. Pulsating flow excites the intake plenum and runner. Pressure release depends on bore and can be routed from each cylinder to a configured exhaust outlet. The model accepts higher starter and load torque for large engines.
-
-- Separate city cars from the sports I4 through milder intake/valve timing, a more restrictive exhaust and quiet exterior rendering. Diesel gains a hybrid voice built from eight excitations extracted from the supplied TDI reference, driven by native RPM with deterministic shutdown/reset. Labels identify the recorded source and its unidentified engine; mechanical simulation does not become diesel combustion. The 454, sports cars and 500 four-stroke motocross retain their sound paths.
-
-- Correct native RPM decoding during small crankshaft rebounds and round positive telemetry after unit conversion. The workshop retains free bench idle: a profile's nominal idle no longer automatically engages the dynamometer.
-
-- Add `Engines.Vehicles`: sample-exact Chevrolet 454 reference and 17 variants prepared with the thermal simulator, native definitions and exhaust responses. Total displacement in cc, mechanical scaling for singles, optional continuous throttle and private definitions retained across reset. The embedded native binary remains unchanged and qualified on macOS ARM64; diesel, turbo and two-stroke limitations are explicit in the guide. EngineWorkshop now uses this chain and checks 454 PCM parity; the pulse generator remains a separate prototype.
-
-- Add `Synthesis.EngineVehicles.catalogue()`: 17 procedural city petrol/diesel, sports car, 2T/4T motocross, race motorcycle and custom profiles, with displacement, RPM and response settings for each archetype. Profiles remain sonic inspirations requiring listening qualification.
-- Extend `Engine.assemble` with combustion attack, compression ignition clatter, acoustic baffles, expansion resonance, mechanical whine and rotation irregularity. Validate settings before mutation and preserve phases, deterministic rendering and prepared storage. Lower the parts path's pre-limiter level to preserve loaded transients; its output level changes. `Engine.create` and the native `Engines` library remain separate.
+- Remove vehicle-engine simulation from the public API. The
+  AudioEngineSimulator and MonsterTruck demos use the simulation modules in
+  Silex-Examples. The package provides PCM streams, mixing and generic audio
+  processing.
 
 ## [0.5.0] - 2026-11-09
 
