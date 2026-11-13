@@ -1,11 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.6.0] - 2026-11-13
 
-- Remove vehicle-engine simulation from the public API. The
-  AudioEngineSimulator and MonsterTruck demos use the simulation modules in
-  Silex-Examples. The package provides PCM streams, mixing and generic audio
-  processing.
+- Remove `GFX.Audio.Engines`, the engine from `GFX.Audio.Synthesis`, and their
+  profiles and resources. Vehicle-engine simulation continues in Silex-Examples.
+  AudioEngineSimulator bundles the engines and supplies the Chevrolet 454 to
+  MonsterTruck. GFX.Audio continues to provide PCM streams, mixing and generic
+  audio processing.
+- Projects migrating from the GFX.Audio engine API can refer to the
+  AudioEngineSimulator modules and their use in MonsterTruck.
 
 ## [0.5.0] - 2026-11-09
 

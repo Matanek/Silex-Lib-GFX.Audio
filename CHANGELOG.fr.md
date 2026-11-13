@@ -1,11 +1,14 @@
 # Historique
 
-## [Unreleased]
+## [0.6.0] - 2026-11-13
 
-- Retirer la simulation de moteurs de véhicules de l’API publique. Les démos
-  AudioEngineSimulator et MonsterTruck utilisent les modules de simulation de
-  Silex-Examples. Le package fournit les flux PCM, le mixage et les traitements
-  audio génériques.
+- Retrait de `GFX.Audio.Engines`, du moteur de `GFX.Audio.Synthesis` et de leurs
+  profils et ressources. La simulation de moteurs de véhicules se poursuit dans
+  Silex-Examples. AudioEngineSimulator embarque les moteurs et fournit le
+  Chevrolet 454 à MonsterTruck. Les flux PCM, le mixage et les traitements
+  audio génériques restent disponibles dans GFX.Audio.
+- Pour migrer un projet qui utilisait la simulation de GFX.Audio, voir les
+  modules d’AudioEngineSimulator et leur utilisation dans MonsterTruck.
 
 ## [0.5.0] - 2026-11-09
 

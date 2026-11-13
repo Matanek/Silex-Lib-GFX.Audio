@@ -1,7 +1,7 @@
 {
   "name": "GFX.Audio",
   "sources": "Module",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": {
     "en": "Procedural synthesis and sound playback with envelopes, fades, routing, spatial position, and GFX integration.",
     "fr": "Synthèse procédurale et lecture audio avec enveloppes, fondus, routage, position spatiale et intégration GFX."
